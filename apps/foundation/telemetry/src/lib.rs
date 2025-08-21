@@ -10,10 +10,7 @@ use tracing_core::Subscriber;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::registry::LookupSpan;
 
-pub fn get_tracer_provider<S, L>(
-    service: S,
-    endpoint: &str,
-) -> Result<OpenTelemetryLayer<L, SdkTracer>>
+pub fn get_trace_layer<S, L>(service: S, endpoint: &str) -> Result<OpenTelemetryLayer<L, SdkTracer>>
 where
     S: Into<Value> + Copy,
     S: Into<Cow<'static, str>>,
