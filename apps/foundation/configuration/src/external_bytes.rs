@@ -27,7 +27,7 @@ impl ExternalBytes {
             }
         };
 
-        tracing::debug!("Resolving a file at {self:?}, got {} bytes", bytes.len());
+        tracing::debug!(?self, byte_count = %bytes.len(), "resolved some external bytes");
 
         Ok(bytes)
     }
