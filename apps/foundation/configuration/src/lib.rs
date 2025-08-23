@@ -6,6 +6,12 @@ use std::path::Path;
 use color_eyre::eyre::Result;
 use serde::Deserialize;
 
+#[cfg(feature = "external-bytes")]
+pub mod external_bytes;
+
+#[cfg(feature = "external-bytes")]
+pub use crate::external_bytes::ExternalBytes;
+
 #[derive(Clone, Deserialize)]
 pub struct Secret<T>(T);
 
