@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
 	"foundation/configuration",
+	"foundation/logging",
 	"foundation/telemetry",
 	"foundation/uid"
 ]

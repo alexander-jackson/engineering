@@ -1,0 +1,10 @@
+[package]
+name = "foundation-logging"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+color-eyre = { version = "0.6.5", default-features = false }
+tracing = "0.1.41"
+tracing-error = "0.2.1"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
