@@ -1,11 +1,11 @@
 use std::borrow::Cow;
 
 use color_eyre::eyre::Result;
-use opentelemetry::trace::TracerProvider;
 use opentelemetry::Value;
+use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::{Protocol, SpanExporter, WithExportConfig};
-use opentelemetry_sdk::trace::{SdkTracer, SdkTracerProvider};
 use opentelemetry_sdk::Resource;
+use opentelemetry_sdk::trace::{SdkTracer, SdkTracerProvider};
 use tracing_core::Subscriber;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::registry::LookupSpan;

@@ -1,10 +1,10 @@
 use std::fmt;
 use std::ops::Deref;
 
-use base64::alphabet::URL_SAFE;
-use base64::engine::general_purpose::NO_PAD;
-use base64::engine::GeneralPurpose;
 use base64::Engine;
+use base64::alphabet::URL_SAFE;
+use base64::engine::GeneralPurpose;
+use base64::engine::general_purpose::NO_PAD;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
