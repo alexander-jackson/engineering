@@ -31,7 +31,7 @@ jobs:
       - uses: docker/build-push-action@v2
         with:
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/$APPLICATION_NAME:${{ steps.tag.outputs.value }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.APPLICATION_NAME }}:${{ steps.tag.outputs.value }}
       - name: Inform `tag-updater`
         run: |
-          curl https://tags.opentracker.app/update -X PUT -H "Content-Type: application/json" -H "Authorization: Bearer ${{ secrets.TAG_UPDATER_PASSPHRASE }}" --data '{"service": "$APPLICATION_NAME", "tag": "${{ steps.tag.outputs.value }}"}'
+          curl https://tags.opentracker.app/update -X PUT -H "Content-Type: application/json" -H "Authorization: Bearer ${{ secrets.TAG_UPDATER_PASSPHRASE }}" --data '{"service": "${{ env.APPLICATION_NAME }}", "tag": "${{ steps.tag.outputs.value }}"}'
