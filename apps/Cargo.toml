@@ -4,5 +4,6 @@ members = [
 	"foundation/configuration",
 	"foundation/logging",
 	"foundation/telemetry",
-	"foundation/uid"
+	"foundation/uid",
+	"tag-updater"
 ]

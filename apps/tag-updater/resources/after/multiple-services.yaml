@@ -1,0 +1,8 @@
+services:
+  backend:
+    image: example/image
+    tag: something
+
+  frontend:
+    image: example/image
+    tag: 20230614-1830

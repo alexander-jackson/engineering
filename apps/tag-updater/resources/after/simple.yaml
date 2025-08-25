@@ -1,0 +1,4 @@
+services:
+  frontend:
+    image: example/image
+    tag: 20230614-1830
