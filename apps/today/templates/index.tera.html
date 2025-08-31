@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="assets/style.css" />
+    <script type="text/javascript" src="assets/script.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Today</title>
+  </head>
+
+  <body class="container">
+    <h1>Today</h1>
+
+    <ul id="unchecked-items">
+      {% for item in unchecked_items %}
+      <li>
+        <input type="checkbox" id="{{ item.item_uid }}" />
+        {{ item.content | safe }}
+      </li>
+      {% endfor %}
+    </ul>
+
+    <form action="/add" method="post">
+      <input type="text" id="add-item" name="content" />
+    </form>
+
+    <details>
+      <summary>Archived Items</summary>
+
+      <ul id="checked-items">
+        {% for item in checked_items %}
+        <li>
+          <input type="checkbox" id="{{ item.item_uid }}" checked />
+          {{ item.content | safe }}
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+  </body>
+</html>
