@@ -7,6 +7,10 @@ on:
 
 name: CI
 
+defaults:
+  run:
+    working-directory: ./apps/today
+
 jobs:
   unit-tests:
     name: Unit tests
@@ -32,11 +36,11 @@ jobs:
         run: sqlx database create
 
       - name: Run migrations
-        run: sqlx migrate run --source apps/today/migrations
+        run: sqlx migrate run
 
       - uses: taiki-e/install-action@nextest
       - name: Run tests
-        run: cargo nextest run --manifest-path apps/today/Cargo.toml --all-features
+        run: cargo nextest run
 
   fmt:
     name: Rustfmt
@@ -45,7 +49,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: rustup component add rustfmt
-      - run: cargo fmt --manifest-path apps/today/Cargo.toml --all -- --check
+      - run: cargo fmt --all -- --check
 
   clippy:
     name: Clippy
@@ -56,4 +60,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: rustup component add clippy
-      - run: cargo clippy --manifest-path apps/today/Cargo.toml -- -D warnings
+      - run: cargo clippy -- -D warnings
