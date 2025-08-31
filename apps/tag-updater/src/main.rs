@@ -13,6 +13,8 @@ use foundation_configuration::{ConfigurationReader, Secret};
 use git2::Repository;
 use serde::Deserialize;
 use tokio::net::TcpListener;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 mod args;
 mod config;
@@ -30,9 +32,19 @@ struct SharedState {
     repository: Arc<Mutex<Repository>>,
 }
 
-fn setup() -> Result<()> {
+fn setup(config: &Config) -> Result<()> {
     color_eyre::install()?;
-    foundation_logging::install_default_registry()?;
+    let registry = foundation_logging::get_default_registry();
+
+    match &config.telemetry {
+        Some(telemetry) if telemetry.enabled => {
+            let layer = foundation_telemetry::get_trace_layer("tag-updater", &telemetry.endpoint)?;
+            registry.with(layer).init();
+        }
+        _ => {
+            registry.init();
+        }
+    }
 
     Ok(())
 }
@@ -54,10 +66,10 @@ fn get_repository_or_clone(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    setup()?;
-
     let args = Args::from_env()?;
     let config = Config::from_yaml(&args.config)?;
+
+    setup(&config)?;
 
     let private_key_bytes = config.private_key.resolve().await?;
     let private_key = String::from_utf8(private_key_bytes)
@@ -69,7 +81,7 @@ async fn main() -> Result<()> {
         &private_key,
     )?;
 
-    tracing::info!("Successfully opened a repository for processing");
+    tracing::info!("successfully opened a repository for processing");
 
     let shared_state = SharedState {
         passphrase: Arc::from(config.passphrase),
@@ -95,6 +107,7 @@ struct TagUpdate {
     tag: String,
 }
 
+#[tracing::instrument(skip(state, authorization))]
 async fn handle_tag_update(
     State(state): State<SharedState>,
     TypedHeader(authorization): TypedHeader<Authorization<Bearer>>,
@@ -114,7 +127,7 @@ async fn handle_tag_update(
     let repository = state.repository.lock().unwrap();
     let path = repository.path();
 
-    tracing::info!("Fetching latest changes for {path:?} to handle {update:?}");
+    tracing::info!(?path, "fetching the latest changes");
 
     let mut remote = repository.find_remote("origin").unwrap();
 
@@ -140,12 +153,12 @@ async fn handle_tag_update(
     // Make a new commit
     let commit_oid = git::commit(&repository, &mut index, service).unwrap();
 
-    tracing::info!("Created a new commit {commit_oid} with the changes");
+    tracing::info!(oid = %commit_oid, "created a new commit with the changes");
 
     let remote_name = "origin";
     let remote_ref = "refs/heads/master";
 
     git::push(&repository, remote_name, remote_ref, &state.ssh_private_key).unwrap();
 
-    tracing::info!("Successfully pushed changes up to the remote ({remote_name})");
+    tracing::info!(%remote_name, %remote_ref, "pushed the changes to the remote");
 }
