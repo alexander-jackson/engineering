@@ -10,7 +10,7 @@ use crate::args::Args;
 
 fn setup() -> Result<()> {
     color_eyre::install()?;
-    foundation_logging::install_default_registry()?;
+    foundation_logging::install_default_registry();
 
     Ok(())
 }
