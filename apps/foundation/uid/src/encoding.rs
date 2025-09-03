@@ -65,9 +65,8 @@ mod tests {
     use crate::typed_uid;
 
     typed_uid! {
-        serde::Serialize, serde::Deserialize;
-
-        AccountUid,
+        Derive(serde::Serialize, serde::Deserialize)
+        Define(AccountUid)
     }
 
     #[test]
