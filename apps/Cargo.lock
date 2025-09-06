@@ -3977,6 +3977,7 @@ dependencies = [
  "axum-extra",
  "color-eyre",
  "foundation-configuration",
+ "foundation-http-server",
  "foundation-logging",
  "foundation-telemetry",
  "git2",
