@@ -8,4 +8,4 @@ clap = { version = "4.5.46", features = ["derive"] }
 color-eyre = "0.6.5"
 foundation-logging = { version = "0.1.0", path = "../../foundation/logging" }
 git2 = { version = "0.20.2", default-features = false }
-tracing = "0.1.41"
+tracing.workspace = true
