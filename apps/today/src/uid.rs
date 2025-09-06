@@ -1,4 +1,4 @@
-use foundation_uid::{Uuid, typed_uid};
+use foundation_uid::{typed_uid, Uuid};
 use serde::{Deserialize, Serialize};
 
 typed_uid! {
