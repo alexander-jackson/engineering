@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 base64 = { version = "0.22.1", optional = true }
-serde = { version = "1.0.219", features = ["derive"], optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
 sqlx = { version = "0.8.6", default-features = false, optional = true }
 uuid = { version = "1.18.0", features = ["v4"] }
 
