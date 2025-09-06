@@ -75,21 +75,20 @@ impl IntoResponse for RenderedTemplate {
 
 #[cfg(test)]
 mod tests {
-    use uuid::Uuid;
-
     use crate::persistence::{Item, ItemState};
     use crate::templates::IndexContext;
+    use crate::uid::ItemUid;
 
     #[test]
     fn items_are_correctly_categorised() {
         let checked_item = Item {
-            item_uid: Uuid::new_v4(),
+            item_uid: ItemUid::new(),
             content: "checked".to_owned().into(),
             state: ItemState::Checked,
         };
 
         let unchecked_item = Item {
-            item_uid: Uuid::new_v4(),
+            item_uid: ItemUid::new(),
             content: "unchecked".to_owned().into(),
             state: ItemState::Unchecked,
         };
@@ -104,7 +103,7 @@ mod tests {
     #[test]
     fn deleted_items_are_ignored() {
         let deleted_item = Item {
-            item_uid: Uuid::new_v4(),
+            item_uid: ItemUid::new(),
             content: "deleted".to_owned().into(),
             state: ItemState::Deleted,
         };

@@ -14,11 +14,11 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
-use uuid::Uuid;
 
 use crate::error::ServerResult;
 use crate::persistence::ItemState;
 use crate::templates::{IndexContext, RenderedTemplate, TemplateEngine};
+use crate::uid::ItemUid;
 
 pub type IndexCache = Cache<(), Arc<IndexContext>>;
 
@@ -83,7 +83,7 @@ async fn add_item(
     }): State<ApplicationState>,
     Form(AddItemForm { content }): Form<AddItemForm>,
 ) -> ServerResult<Response> {
-    let item_uid = Uuid::new_v4();
+    let item_uid = ItemUid::new();
     let now = Utc::now().naive_local();
 
     crate::persistence::create_item(&pool, item_uid, &content, now).await?;
@@ -103,7 +103,7 @@ async fn update_item(
     State(ApplicationState {
         pool, index_cache, ..
     }): State<ApplicationState>,
-    Path(item_uid): Path<Uuid>,
+    Path(item_uid): Path<ItemUid>,
     Json(request): Json<UpdateItemRequest>,
 ) -> ServerResult<Response> {
     crate::persistence::update_item(&pool, item_uid, request.state).await?;
