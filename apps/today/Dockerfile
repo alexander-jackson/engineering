@@ -23,4 +23,4 @@ COPY --from=builder /usr/src/app/today/assets ./assets
 COPY --from=builder /usr/src/app/target/release/today ./
 
 # Command to run the application
-CMD ["./today"]
+CMD ["./today", "--config", "/app/config/today.yaml"]

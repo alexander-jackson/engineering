@@ -3,7 +3,8 @@ use color_eyre::eyre::Result;
 use pulldown_cmark::{Event, Parser};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use uuid::Uuid;
+
+use crate::uid::ItemUid;
 
 pub mod bootstrap;
 
@@ -69,7 +70,7 @@ impl Serialize for Content {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct Item {
-    pub item_uid: Uuid,
+    pub item_uid: ItemUid,
     pub content: Content,
     pub state: ItemState,
 }
@@ -103,7 +104,7 @@ pub async fn select_items(pool: &PgPool, date: NaiveDate) -> Result<Vec<Item>> {
 
 pub async fn create_item(
     pool: &PgPool,
-    item_uid: Uuid,
+    item_uid: ItemUid,
     content: &str,
     created_at: NaiveDateTime,
 ) -> Result<()> {
@@ -114,7 +115,7 @@ pub async fn create_item(
             INSERT INTO item (item_uid, content, created_at)
             VALUES ($1, $2, $3)
         "#,
-        item_uid,
+        *item_uid,
         content,
         created_at,
     )
@@ -130,7 +131,7 @@ pub async fn create_item(
                 $2
             )
         "#,
-        item_uid,
+        *item_uid,
         created_at,
     )
     .execute(&mut *tx)
@@ -141,7 +142,7 @@ pub async fn create_item(
     Ok(())
 }
 
-pub async fn update_item(pool: &PgPool, item_uid: Uuid, state: ItemState) -> Result<()> {
+pub async fn update_item(pool: &PgPool, item_uid: ItemUid, state: ItemState) -> Result<()> {
     let mut tx = pool.begin().await?;
     let now = Utc::now().naive_local();
 
@@ -158,7 +159,7 @@ pub async fn update_item(pool: &PgPool, item_uid: Uuid, state: ItemState) -> Res
                 $3
             )
         "#,
-        item_uid,
+        *item_uid,
         state.as_str(),
         now,
     )

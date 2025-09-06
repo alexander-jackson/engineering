@@ -3,12 +3,12 @@ use std::collections::HashSet;
 use chrono::{Duration, NaiveDateTime, Utc};
 use color_eyre::eyre::Result;
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::persistence::ItemState;
+use crate::uid::ItemUid;
 
-async fn create_item(pool: &PgPool, content: &str, created_at: NaiveDateTime) -> Result<Uuid> {
-    let item_uid = Uuid::new_v4();
+async fn create_item(pool: &PgPool, content: &str, created_at: NaiveDateTime) -> Result<ItemUid> {
+    let item_uid = ItemUid::new();
 
     super::create_item(pool, item_uid, content, created_at).await?;
 
@@ -28,7 +28,7 @@ fn items_are_only_returned_for_the_current_day(pool: PgPool) -> Result<()> {
     let item_uid2 = create_item(&pool, "Yesterday", yesterday).await?;
 
     // Fetch all the items for today
-    let items: HashSet<Uuid> = super::select_items(&pool, today)
+    let items: HashSet<ItemUid> = super::select_items(&pool, today)
         .await?
         .iter()
         .map(|item| item.item_uid)
