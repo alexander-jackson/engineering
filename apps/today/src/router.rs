@@ -1,9 +1,10 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::body::Body;
 use axum::extract::{Form, Json, Path, State};
 use axum::http::header::LOCATION;
-use axum::http::StatusCode;
+use axum::http::{Request, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, patch, post};
 use axum::Router;
@@ -13,7 +14,8 @@ use moka::future::Cache;
 use serde::Deserialize;
 use sqlx::PgPool;
 use tower_http::services::ServeDir;
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{DefaultMakeSpan, TraceLayer};
+use tracing::{Level, Span};
 
 use crate::error::ServerResult;
 use crate::persistence::ItemState;
@@ -36,13 +38,24 @@ pub fn build(template_engine: TemplateEngine, pool: PgPool, index_cache: IndexCa
         index_cache,
     };
 
+    let trace_layer = TraceLayer::new_for_http()
+        .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+        .on_request(|request: &Request<Body>, _span: &Span| {
+            tracing::info!(method = %request.method(), uri = %request.uri(), "received request");
+        })
+        .on_response(
+            |response: &axum::http::Response<Body>, latency: Duration, _span: &Span| {
+                tracing::info!(status = %response.status(), latency = ?latency, "sent response");
+            },
+        );
+
     Router::new()
         .route("/", get(templated))
         .route("/add", post(add_item))
         .route("/update/:item_uid", patch(update_item))
-        .layer(TraceLayer::new_for_http())
         .nest_service("/assets", ServeDir::new("assets"))
         .with_state(state)
+        .layer(trace_layer)
 }
 
 async fn templated(
