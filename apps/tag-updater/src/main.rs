@@ -2,14 +2,15 @@ use std::net::SocketAddrV4;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use axum::Json;
 use axum::extract::State;
 use axum::routing::put;
-use axum::{Json, Router};
 use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
 use axum_extra::headers::authorization::Bearer;
 use color_eyre::eyre::{Context, Result, eyre};
 use foundation_configuration::{ConfigurationReader, Secret};
+use foundation_http_server::Server;
 use git2::Repository;
 use serde::Deserialize;
 use tokio::net::TcpListener;
@@ -89,14 +90,14 @@ async fn main() -> Result<()> {
         repository,
     };
 
-    let router = Router::new()
+    let server = Server::new()
         .route("/update", put(handle_tag_update))
         .with_state(shared_state);
 
     let addr = SocketAddrV4::new(config.addr, config.port);
     let listener = TcpListener::bind(addr).await?;
 
-    axum::serve(listener, router.into_make_service()).await?;
+    server.run(listener).await?;
 
     Ok(())
 }
