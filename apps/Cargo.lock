@@ -1370,6 +1370,7 @@ dependencies = [
  "reqwest",
  "tokio",
  "tower-http 0.6.6",
+ "tower-layer",
  "tower-service",
  "tracing",
 ]
