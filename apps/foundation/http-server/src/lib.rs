@@ -9,9 +9,51 @@ use axum::http::{Request, Response};
 use axum::response::IntoResponse;
 use axum::routing::MethodRouter;
 use tokio::net::TcpListener;
-use tower_http::trace::{DefaultMakeSpan, TraceLayer};
+use tower_http::trace::{
+    DefaultOnRequest, DefaultOnResponse, MakeSpan, OnRequest, OnResponse, TraceLayer,
+};
 use tower_service::Service;
-use tracing::{Level, Span};
+use tracing::Span;
+use tracing::field::Empty;
+
+#[derive(Copy, Clone, Debug, Default)]
+struct SpanCreator;
+
+impl<B> MakeSpan<B> for SpanCreator {
+    fn make_span(&mut self, request: &Request<B>) -> Span {
+        tracing::info_span!(
+            "request",
+            method = %request.method(),
+            uri = %request.uri(),
+            version = ?request.version(),
+            status = Empty,
+        )
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct RequestTracingFilter {
+    inner: DefaultOnRequest,
+}
+
+impl<B> OnRequest<B> for RequestTracingFilter {
+    fn on_request(&mut self, request: &Request<B>, span: &Span) {
+        self.inner.on_request(request, span);
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct ResponseTracingFilter {
+    inner: DefaultOnResponse,
+}
+
+impl<B> OnResponse<B> for ResponseTracingFilter {
+    fn on_response(self, response: &Response<B>, latency: Duration, span: &Span) {
+        span.record("status", response.status().as_u16());
+
+        self.inner.on_response(response, latency, span);
+    }
+}
 
 pub struct Server<S = ()> {
     router: Router<S>,
@@ -54,15 +96,9 @@ where
 impl Server<()> {
     pub async fn run(self, listener: TcpListener) -> Result<(), Error> {
         let trace_layer = TraceLayer::new_for_http()
-            .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
-            .on_request(|request: &Request<Body>, _span: &Span| {
-                tracing::info!(method = %request.method(), uri = %request.uri(), "received request");
-            })
-            .on_response(
-                |response: &Response<Body>, latency: Duration, _span: &Span| {
-                    tracing::info!(status = %response.status(), latency = ?latency, "sent response");
-                },
-            );
+            .make_span_with(SpanCreator)
+            .on_request(RequestTracingFilter::default())
+            .on_response(ResponseTracingFilter::default());
 
         let router = self.router.layer(trace_layer);
 
