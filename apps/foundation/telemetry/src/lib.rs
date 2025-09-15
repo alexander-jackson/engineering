@@ -10,6 +10,32 @@ use tracing_core::Subscriber;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::registry::LookupSpan;
 
+/// Initialises an [`OpenTelemetryLayer`] and sets up exporting for the service to the given
+/// endpoint.
+///
+/// Defaults to using HTTP for trace exports, as well as a binary protocol.
+///
+/// # Examples
+/// ```
+/// use std::error::Error;
+///
+/// use foundation_telemetry::get_trace_layer;
+/// use tracing_subscriber::layer::SubscriberExt;
+/// use tracing_subscriber::util::SubscriberInitExt;
+///
+/// fn main() -> Result<(), Box<dyn Error>> {
+///     let service = "foobar";
+///     let endpoint = "localhost:4318";
+///
+///     let layer = get_trace_layer(service, endpoint)?;
+///
+///     tracing_subscriber::registry()
+///         .with(layer)
+///         .init();
+///
+///     Ok(())
+/// }
+/// ```
 pub fn get_trace_layer<S, L>(service: S, endpoint: &str) -> Result<OpenTelemetryLayer<L, SdkTracer>>
 where
     S: Into<Value> + Copy,

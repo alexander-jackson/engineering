@@ -1,0 +1,5 @@
+name: foobar
+service_type: internal
+socket:
+  addr: 0.0.0.0
+  port: 80

@@ -12,6 +12,7 @@ pub mod external_bytes;
 #[cfg(feature = "external-bytes")]
 pub use crate::external_bytes::ExternalBytes;
 
+/// Wrapper type to ensure secret values are not displayed.
 #[derive(Clone, Deserialize)]
 pub struct Secret<T>(T);
 
@@ -38,7 +39,9 @@ impl<T> From<T> for Secret<T> {
     }
 }
 
+/// Allows arbitrary structs that implement [`Deserialize`] to be read from a file.
 pub trait ConfigurationReader: Sized {
+    /// Reads the content of the file and attempts to deserialize it into the provided type.
     fn from_yaml<P: AsRef<Path>>(path: P) -> Result<Self>;
 }
 
@@ -60,9 +63,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use color_eyre::eyre::Result;
+    use std::net::Ipv4Addr;
 
-    use crate::Secret;
+    use color_eyre::eyre::Result;
+    use serde::Deserialize;
+
+    use crate::{ConfigurationReader, Secret};
 
     #[test]
     fn secret_values_are_not_displayed() -> Result<()> {
@@ -81,6 +87,38 @@ mod tests {
         let underlying = *secret;
 
         assert_eq!(underlying, hidden);
+
+        Ok(())
+    }
+
+    #[test]
+    fn can_deserialize_configuration_from_yaml_generically() -> Result<()> {
+        #[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize)]
+        #[serde(rename_all = "lowercase")]
+        enum ServiceType {
+            Internal,
+            External,
+        }
+
+        #[derive(Deserialize)]
+        struct SocketConfiguration {
+            addr: Ipv4Addr,
+            port: u16,
+        }
+
+        #[derive(Deserialize)]
+        struct Configuration {
+            name: String,
+            service_type: ServiceType,
+            socket: SocketConfiguration,
+        }
+
+        let configuration = Configuration::from_yaml("resources/test-configuration.yaml")?;
+
+        assert_eq!(configuration.name, "foobar");
+        assert_eq!(configuration.service_type, ServiceType::Internal);
+        assert_eq!(configuration.socket.addr, Ipv4Addr::UNSPECIFIED);
+        assert_eq!(configuration.socket.port, 80);
 
         Ok(())
     }
