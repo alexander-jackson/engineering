@@ -7,11 +7,13 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, Response};
 use axum::response::IntoResponse;
-use axum::routing::MethodRouter;
+use axum::routing::{MethodRouter, Route};
 use tokio::net::TcpListener;
+use tokio::signal::unix::SignalKind;
 use tower_http::trace::{
     DefaultOnRequest, DefaultOnResponse, MakeSpan, OnRequest, OnResponse, TraceLayer,
 };
+use tower_layer::Layer;
 use tower_service::Service;
 use tracing::Span;
 use tracing::field::Empty;
@@ -91,6 +93,19 @@ where
 
         Server { router }
     }
+
+    pub fn layer<L>(self, layer: L) -> Self
+    where
+        L: Layer<Route> + Clone + Send + Sync + 'static,
+        L::Service: Service<Request<Body>> + Clone + Send + Sync + 'static,
+        <L::Service as Service<Request<Body>>>::Response: IntoResponse + 'static,
+        <L::Service as Service<Request<Body>>>::Error: Into<Infallible> + 'static,
+        <L::Service as Service<Request<Body>>>::Future: Send + 'static,
+    {
+        let router = self.router.layer(layer);
+
+        Server { router }
+    }
 }
 
 impl Server<()> {
@@ -101,8 +116,11 @@ impl Server<()> {
             .on_response(ResponseTracingFilter::default());
 
         let router = self.router.layer(trace_layer);
+        let signal = shutdown_signal();
 
-        axum::serve(listener, router).await?;
+        axum::serve(listener, router)
+            .with_graceful_shutdown(signal)
+            .await?;
 
         Ok(())
     }
@@ -128,14 +146,43 @@ impl<S> DerefMut for Server<S> {
     }
 }
 
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+
+        tracing::info!("received ctrl+c, starting graceful shutdown");
+    };
+
+    let terminate = async {
+        tokio::signal::unix::signal(SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+
+        tracing::info!("received terminate signal, starting graceful shutdown");
+    };
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::{Ipv4Addr, SocketAddrV4};
+    use std::sync::{Arc, RwLock};
+    use std::task::{Context, Poll};
 
     use axum::extract::State;
+    use axum::http::Request;
     use axum::routing::get;
     use reqwest::Client;
     use tokio::net::TcpListener;
+    use tower_layer::Layer;
+    use tower_service::Service;
 
     use crate::Server;
 
@@ -206,6 +253,86 @@ mod tests {
         let body = response.text().await?;
 
         assert_eq!(body, "Hello, World!");
+        task.abort();
+
+        Ok(())
+    }
+
+    #[derive(Clone)]
+    pub struct LogLayer {
+        messages: Arc<RwLock<Vec<String>>>,
+    }
+
+    impl<S> Layer<S> for LogLayer {
+        type Service = LogService<S>;
+
+        fn layer(&self, service: S) -> Self::Service {
+            LogService {
+                messages: Arc::clone(&self.messages),
+                service,
+            }
+        }
+    }
+
+    // This service implements the Log behavior
+    #[derive(Clone)]
+    pub struct LogService<S> {
+        messages: Arc<RwLock<Vec<String>>>,
+        service: S,
+    }
+
+    impl<S, B> Service<Request<B>> for LogService<S>
+    where
+        S: Service<Request<B>> + Clone + Send + 'static,
+    {
+        type Response = S::Response;
+        type Error = S::Error;
+        type Future = S::Future;
+
+        fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            self.service.poll_ready(cx)
+        }
+
+        fn call(&mut self, request: Request<B>) -> Self::Future {
+            let mut writer = self.messages.write().unwrap();
+            writer.push(request.uri().path().to_string());
+
+            self.service.call(request)
+        }
+    }
+
+    #[tokio::test]
+    async fn can_add_layers_to_a_server() -> TestResult<()> {
+        let buffer = Arc::new(RwLock::new(Vec::new()));
+        let layer = LogLayer {
+            messages: Arc::clone(&buffer),
+        };
+
+        let server: Server<()> = Server::new()
+            .route("/{capture}", get(|| async { "Hello, World!" }))
+            .layer(layer);
+
+        let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
+        let listener = TcpListener::bind(addr).await?;
+        let local_addr = listener.local_addr()?;
+
+        let task = tokio::spawn(async move {
+            if let Err(e) = server.run(listener).await {
+                eprintln!("Server error: {}", e);
+            }
+        });
+
+        // make a request to the server
+        let client = Client::new();
+        let path = "/something-here";
+        let response = client
+            .get(format!("http://{}{path}", local_addr))
+            .send()
+            .await?;
+
+        assert!(response.status().is_success());
+        assert_eq!(buffer.read().unwrap().as_slice(), [path]);
+
         task.abort();
 
         Ok(())
