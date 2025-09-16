@@ -1,12 +1,14 @@
 use std::path::Path;
 
 use color_eyre::eyre::{WrapErr, eyre};
+use foundation_configuration::Secret;
 use git2::{Cred, Index, Oid, PushOptions, RemoteCallbacks, Signature};
 
+#[tracing::instrument(skip(private_key))]
 pub fn clone(
     url: &str,
     filepath: &Path,
-    private_key: &str,
+    private_key: &Secret<String>,
 ) -> color_eyre::eyre::Result<git2::Repository> {
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username, _allowed_types| {
@@ -27,11 +29,12 @@ pub fn clone(
 }
 
 /// Fetches the changes for a set of branches from a remote.
+#[tracing::instrument(skip(repo), fields(remote = ?remote.name()))]
 pub fn fetch<'a>(
     repo: &'a git2::Repository,
     refs: &[&str],
     remote: &'a mut git2::Remote,
-    private_key: &'a str,
+    private_key: &Secret<String>,
 ) -> Result<git2::AnnotatedCommit<'a>, git2::Error> {
     let mut cb = git2::RemoteCallbacks::new();
 
@@ -66,6 +69,10 @@ pub fn fetch<'a>(
 }
 
 /// Performs a fast-forward merge on a repository.
+#[tracing::instrument(
+    skip(repo, lb, rc),
+    fields(lb = ?lb.name(), rc = %rc.id())
+)]
 fn fast_forward(
     repo: &git2::Repository,
     lb: &mut git2::Reference,
@@ -82,6 +89,10 @@ fn fast_forward(
 }
 
 /// Performs a normal merge on a repository.
+#[tracing::instrument(
+    skip(repo, local, remote),
+    fields(local_id = %local.id(), remote_id = %remote.id())
+)]
 fn normal_merge(
     repo: &git2::Repository,
     local: &git2::AnnotatedCommit,
@@ -127,6 +138,10 @@ fn normal_merge(
 }
 
 /// Performs a merge on a repository, whether that be a fast-forward or normal.
+#[tracing::instrument(
+    skip(repo),
+    fields(fetch_commit = %fetch_commit.id())
+)]
 pub fn merge<'a>(
     repo: &'a git2::Repository,
     remote_branch: &str,
@@ -172,6 +187,7 @@ pub fn merge<'a>(
 }
 
 /// Creates a commit based on the staged changes.
+#[tracing::instrument(skip(repo, index))]
 pub fn commit(
     repo: &git2::Repository,
     index: &mut git2::Index,
@@ -196,11 +212,12 @@ pub fn commit(
 }
 
 /// Pushes a reference up to the remote repository.
+#[tracing::instrument(skip(repo))]
 pub fn push(
     repo: &git2::Repository,
     remote: &str,
     reference: &str,
-    ssh_private_key: &str,
+    ssh_private_key: &Secret<String>,
 ) -> Result<(), git2::Error> {
     let mut callbacks = RemoteCallbacks::new();
     callbacks.credentials(|_url, username, _allowed_types| {
@@ -218,6 +235,7 @@ pub fn push(
 }
 
 /// Stages a filepath into the current index.
+#[tracing::instrument(skip(repo))]
 pub fn add(repo: &git2::Repository, path: &Path) -> Result<Index, git2::Error> {
     let mut index = repo.index()?;
     index.add_path(path)?;
