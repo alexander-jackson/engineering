@@ -43,6 +43,7 @@ pub fn build(template_engine: TemplateEngine, pool: PgPool, index_cache: IndexCa
         .with_state(state)
 }
 
+#[tracing::instrument(skip(template_engine, pool, index_cache))]
 async fn templated(
     State(ApplicationState {
         template_engine,
@@ -75,6 +76,7 @@ struct AddItemForm {
     content: String,
 }
 
+#[tracing::instrument(skip(pool, index_cache, content))]
 async fn add_item(
     State(ApplicationState {
         pool, index_cache, ..
@@ -97,6 +99,7 @@ struct UpdateItemRequest {
     state: ItemState,
 }
 
+#[tracing::instrument(skip(pool, index_cache))]
 async fn update_item(
     State(ApplicationState {
         pool, index_cache, ..

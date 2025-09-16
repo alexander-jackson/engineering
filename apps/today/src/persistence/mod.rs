@@ -75,6 +75,7 @@ pub struct Item {
     pub state: ItemState,
 }
 
+#[tracing::instrument(skip(pool))]
 pub async fn select_items(pool: &PgPool, date: NaiveDate) -> Result<Vec<Item>> {
     let items = sqlx::query_as!(
         Item,
@@ -102,6 +103,7 @@ pub async fn select_items(pool: &PgPool, date: NaiveDate) -> Result<Vec<Item>> {
     Ok(items)
 }
 
+#[tracing::instrument(skip(pool, content))]
 pub async fn create_item(
     pool: &PgPool,
     item_uid: ItemUid,
@@ -142,6 +144,7 @@ pub async fn create_item(
     Ok(())
 }
 
+#[tracing::instrument(skip(pool))]
 pub async fn update_item(pool: &PgPool, item_uid: ItemUid, state: ItemState) -> Result<()> {
     let mut tx = pool.begin().await?;
     let now = Utc::now().naive_local();
