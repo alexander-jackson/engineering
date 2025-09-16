@@ -50,10 +50,11 @@ fn setup(config: &Config) -> Result<()> {
     Ok(())
 }
 
+#[tracing::instrument]
 fn get_repository_or_clone(
     filepath: &Path,
     url: &str,
-    private_key: &str,
+    private_key: &Secret<String>,
 ) -> Result<Arc<Mutex<Repository>>> {
     let repository = if filepath.exists() {
         Repository::open(filepath)
@@ -76,6 +77,8 @@ async fn main() -> Result<()> {
     let private_key = String::from_utf8(private_key_bytes)
         .wrap_err("Failed to parse private key as UTF-8 string")?;
 
+    let private_key = Arc::from(Secret::from(private_key));
+
     let repository = get_repository_or_clone(
         Path::new("/tmp/infrastructure"),
         "git@github.com:alexander-jackson/infrastructure.git",
@@ -86,7 +89,7 @@ async fn main() -> Result<()> {
 
     let shared_state = SharedState {
         passphrase: Arc::from(config.passphrase),
-        ssh_private_key: Arc::from(Secret::from(private_key)),
+        ssh_private_key: private_key,
         repository,
     };
 
