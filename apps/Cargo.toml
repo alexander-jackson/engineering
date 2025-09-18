@@ -10,6 +10,7 @@ members = [
 	"foundation/shutdown",
 	"foundation/telemetry",
 	"foundation/uid",
+	"pgmanager",
 	"tag-updater",
 	"today",
 	"uptime",
