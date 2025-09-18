@@ -118,6 +118,9 @@ impl Server<()> {
         let router = self.router.layer(trace_layer);
         let signal = shutdown_signal();
 
+        let addr = listener.local_addr()?;
+        tracing::info!(%addr, "listening for incoming requests");
+
         axum::serve(listener, router)
             .with_graceful_shutdown(signal)
             .await?;

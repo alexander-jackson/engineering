@@ -54,8 +54,6 @@ async fn main() -> Result<()> {
     let server = crate::server::build(template_engine, pool, index_cache);
     let listener = TcpListener::bind(addr).await?;
 
-    tracing::info!(?addr, "listening for incoming requests");
-
     server.run(listener).await?;
 
     Ok(())
