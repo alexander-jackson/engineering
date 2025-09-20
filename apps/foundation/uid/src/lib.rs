@@ -50,11 +50,39 @@ macro_rules! typed_uid {
         typed_uid!(@internal [$($derive),*] $($rest),+);
     };
 
-    ($($derive:path),+ ; $($name:ident),+ $(,)?) => {
+    (Derive($($derive:path),+) $(,)? Define($($name:ident),+) $(,)?) => {
         typed_uid!(@internal [$($derive),+] $($name),+);
     };
 
-    ($($name:ident),+ $(,)?) => {
+    (Define($($name:ident),+) $(,)?) => {
         typed_uid!(@internal [] $($name),+);
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+    use std::hash::Hash;
+
+    use uuid::Uuid;
+
+    typed_uid! {
+        Define(AccountUid)
+    }
+
+    typed_uid! {
+        Derive(Hash, PartialEq, Eq), Define(HashUid)
+    }
+
+    #[test]
+    fn can_define_basic_uids() {
+        let _ = AccountUid::new();
+    }
+
+    #[test]
+    fn can_add_custom_derives() {
+        let mut items: HashSet<HashUid> = HashSet::new();
+
+        items.insert(HashUid::new());
+    }
 }
