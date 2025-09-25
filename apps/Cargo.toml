@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+	"foundation/args",
 	"foundation/configuration",
 	"foundation/http-server",
 	"foundation/logging",

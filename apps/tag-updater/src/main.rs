@@ -9,6 +9,7 @@ use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
 use axum_extra::headers::authorization::Bearer;
 use color_eyre::eyre::{Context, Result, eyre};
+use foundation_args::Args;
 use foundation_configuration::{ConfigurationReader, Secret};
 use foundation_http_server::Server;
 use git2::Repository;
@@ -17,12 +18,10 @@ use tokio::net::TcpListener;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-mod args;
 mod config;
 mod editor;
 mod git;
 
-use crate::args::Args;
 use crate::config::Config;
 use crate::editor::make_tag_edit;
 

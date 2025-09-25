@@ -1,6 +1,7 @@
 use std::net::SocketAddrV4;
 
 use color_eyre::eyre::Result;
+use foundation_args::Args;
 use foundation_configuration::ConfigurationReader;
 use tokio::net::TcpListener;
 use tracing_subscriber::layer::SubscriberExt;
@@ -8,7 +9,6 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::server::IndexCache;
 
-mod args;
 mod config;
 mod error;
 mod persistence;
@@ -16,7 +16,6 @@ mod server;
 mod templates;
 mod uid;
 
-use crate::args::Args;
 use crate::config::Config;
 use crate::templates::TemplateEngine;
 
