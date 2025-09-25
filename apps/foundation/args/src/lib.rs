@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::ffi::OsString;
+use std::path::PathBuf;
 
 use color_eyre::eyre::Result;
 use pico_args::Arguments;
@@ -14,7 +14,7 @@ impl Args {
     pub fn from_env() -> Result<Self> {
         let args = std::env::args_os().collect::<Vec<_>>();
 
-        Ok(Self::from_vec(args)?)
+        Self::from_vec(args)
     }
 
     fn from_vec(args: Vec<OsString>) -> Result<Self> {
@@ -32,11 +32,7 @@ mod tests {
 
     #[test]
     fn can_parse_arguments() {
-        let args = vec![
-            "program".into(),
-            "--config".into(),
-            "config.toml".into(),
-        ];
+        let args = vec!["program".into(), "--config".into(), "config.toml".into()];
 
         let parsed_args = Args::from_vec(args).unwrap();
 
