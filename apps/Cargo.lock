@@ -1350,6 +1350,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "foundation-args"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "pico-args",
+]
+
+[[package]]
 name = "foundation-configuration"
 version = "0.1.0"
 dependencies = [
@@ -3977,6 +3985,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "color-eyre",
+ "foundation-args",
  "foundation-configuration",
  "foundation-http-server",
  "foundation-logging",
@@ -4142,6 +4151,7 @@ dependencies = [
  "chrono",
  "color-eyre",
  "dotenvy",
+ "foundation-args",
  "foundation-configuration",
  "foundation-http-server",
  "foundation-logging",

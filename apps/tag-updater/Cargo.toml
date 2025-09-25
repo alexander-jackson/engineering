@@ -9,6 +9,7 @@ edition = "2024"
 axum.workspace = true
 axum-extra = { version = "0.10.1", features = ["typed-header"] }
 color-eyre = { version = "0.6.5", default-features = false }
+foundation-args = { path = "../foundation/args" }
 foundation-configuration = { path = "../foundation/configuration", features = ["external-bytes"] }
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
 foundation-logging = { path = "../foundation/logging", version = "0.1.0" }

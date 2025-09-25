@@ -8,6 +8,7 @@ axum.workspace = true
 chrono = { version = "0.4.38", default-features = false, features = ["now"] }
 color-eyre = "0.6.3"
 dotenvy = "0.15.7"
+foundation-args = { path = "../foundation/args" }
 foundation-configuration = { version = "0.1.0", path = "../foundation/configuration" }
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
 foundation-logging = { version = "0.1.0", path = "../foundation/logging" }
