@@ -6,9 +6,16 @@ use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::{Protocol, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::trace::{SdkTracer, SdkTracerProvider};
+use serde::Deserialize;
 use tracing_core::Subscriber;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::registry::LookupSpan;
+
+#[derive(Deserialize)]
+pub struct TelemetryConfig {
+    pub enabled: bool,
+    pub endpoint: String,
+}
 
 /// Initialises an [`OpenTelemetryLayer`] and sets up exporting for the service to the given
 /// endpoint.
@@ -38,7 +45,7 @@ use tracing_subscriber::registry::LookupSpan;
 /// ```
 pub fn get_trace_layer<S, L>(service: S, endpoint: &str) -> Result<OpenTelemetryLayer<L, SdkTracer>>
 where
-    S: Into<Value> + Copy,
+    S: Into<Value> + Clone,
     S: Into<Cow<'static, str>>,
     L: Subscriber + for<'span> LookupSpan<'span>,
 {
@@ -48,7 +55,9 @@ where
         .with_endpoint(endpoint)
         .build()?;
 
-    let resource = Resource::builder().with_service_name(service).build();
+    let resource = Resource::builder()
+        .with_service_name(service.clone())
+        .build();
 
     let provider = SdkTracerProvider::builder()
         .with_resource(resource)
