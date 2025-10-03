@@ -1,11 +1,8 @@
 use std::net::SocketAddrV4;
 
 use color_eyre::eyre::Result;
-use foundation_args::Args;
-use foundation_configuration::ConfigurationReader;
+use foundation_init::Configuration;
 use tokio::net::TcpListener;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::server::IndexCache;
 
@@ -16,34 +13,12 @@ mod server;
 mod templates;
 mod uid;
 
-use crate::config::Config;
+use crate::config::ApplicationConfiguration;
 use crate::templates::TemplateEngine;
-
-fn setup(config: &Config) -> Result<()> {
-    dotenvy::dotenv().ok();
-    color_eyre::install()?;
-
-    let registry = foundation_logging::get_default_registry();
-
-    match &config.telemetry {
-        Some(telemetry) if telemetry.enabled => {
-            let layer = foundation_telemetry::get_trace_layer("today", &telemetry.endpoint)?;
-            registry.with(layer).init();
-        }
-        _ => {
-            registry.init();
-        }
-    }
-
-    Ok(())
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::from_env()?;
-    let config = Config::from_yaml(&args.config)?;
-
-    setup(&config)?;
+    let config: Configuration<ApplicationConfiguration> = foundation_init::run()?;
 
     let template_engine = TemplateEngine::new()?;
     let pool = crate::persistence::bootstrap::run(&config.database).await?;

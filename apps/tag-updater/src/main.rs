@@ -9,20 +9,18 @@ use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
 use axum_extra::headers::authorization::Bearer;
 use color_eyre::eyre::{Context, Result, eyre};
-use foundation_args::Args;
-use foundation_configuration::{ConfigurationReader, Secret};
+use foundation_configuration::Secret;
 use foundation_http_server::Server;
+use foundation_init::Configuration;
 use git2::Repository;
 use serde::Deserialize;
 use tokio::net::TcpListener;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 mod config;
 mod editor;
 mod git;
 
-use crate::config::Config;
+use crate::config::ApplicationConfiguration;
 use crate::editor::make_tag_edit;
 
 #[derive(Clone)]
@@ -30,23 +28,6 @@ struct SharedState {
     passphrase: Arc<Secret<String>>,
     ssh_private_key: Arc<Secret<String>>,
     repository: Arc<Mutex<Repository>>,
-}
-
-fn setup(config: &Config) -> Result<()> {
-    color_eyre::install()?;
-    let registry = foundation_logging::get_default_registry();
-
-    match &config.telemetry {
-        Some(telemetry) if telemetry.enabled => {
-            let layer = foundation_telemetry::get_trace_layer("tag-updater", &telemetry.endpoint)?;
-            registry.with(layer).init();
-        }
-        _ => {
-            registry.init();
-        }
-    }
-
-    Ok(())
 }
 
 #[tracing::instrument]
@@ -67,10 +48,7 @@ fn get_repository_or_clone(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::from_env()?;
-    let config = Config::from_yaml(&args.config)?;
-
-    setup(&config)?;
+    let config: Configuration<ApplicationConfiguration> = foundation_init::run()?;
 
     let private_key_bytes = config.private_key.resolve().await?;
     let private_key = String::from_utf8(private_key_bytes)
@@ -87,7 +65,7 @@ async fn main() -> Result<()> {
     tracing::info!("successfully opened a repository for processing");
 
     let shared_state = SharedState {
-        passphrase: Arc::from(config.passphrase),
+        passphrase: Arc::from(config.passphrase.clone()),
         ssh_private_key: private_key,
         repository,
     };

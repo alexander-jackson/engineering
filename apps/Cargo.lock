@@ -1384,6 +1384,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "foundation-init"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "foundation-args",
+ "foundation-configuration",
+ "foundation-logging",
+ "foundation-telemetry",
+ "serde",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "foundation-logging"
 version = "0.1.0"
 dependencies = [
@@ -1400,6 +1414,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "serde",
  "tracing-core",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -3985,17 +4000,15 @@ dependencies = [
  "axum",
  "axum-extra",
  "color-eyre",
- "foundation-args",
  "foundation-configuration",
  "foundation-http-server",
- "foundation-logging",
+ "foundation-init",
  "foundation-telemetry",
  "git2",
  "pico-args",
  "serde",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -4151,10 +4164,9 @@ dependencies = [
  "chrono",
  "color-eyre",
  "dotenvy",
- "foundation-args",
  "foundation-configuration",
  "foundation-http-server",
- "foundation-logging",
+ "foundation-init",
  "foundation-telemetry",
  "foundation-uid",
  "http-body-util",
@@ -4171,7 +4183,6 @@ dependencies = [
  "tower-http 0.5.2",
  "tower-util",
  "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 

@@ -4,16 +4,9 @@ use foundation_configuration::{ExternalBytes, Secret};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-pub struct Config {
+pub struct ApplicationConfiguration {
     pub addr: Ipv4Addr,
     pub port: u16,
     pub passphrase: Secret<String>,
     pub private_key: ExternalBytes,
-    pub telemetry: Option<TelemetryConfig>,
-}
-
-#[derive(Deserialize)]
-pub struct TelemetryConfig {
-    pub enabled: bool,
-    pub endpoint: String,
 }

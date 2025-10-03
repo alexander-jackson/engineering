@@ -4,10 +4,9 @@ use foundation_configuration::Secret;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-pub struct Config {
+pub struct ApplicationConfiguration {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
-    pub telemetry: Option<TelemetryConfig>,
 }
 
 #[derive(Deserialize)]
@@ -29,10 +28,4 @@ pub struct DatabaseConnectionConfig {
     pub username: String,
     pub password: Secret<String>,
     pub database: String,
-}
-
-#[derive(Deserialize)]
-pub struct TelemetryConfig {
-    pub enabled: bool,
-    pub endpoint: String,
 }

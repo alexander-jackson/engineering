@@ -4,6 +4,7 @@ members = [
 	"foundation/args",
 	"foundation/configuration",
 	"foundation/http-server",
+	"foundation/init",
 	"foundation/logging",
 	"foundation/telemetry",
 	"foundation/uid",
