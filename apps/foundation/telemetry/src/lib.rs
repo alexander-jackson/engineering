@@ -11,7 +11,7 @@ use tracing_core::Subscriber;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::registry::LookupSpan;
 
-#[derive(Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct TelemetryConfig {
     pub enabled: bool,
     pub endpoint: String,
