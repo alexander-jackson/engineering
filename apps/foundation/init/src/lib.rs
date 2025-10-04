@@ -8,7 +8,7 @@ use serde::Deserialize;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-#[derive(Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Configuration<T> {
     #[serde(flatten)]
     pub application: T,
