@@ -73,6 +73,7 @@ pub async fn fetch_origins(pool: &PgPool) -> Result<Vec<Origin>> {
 }
 
 pub struct IndexOrigin {
+    pub origin_uid: Uuid,
     pub uri: String,
     pub status: i16,
     pub latency_millis: i64,
@@ -86,6 +87,7 @@ pub async fn fetch_origins_with_most_recent_success_metrics(
         IndexOrigin,
         r#"
             SELECT DISTINCT ON (o.uri)
+                o.origin_uid,
                 o.uri,
                 q.status,
                 q.latency_millis,
@@ -102,6 +104,7 @@ pub async fn fetch_origins_with_most_recent_success_metrics(
 }
 
 pub struct OriginFailure {
+    pub origin_uid: Uuid,
     pub uri: String,
     pub failure_reason: String,
     pub queried_at: DateTime<Utc>,
@@ -114,6 +117,7 @@ pub async fn fetch_origins_with_most_recent_failure_metrics(
         OriginFailure,
         r#"
             SELECT DISTINCT ON (o.uri)
+                o.origin_uid,
                 o.uri,
                 qfr.name AS failure_reason,
                 qf.queried_at
@@ -280,4 +284,85 @@ pub async fn latest_notification_older_than(
     .expect("Exists returned a null value");
 
     Ok(notification)
+}
+
+pub struct OriginDetail {
+    pub origin_uid: Uuid,
+    pub uri: String,
+}
+
+pub async fn fetch_origin_by_uid(pool: &PgPool, origin_uid: Uuid) -> Result<Option<OriginDetail>> {
+    let origin = sqlx::query_as!(
+        OriginDetail,
+        r#"
+            SELECT origin_uid, uri
+            FROM origin
+            WHERE origin_uid = $1
+        "#,
+        origin_uid
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(origin)
+}
+
+pub struct RecentSuccessfulQuery {
+    pub status: i16,
+    pub latency_millis: i64,
+    pub queried_at: DateTime<Utc>,
+}
+
+pub async fn fetch_recent_successful_queries(
+    pool: &PgPool,
+    origin_uid: Uuid,
+    limit: i64,
+) -> Result<Vec<RecentSuccessfulQuery>> {
+    let queries = sqlx::query_as!(
+        RecentSuccessfulQuery,
+        r#"
+            SELECT q.status, q.latency_millis, q.queried_at
+            FROM query q
+            JOIN origin o ON o.id = q.origin_id
+            WHERE o.origin_uid = $1
+            ORDER BY q.queried_at DESC
+            LIMIT $2
+        "#,
+        origin_uid,
+        limit
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(queries)
+}
+
+pub struct RecentFailedQuery {
+    pub failure_reason: String,
+    pub queried_at: DateTime<Utc>,
+}
+
+pub async fn fetch_recent_failed_queries(
+    pool: &PgPool,
+    origin_uid: Uuid,
+    limit: i64,
+) -> Result<Vec<RecentFailedQuery>> {
+    let queries = sqlx::query_as!(
+        RecentFailedQuery,
+        r#"
+            SELECT qfr.name AS failure_reason, qf.queried_at
+            FROM query_failure qf
+            JOIN origin o ON o.id = qf.origin_id
+            JOIN query_failure_reason qfr ON qfr.id = qf.failure_reason_id
+            WHERE o.origin_uid = $1
+            ORDER BY qf.queried_at DESC
+            LIMIT $2
+        "#,
+        origin_uid,
+        limit
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(queries)
 }

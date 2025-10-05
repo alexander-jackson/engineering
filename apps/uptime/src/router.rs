@@ -1,7 +1,8 @@
 use std::time::Duration;
 
-use axum::extract::State;
-use axum::response::Redirect;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use axum::{Form, Router};
 use chrono::Utc;
@@ -30,6 +31,7 @@ pub fn build(pool: PgPool) -> Result<Router> {
     let router = Router::new()
         .route("/", get(index))
         .route("/add-origin", get(add_origin_template).post(add_origin))
+        .route("/origin/:origin_uid", get(origin_detail))
         .nest_service("/assets", ServeDir::new("assets"))
         .with_state(state);
 
@@ -38,6 +40,7 @@ pub fn build(pool: PgPool) -> Result<Router> {
 
 #[derive(Serialize)]
 struct IndexOrigin {
+    origin_uid: Uuid,
     uri: String,
     status: u16,
     latency_millis: u64,
@@ -46,6 +49,7 @@ struct IndexOrigin {
 
 #[derive(Serialize)]
 struct OriginFailure {
+    origin_uid: Uuid,
     uri: String,
     failure_reason: String,
     queried: String,
@@ -72,6 +76,7 @@ async fn index(
             let duration = Duration::from_millis(delta.num_milliseconds() as u64);
 
             IndexOrigin {
+                origin_uid: origin.origin_uid,
                 uri: origin.uri,
                 status: origin.status as u16,
                 latency_millis: origin.latency_millis as u64,
@@ -89,6 +94,7 @@ async fn index(
             let duration = Duration::from_millis(delta.num_milliseconds() as u64);
 
             OriginFailure {
+                origin_uid: origin.origin_uid,
                 uri: origin.uri,
                 failure_reason: origin.failure_reason,
                 queried: format_duration(duration).to_string(),
@@ -132,4 +138,100 @@ async fn add_origin(
         .expect("failed to insert origin");
 
     Redirect::to("/")
+}
+
+#[derive(Serialize)]
+struct OriginDetailContext {
+    origin_uid: Uuid,
+    uri: String,
+    successful_queries: Vec<SuccessfulQueryInfo>,
+    failed_queries: Vec<FailedQueryInfo>,
+    total_queries: usize,
+    success_rate: f64,
+}
+
+#[derive(Serialize)]
+struct SuccessfulQueryInfo {
+    status: u16,
+    latency_millis: u64,
+    queried: String,
+}
+
+#[derive(Serialize)]
+struct FailedQueryInfo {
+    failure_reason: String,
+    queried: String,
+}
+
+async fn origin_detail(
+    Path(origin_uid): Path<Uuid>,
+    State(ApplicationState {
+        pool,
+        template_engine,
+    }): State<ApplicationState>,
+) -> Response {
+    // Fetch origin details
+    let origin = match crate::persistence::fetch_origin_by_uid(&pool, origin_uid).await {
+        Ok(Some(origin)) => origin,
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, "Origin not found").into_response();
+        }
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch origin").into_response();
+        }
+    };
+
+    // Fetch recent successful queries
+    let successful_queries = crate::persistence::fetch_recent_successful_queries(&pool, origin_uid, 5)
+        .await
+        .expect("failed to fetch successful queries")
+        .into_iter()
+        .map(|query| {
+            let delta = (Utc::now() - query.queried_at).abs();
+            let duration = Duration::from_millis(delta.num_milliseconds() as u64);
+
+            SuccessfulQueryInfo {
+                status: query.status as u16,
+                latency_millis: query.latency_millis as u64,
+                queried: format_duration(duration).to_string(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // Fetch recent failed queries
+    let failed_queries = crate::persistence::fetch_recent_failed_queries(&pool, origin_uid, 5)
+        .await
+        .expect("failed to fetch failed queries")
+        .into_iter()
+        .map(|query| {
+            let delta = (Utc::now() - query.queried_at).abs();
+            let duration = Duration::from_millis(delta.num_milliseconds() as u64);
+
+            FailedQueryInfo {
+                failure_reason: query.failure_reason,
+                queried: format_duration(duration).to_string(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let total_queries = successful_queries.len() + failed_queries.len();
+    let success_rate = if total_queries > 0 {
+        (successful_queries.len() as f64 / total_queries as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let context = OriginDetailContext {
+        origin_uid: origin.origin_uid,
+        uri: origin.uri,
+        successful_queries,
+        failed_queries,
+        total_queries,
+        success_rate,
+    };
+
+    template_engine
+        .render_serialized("origin.tera.html", &context)
+        .expect("failed to render template")
+        .into_response()
 }
