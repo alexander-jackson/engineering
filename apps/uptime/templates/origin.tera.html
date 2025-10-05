@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="assets/style.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Uptime</title>
+  </head>
+
+  <body class="container">
+    <h1>Uptime</h1>
+
+	{% for query in queries %}
+		{{ query.result.reason }}
+	{% endfor %}
+  </body>
+</html>
