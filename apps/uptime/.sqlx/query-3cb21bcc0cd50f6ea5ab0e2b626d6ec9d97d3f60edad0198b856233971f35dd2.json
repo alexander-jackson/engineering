@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT ON (o.uri)\n                o.origin_uid,\n                o.uri,\n                qfr.name AS failure_reason,\n                qf.queried_at\n            FROM origin o\n            JOIN query_failure qf ON o.id = qf.origin_id\n            JOIN query_failure_reason qfr ON qfr.id = qf.failure_reason_id\n            ORDER BY o.uri, qf.queried_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "origin_uid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "uri",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "failure_reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "queried_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3cb21bcc0cd50f6ea5ab0e2b626d6ec9d97d3f60edad0198b856233971f35dd2"
+}
