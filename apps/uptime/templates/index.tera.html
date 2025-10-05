@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="assets/style.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Uptime</title>
+  </head>
+
+  <body class="container">
+    <h1>Uptime</h1>
+
+    <a href="/add-origin">Add Origin</a>
+
+    <table>
+      <tr>
+        <th>Uri</th>
+        <th>Status</th>
+        <th>Queried</th>
+      </tr>
+
+      {% for overview in overviews %}
+      <tr>
+        <td>
+          <a href="/origin/{{ overview.origin_uid }}">{{ overview.uri }}</a>
+        </td>
+        <td>
+          {% if overview.status == 'Healthy' %} ✅ {% elif overview.status ==
+          'Unhealthy' %} ❌ {% else %} ❔ {% endif %}
+        </td>
+        <td>
+          {% if overview.queried %} {{ overview.queried }} ago {% else %} ❔ {%
+          endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </body>
+</html>
