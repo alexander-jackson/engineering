@@ -99,10 +99,21 @@
                             Visit
                         </a>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
                         <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Origin UID</p>
-                            <p class="mt-1 text-sm font-mono text-gray-900 dark:text-white break-all">{{ origin_uid }}</p>
+                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Current Status</p>
+                            <div class="mt-1 flex items-center">
+                                {% if health.status == "healthy" %}
+                                <div class="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                                <span class="text-lg font-semibold text-green-600 dark:text-green-400">Healthy</span>
+                                {% elif health.status == "down" %}
+                                <div class="w-2 h-2 bg-red-400 rounded-full mr-2"></div>
+                                <span class="text-lg font-semibold text-red-600 dark:text-red-400">Down</span>
+                                {% else %}
+                                <div class="w-2 h-2 bg-gray-400 rounded-full mr-2"></div>
+                                <span class="text-lg font-semibold text-gray-600 dark:text-gray-400">Unknown</span>
+                                {% endif %}
+                            </div>
                         </div>
                         <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
                             <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Recent Queries</p>
@@ -120,6 +131,32 @@
                                 {% endif %}
                             </p>
                         </div>
+                        <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                            {% if health.status == "healthy" %}
+                                {% if health.last_failure %}
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Last Failed</p>
+                                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ health.last_failure }} ago</p>
+                                {% else %}
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Last Failed</p>
+                                <p class="mt-1 text-lg font-semibold text-gray-600 dark:text-gray-400">Never</p>
+                                {% endif %}
+                            {% elif health.status == "down" %}
+                                {% if health.last_success %}
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Last Succeeded</p>
+                                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ health.last_success }} ago</p>
+                                {% else %}
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Last Succeeded</p>
+                                <p class="mt-1 text-lg font-semibold text-gray-600 dark:text-gray-400">Never</p>
+                                {% endif %}
+                            {% else %}
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">No Data</p>
+                                <p class="mt-1 text-lg font-semibold text-gray-600 dark:text-gray-400">-</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="mt-4 bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Origin UID</p>
+                        <p class="mt-1 text-sm font-mono text-gray-900 dark:text-white break-all">{{ origin_uid }}</p>
                     </div>
                 </div>
             </div>

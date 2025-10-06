@@ -364,3 +364,45 @@ pub async fn fetch_recent_queries(
 
     Ok(queries)
 }
+
+pub async fn fetch_most_recent_success(
+    pool: &PgPool,
+    origin_uid: Uuid,
+) -> Result<Option<DateTime<Utc>>> {
+    let result = sqlx::query_scalar!(
+        r#"
+            SELECT q.queried_at
+            FROM query q
+            JOIN origin o ON o.id = q.origin_id
+            WHERE o.origin_uid = $1
+            ORDER BY q.queried_at DESC
+            LIMIT 1
+        "#,
+        origin_uid
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result)
+}
+
+pub async fn fetch_most_recent_failure(
+    pool: &PgPool,
+    origin_uid: Uuid,
+) -> Result<Option<DateTime<Utc>>> {
+    let result = sqlx::query_scalar!(
+        r#"
+            SELECT qf.queried_at
+            FROM query_failure qf
+            JOIN origin o ON o.id = qf.origin_id
+            WHERE o.origin_uid = $1
+            ORDER BY qf.queried_at DESC
+            LIMIT 1
+        "#,
+        origin_uid
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result)
+}
