@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT q.queried_at\n            FROM query q\n            JOIN origin o ON o.id = q.origin_id\n            WHERE o.origin_uid = $1\n            ORDER BY q.queried_at DESC\n            LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "queried_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d5e088bbd8ab977712c79ca32086f7051d64f3dec6281cc6851e9b315c26717b"
+}

@@ -141,12 +141,21 @@ async fn add_origin(
 }
 
 #[derive(Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+enum OriginHealthStatus {
+    Healthy { last_failure: Option<String> },
+    Down { last_success: Option<String> },
+    Unknown,
+}
+
+#[derive(Serialize)]
 struct OriginDetailContext {
     origin_uid: Uuid,
     uri: String,
     queries: Vec<QueryInfo>,
     total_queries: usize,
     success_rate: f64,
+    health: OriginHealthStatus,
 }
 
 #[derive(Serialize)]
@@ -203,12 +212,42 @@ async fn origin_detail(
         0.0
     };
 
+    // Determine health status based on most recent query
+    let health = match queries.first().map(|q| q.is_success) {
+        Some(true) => {
+            // Currently healthy, fetch when it last failed
+            let last_failure = crate::persistence::fetch_most_recent_failure(&pool, origin_uid)
+                .await
+                .expect("failed to fetch most recent failure")
+                .map(|ts| {
+                    let delta = (Utc::now() - ts).abs();
+                    let duration = Duration::from_millis(delta.num_milliseconds() as u64);
+                    format_duration(duration).to_string()
+                });
+            OriginHealthStatus::Healthy { last_failure }
+        }
+        Some(false) => {
+            // Currently down, fetch when it last succeeded
+            let last_success = crate::persistence::fetch_most_recent_success(&pool, origin_uid)
+                .await
+                .expect("failed to fetch most recent success")
+                .map(|ts| {
+                    let delta = (Utc::now() - ts).abs();
+                    let duration = Duration::from_millis(delta.num_milliseconds() as u64);
+                    format_duration(duration).to_string()
+                });
+            OriginHealthStatus::Down { last_success }
+        }
+        None => OriginHealthStatus::Unknown,
+    };
+
     let context = OriginDetailContext {
         origin_uid: origin.origin_uid,
         uri: origin.uri,
         queries,
         total_queries,
         success_rate,
+        health,
     };
 
     template_engine
