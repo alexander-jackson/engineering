@@ -92,8 +92,7 @@ fn extract_certificate_expiry(cert_der: &[u8]) -> Result<DateTime<Utc>> {
     let not_after = cert.validity().not_after;
     let timestamp = not_after.timestamp();
 
-    DateTime::from_timestamp(timestamp, 0)
-        .ok_or_else(|| eyre!("Invalid timestamp in certificate"))
+    DateTime::from_timestamp(timestamp, 0).ok_or_else(|| eyre!("Invalid timestamp in certificate"))
 }
 
 /// Check the certificate expiry for a given URI
