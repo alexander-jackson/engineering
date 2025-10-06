@@ -1,0 +1,15 @@
+default: run
+
+run:
+	cargo run
+
+test:
+	cargo nextest run
+
+lint:
+	cargo clippy -- -D warnings
+
+format:
+	cargo fmt
+
+validate: lint format test

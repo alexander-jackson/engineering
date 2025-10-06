@@ -8,12 +8,29 @@ use axum::{Form, Router};
 use chrono::Utc;
 use color_eyre::eyre::Result;
 use humantime::format_duration;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
+use sqlx::types::chrono::DateTime;
 use sqlx::PgPool;
 use tower_http::services::ServeDir;
 use uuid::Uuid;
 
 use crate::templates::{RenderedTemplate, TemplateEngine};
+
+/// A wrapper type for timestamps that serializes as a human-readable duration relative to now
+#[derive(Clone)]
+struct PrettyDuration(DateTime<Utc>);
+
+impl Serialize for PrettyDuration {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let delta = (Utc::now() - self.0).abs();
+        let duration = Duration::from_millis(delta.num_milliseconds() as u64);
+        let formatted = format_duration(duration).to_string();
+        serializer.serialize_str(&formatted)
+    }
+}
 
 #[derive(Clone)]
 struct ApplicationState {
@@ -44,7 +61,7 @@ struct IndexOrigin {
     uri: String,
     status: u16,
     latency_millis: u64,
-    queried: String,
+    queried: PrettyDuration,
 }
 
 #[derive(Serialize)]
@@ -52,7 +69,7 @@ struct OriginFailure {
     origin_uid: Uuid,
     uri: String,
     failure_reason: String,
-    queried: String,
+    queried: PrettyDuration,
 }
 
 #[derive(Serialize)]
@@ -71,17 +88,12 @@ async fn index(
         .await
         .expect("failed to fetch origins")
         .into_iter()
-        .map(|origin| {
-            let delta = (Utc::now() - origin.queried_at).abs();
-            let duration = Duration::from_millis(delta.num_milliseconds() as u64);
-
-            IndexOrigin {
-                origin_uid: origin.origin_uid,
-                uri: origin.uri,
-                status: origin.status as u16,
-                latency_millis: origin.latency_millis as u64,
-                queried: format_duration(duration).to_string(),
-            }
+        .map(|origin| IndexOrigin {
+            origin_uid: origin.origin_uid,
+            uri: origin.uri,
+            status: origin.status as u16,
+            latency_millis: origin.latency_millis as u64,
+            queried: PrettyDuration(origin.queried_at),
         })
         .collect();
 
@@ -89,16 +101,11 @@ async fn index(
         .await
         .expect("failed to fetch failing origins")
         .into_iter()
-        .map(|origin| {
-            let delta = (Utc::now() - origin.queried_at).abs();
-            let duration = Duration::from_millis(delta.num_milliseconds() as u64);
-
-            OriginFailure {
-                origin_uid: origin.origin_uid,
-                uri: origin.uri,
-                failure_reason: origin.failure_reason,
-                queried: format_duration(duration).to_string(),
-            }
+        .map(|origin| OriginFailure {
+            origin_uid: origin.origin_uid,
+            uri: origin.uri,
+            failure_reason: origin.failure_reason,
+            queried: PrettyDuration(origin.queried_at),
         })
         .collect();
 
@@ -143,8 +150,12 @@ async fn add_origin(
 #[derive(Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 enum OriginHealthStatus {
-    Healthy { last_failure: Option<String> },
-    Down { last_success: Option<String> },
+    Healthy {
+        last_failure: Option<PrettyDuration>,
+    },
+    Down {
+        last_success: Option<PrettyDuration>,
+    },
     Unknown,
 }
 
@@ -163,7 +174,7 @@ struct QueryInfo {
     status: Option<u16>,
     latency_millis: Option<u64>,
     failure_reason: Option<String>,
-    queried: String,
+    queried: PrettyDuration,
     is_success: bool,
 }
 
@@ -190,17 +201,12 @@ async fn origin_detail(
         .await
         .expect("failed to fetch recent queries")
         .into_iter()
-        .map(|query| {
-            let delta = (Utc::now() - query.queried_at).abs();
-            let duration = Duration::from_millis(delta.num_milliseconds() as u64);
-
-            QueryInfo {
-                status: query.status.map(|s| s as u16),
-                latency_millis: query.latency_millis.map(|l| l as u64),
-                failure_reason: query.failure_reason,
-                queried: format_duration(duration).to_string(),
-                is_success: query.is_success,
-            }
+        .map(|query| QueryInfo {
+            status: query.status.map(|s| s as u16),
+            latency_millis: query.latency_millis.map(|l| l as u64),
+            failure_reason: query.failure_reason,
+            queried: PrettyDuration(query.queried_at),
+            is_success: query.is_success,
         })
         .collect::<Vec<_>>();
 
@@ -219,11 +225,7 @@ async fn origin_detail(
             let last_failure = crate::persistence::fetch_most_recent_failure(&pool, origin_uid)
                 .await
                 .expect("failed to fetch most recent failure")
-                .map(|ts| {
-                    let delta = (Utc::now() - ts).abs();
-                    let duration = Duration::from_millis(delta.num_milliseconds() as u64);
-                    format_duration(duration).to_string()
-                });
+                .map(PrettyDuration);
             OriginHealthStatus::Healthy { last_failure }
         }
         Some(false) => {
@@ -231,11 +233,7 @@ async fn origin_detail(
             let last_success = crate::persistence::fetch_most_recent_success(&pool, origin_uid)
                 .await
                 .expect("failed to fetch most recent success")
-                .map(|ts| {
-                    let delta = (Utc::now() - ts).abs();
-                    let duration = Duration::from_millis(delta.num_milliseconds() as u64);
-                    format_duration(duration).to_string()
-                });
+                .map(PrettyDuration);
             OriginHealthStatus::Down { last_success }
         }
         None => OriginHealthStatus::Unknown,
