@@ -160,6 +160,14 @@ enum OriginHealthStatus {
 }
 
 #[derive(Serialize)]
+struct CertificateInfo {
+    expires_at: String,
+    checked_at: PrettyDuration,
+    days_until_expiry: i64,
+    is_expiring_soon: bool,
+}
+
+#[derive(Serialize)]
 struct OriginDetailContext {
     origin_uid: Uuid,
     uri: String,
@@ -167,6 +175,7 @@ struct OriginDetailContext {
     total_queries: usize,
     success_rate: f64,
     health: OriginHealthStatus,
+    certificate: Option<CertificateInfo>,
 }
 
 #[derive(Serialize)]
@@ -239,6 +248,22 @@ async fn origin_detail(
         None => OriginHealthStatus::Unknown,
     };
 
+    // Fetch certificate information if available
+    let certificate = crate::persistence::fetch_most_recent_certificate_check(&pool, origin_uid)
+        .await
+        .expect("failed to fetch certificate check")
+        .map(|cert| {
+            let days_until_expiry = (cert.expires_at - Utc::now()).num_days();
+            let is_expiring_soon = days_until_expiry <= 30;
+
+            CertificateInfo {
+                expires_at: cert.expires_at.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+                checked_at: PrettyDuration(cert.checked_at),
+                days_until_expiry,
+                is_expiring_soon,
+            }
+        });
+
     let context = OriginDetailContext {
         origin_uid: origin.origin_uid,
         uri: origin.uri,
@@ -246,6 +271,7 @@ async fn origin_detail(
         total_queries,
         success_rate,
         health,
+        certificate,
     };
 
     template_engine

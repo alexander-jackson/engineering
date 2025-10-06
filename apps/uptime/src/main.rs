@@ -12,12 +12,14 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
+mod certificate_checker;
 mod persistence;
 mod poller;
 mod router;
 mod templates;
 mod utils;
 
+use crate::certificate_checker::CertificateChecker;
 use crate::poller::Poller;
 use crate::utils::get_env_var;
 
@@ -52,7 +54,8 @@ async fn main() -> Result<()> {
     let configuration = PollerConfiguration::new(AlertThreshold::default(), topic);
 
     let http_client = Client::new();
-    let poller = Poller::new(pool.clone(), http_client, sns_client, configuration);
+    let poller = Poller::new(pool.clone(), http_client.clone(), sns_client, configuration);
+    let cert_checker = CertificateChecker::new(pool.clone(), http_client);
 
     let router = crate::router::build(pool.clone())?;
     let addr = SocketAddr::from_str(&get_env_var("SERVER_ADDR")?)?;
@@ -60,7 +63,11 @@ async fn main() -> Result<()> {
 
     tracing::info!(%addr, "listening for incoming requests");
 
-    let _ = tokio::join!(poller.run(), axum::serve(listener, router));
+    let _ = tokio::join!(
+        poller.run(),
+        cert_checker.run(),
+        axum::serve(listener, router)
+    );
 
     Ok(())
 }
