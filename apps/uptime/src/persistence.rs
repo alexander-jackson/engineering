@@ -406,3 +406,59 @@ pub async fn fetch_most_recent_failure(
 
     Ok(result)
 }
+
+pub async fn insert_certificate_check(
+    pool: &PgPool,
+    origin_uid: Uuid,
+    expires_at: DateTime<Utc>,
+    checked_at: DateTime<Utc>,
+) -> Result<Uuid> {
+    let certificate_check_uid = Uuid::new_v4();
+
+    sqlx::query!(
+        r#"
+            INSERT INTO certificate_check (certificate_check_uid, origin_id, expires_at, checked_at)
+            VALUES (
+                $1,
+                (SELECT id FROM origin WHERE origin_uid = $2),
+                $3,
+                $4
+            )
+        "#,
+        certificate_check_uid,
+        origin_uid,
+        expires_at,
+        checked_at
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(certificate_check_uid)
+}
+
+pub struct CertificateCheck {
+    pub expires_at: DateTime<Utc>,
+    pub checked_at: DateTime<Utc>,
+}
+
+pub async fn fetch_most_recent_certificate_check(
+    pool: &PgPool,
+    origin_uid: Uuid,
+) -> Result<Option<CertificateCheck>> {
+    let result = sqlx::query_as!(
+        CertificateCheck,
+        r#"
+            SELECT cc.expires_at, cc.checked_at
+            FROM certificate_check cc
+            JOIN origin o ON o.id = cc.origin_id
+            WHERE o.origin_uid = $1
+            ORDER BY cc.checked_at DESC
+            LIMIT 1
+        "#,
+        origin_uid
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result)
+}
