@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                combined.is_success AS \"is_success!\",\n                combined.status AS \"status?\",\n                combined.latency_millis AS \"latency_millis?\",\n                combined.failure_reason AS \"failure_reason?\",\n                combined.queried_at AS \"queried_at!\"\n            FROM (\n                SELECT\n                    TRUE AS is_success,\n                    q.status,\n                    q.latency_millis,\n                    NULL::TEXT AS failure_reason,\n                    q.queried_at\n                FROM query q\n                JOIN origin o ON o.id = q.origin_id\n                WHERE o.origin_uid = $1\n\n                UNION ALL\n\n                SELECT\n                    FALSE AS is_success,\n                    NULL::SMALLINT AS status,\n                    NULL::BIGINT AS latency_millis,\n                    qfr.name AS failure_reason,\n                    qf.queried_at\n                FROM query_failure qf\n                JOIN origin o ON o.id = qf.origin_id\n                JOIN query_failure_reason qfr ON qfr.id = qf.failure_reason_id\n                WHERE o.origin_uid = $1\n            ) combined\n            ORDER BY combined.queried_at DESC\n            LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_success!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "status?",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 2,
+        "name": "latency_millis?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "failure_reason?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "queried_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "4e8ad86da9bb0055754569d51bab126fb902408844eac94591ec90b969f7c82f"
+}
