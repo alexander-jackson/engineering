@@ -124,75 +124,55 @@
                 </div>
             </div>
 
-            <!-- Successful Queries Section -->
-            {% if successful_queries %}
-            <section class="mb-8" aria-labelledby="successful-queries-heading">
+            <!-- Recent Queries Section -->
+            {% if queries %}
+            <section aria-labelledby="recent-queries-heading">
                 <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
                     <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <h2 id="successful-queries-heading" class="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
-                            <span class="w-3 h-3 bg-green-400 rounded-full mr-3"></span>
-                            Recent Successful Queries
+                        <h2 id="recent-queries-heading" class="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
+                            <span class="w-3 h-3 bg-blue-400 rounded-full mr-3"></span>
+                            Recent Query History
                         </h2>
-                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">The 5 most recent successful responses</p>
+                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">The 5 most recent queries (successful and failed)</p>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-900">
                                 <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status Code</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Latency</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Result</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Details</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Queried</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                {% for query in successful_queries %}
+                                {% for query in queries %}
                                 <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                            {{ query.status }}
-                                        </span>
+                                        {% if query.is_success %}
+                                        <div class="flex items-center">
+                                            <div class="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                                            <span class="text-sm font-medium text-green-600 dark:text-green-400">Success</span>
+                                        </div>
+                                        {% else %}
+                                        <div class="flex items-center">
+                                            <div class="w-2 h-2 bg-red-400 rounded-full mr-2"></div>
+                                            <span class="text-sm font-medium text-red-600 dark:text-red-400">Failed</span>
+                                        </div>
+                                        {% endif %}
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                                        <span class="font-mono">{{ query.latency_millis }}ms</span>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                                        {{ query.queried }} ago
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-            {% endif %}
-
-            <!-- Failed Queries Section -->
-            {% if failed_queries %}
-            <section aria-labelledby="failed-queries-heading">
-                <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <h2 id="failed-queries-heading" class="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
-                            <span class="w-3 h-3 bg-red-400 rounded-full mr-3"></span>
-                            Recent Failed Queries
-                        </h2>
-                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">The 5 most recent failures</p>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead class="bg-gray-50 dark:bg-gray-900">
-                                <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Failure Reason</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Queried</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                {% for query in failed_queries %}
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
                                     <td class="px-6 py-4">
+                                        {% if query.is_success %}
+                                        <div class="flex items-center space-x-3">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                                {{ query.status }}
+                                            </span>
+                                            <span class="text-sm text-gray-900 dark:text-gray-100 font-mono">{{ query.latency_millis }}ms</span>
+                                        </div>
+                                        {% else %}
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
                                             {{ query.failure_reason }}
                                         </span>
+                                        {% endif %}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                                         {{ query.queried }} ago
@@ -207,7 +187,7 @@
             {% endif %}
 
             <!-- Empty state -->
-            {% if not successful_queries and not failed_queries %}
+            {% if not queries %}
             <div class="text-center py-12">
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-12">
                     <svg class="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

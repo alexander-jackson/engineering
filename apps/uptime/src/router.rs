@@ -144,23 +144,18 @@ async fn add_origin(
 struct OriginDetailContext {
     origin_uid: Uuid,
     uri: String,
-    successful_queries: Vec<SuccessfulQueryInfo>,
-    failed_queries: Vec<FailedQueryInfo>,
+    queries: Vec<QueryInfo>,
     total_queries: usize,
     success_rate: f64,
 }
 
 #[derive(Serialize)]
-struct SuccessfulQueryInfo {
-    status: u16,
-    latency_millis: u64,
+struct QueryInfo {
+    status: Option<u16>,
+    latency_millis: Option<u64>,
+    failure_reason: Option<String>,
     queried: String,
-}
-
-#[derive(Serialize)]
-struct FailedQueryInfo {
-    failure_reason: String,
-    queried: String,
+    is_success: bool,
 }
 
 async fn origin_detail(
@@ -181,42 +176,29 @@ async fn origin_detail(
         }
     };
 
-    // Fetch recent successful queries
-    let successful_queries = crate::persistence::fetch_recent_successful_queries(&pool, origin_uid, 5)
+    // Fetch recent queries (both successful and failed)
+    let queries = crate::persistence::fetch_recent_queries(&pool, origin_uid, 5)
         .await
-        .expect("failed to fetch successful queries")
+        .expect("failed to fetch recent queries")
         .into_iter()
         .map(|query| {
             let delta = (Utc::now() - query.queried_at).abs();
             let duration = Duration::from_millis(delta.num_milliseconds() as u64);
 
-            SuccessfulQueryInfo {
-                status: query.status as u16,
-                latency_millis: query.latency_millis as u64,
-                queried: format_duration(duration).to_string(),
-            }
-        })
-        .collect::<Vec<_>>();
-
-    // Fetch recent failed queries
-    let failed_queries = crate::persistence::fetch_recent_failed_queries(&pool, origin_uid, 5)
-        .await
-        .expect("failed to fetch failed queries")
-        .into_iter()
-        .map(|query| {
-            let delta = (Utc::now() - query.queried_at).abs();
-            let duration = Duration::from_millis(delta.num_milliseconds() as u64);
-
-            FailedQueryInfo {
+            QueryInfo {
+                status: query.status.map(|s| s as u16),
+                latency_millis: query.latency_millis.map(|l| l as u64),
                 failure_reason: query.failure_reason,
                 queried: format_duration(duration).to_string(),
+                is_success: query.is_success,
             }
         })
         .collect::<Vec<_>>();
 
-    let total_queries = successful_queries.len() + failed_queries.len();
+    let total_queries = queries.len();
+    let successful_count = queries.iter().filter(|q| q.is_success).count();
     let success_rate = if total_queries > 0 {
-        (successful_queries.len() as f64 / total_queries as f64) * 100.0
+        (successful_count as f64 / total_queries as f64) * 100.0
     } else {
         0.0
     };
@@ -224,8 +206,7 @@ async fn origin_detail(
     let context = OriginDetailContext {
         origin_uid: origin.origin_uid,
         uri: origin.uri,
-        successful_queries,
-        failed_queries,
+        queries,
         total_queries,
         success_rate,
     };

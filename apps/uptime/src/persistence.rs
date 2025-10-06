@@ -307,55 +307,53 @@ pub async fn fetch_origin_by_uid(pool: &PgPool, origin_uid: Uuid) -> Result<Opti
     Ok(origin)
 }
 
-pub struct RecentSuccessfulQuery {
-    pub status: i16,
-    pub latency_millis: i64,
+pub struct RecentQuery {
+    pub is_success: bool,
+    pub status: Option<i16>,
+    pub latency_millis: Option<i64>,
+    pub failure_reason: Option<String>,
     pub queried_at: DateTime<Utc>,
 }
 
-pub async fn fetch_recent_successful_queries(
+pub async fn fetch_recent_queries(
     pool: &PgPool,
     origin_uid: Uuid,
     limit: i64,
-) -> Result<Vec<RecentSuccessfulQuery>> {
+) -> Result<Vec<RecentQuery>> {
     let queries = sqlx::query_as!(
-        RecentSuccessfulQuery,
+        RecentQuery,
         r#"
-            SELECT q.status, q.latency_millis, q.queried_at
-            FROM query q
-            JOIN origin o ON o.id = q.origin_id
-            WHERE o.origin_uid = $1
-            ORDER BY q.queried_at DESC
-            LIMIT $2
-        "#,
-        origin_uid,
-        limit
-    )
-    .fetch_all(pool)
-    .await?;
+            SELECT
+                combined.is_success AS "is_success!",
+                combined.status AS "status?",
+                combined.latency_millis AS "latency_millis?",
+                combined.failure_reason AS "failure_reason?",
+                combined.queried_at AS "queried_at!"
+            FROM (
+                SELECT
+                    TRUE AS is_success,
+                    q.status,
+                    q.latency_millis,
+                    NULL::TEXT AS failure_reason,
+                    q.queried_at
+                FROM query q
+                JOIN origin o ON o.id = q.origin_id
+                WHERE o.origin_uid = $1
 
-    Ok(queries)
-}
+                UNION ALL
 
-pub struct RecentFailedQuery {
-    pub failure_reason: String,
-    pub queried_at: DateTime<Utc>,
-}
-
-pub async fn fetch_recent_failed_queries(
-    pool: &PgPool,
-    origin_uid: Uuid,
-    limit: i64,
-) -> Result<Vec<RecentFailedQuery>> {
-    let queries = sqlx::query_as!(
-        RecentFailedQuery,
-        r#"
-            SELECT qfr.name AS failure_reason, qf.queried_at
-            FROM query_failure qf
-            JOIN origin o ON o.id = qf.origin_id
-            JOIN query_failure_reason qfr ON qfr.id = qf.failure_reason_id
-            WHERE o.origin_uid = $1
-            ORDER BY qf.queried_at DESC
+                SELECT
+                    FALSE AS is_success,
+                    NULL::SMALLINT AS status,
+                    NULL::BIGINT AS latency_millis,
+                    qfr.name AS failure_reason,
+                    qf.queried_at
+                FROM query_failure qf
+                JOIN origin o ON o.id = qf.origin_id
+                JOIN query_failure_reason qfr ON qfr.id = qf.failure_reason_id
+                WHERE o.origin_uid = $1
+            ) combined
+            ORDER BY combined.queried_at DESC
             LIMIT $2
         "#,
         origin_uid,
