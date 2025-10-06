@@ -135,7 +135,7 @@
                             {% if health.status == "healthy" %}
                                 {% if health.last_failure %}
                                 <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Last Failed</p>
-                                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ health.last_failure }} ago</p>
+                                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ health.last_failure }}</p>
                                 {% else %}
                                 <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Last Failed</p>
                                 <p class="mt-1 text-lg font-semibold text-gray-600 dark:text-gray-400">Never</p>
@@ -143,7 +143,7 @@
                             {% elif health.status == "down" %}
                                 {% if health.last_success %}
                                 <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Last Succeeded</p>
-                                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ health.last_success }} ago</p>
+                                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ health.last_success }}</p>
                                 {% else %}
                                 <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Last Succeeded</p>
                                 <p class="mt-1 text-lg font-semibold text-gray-600 dark:text-gray-400">Never</p>
@@ -212,7 +212,7 @@
                                         {% endif %}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                                        {{ query.queried }} ago
+                                        {{ query.queried }}
                                     </td>
                                 </tr>
                                 {% endfor %}
