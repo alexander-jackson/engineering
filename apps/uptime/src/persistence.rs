@@ -510,3 +510,43 @@ pub async fn certificate_expires_within(
 
     Ok(cert_check)
 }
+
+#[derive(Serialize)]
+pub struct RecentNotification {
+    pub notification_uid: Uuid,
+    pub origin_uid: Uuid,
+    pub uri: String,
+    pub notification_type: String,
+    pub subject: String,
+    pub message: String,
+    pub created_at: DateTime<Utc>,
+}
+
+pub async fn fetch_recent_notifications(
+    pool: &PgPool,
+    limit: i64,
+) -> Result<Vec<RecentNotification>> {
+    let notifications = sqlx::query_as!(
+        RecentNotification,
+        r#"
+            SELECT
+                n.notification_uid,
+                o.origin_uid,
+                o.uri,
+                nt.name AS notification_type,
+                n.subject,
+                n.message,
+                n.created_at
+            FROM notification n
+            JOIN origin o ON o.id = n.origin_id
+            JOIN notification_type nt ON nt.id = n.notification_type_id
+            ORDER BY n.created_at DESC
+            LIMIT $1
+        "#,
+        limit
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(notifications)
+}

@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                n.notification_uid,\n                o.origin_uid,\n                o.uri,\n                nt.name AS notification_type,\n                n.subject,\n                n.message,\n                n.created_at\n            FROM notification n\n            JOIN origin o ON o.id = n.origin_id\n            JOIN notification_type nt ON nt.id = n.notification_type_id\n            ORDER BY n.created_at DESC\n            LIMIT $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_uid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "origin_uid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "uri",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "notification_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "43975333941f20ca821f3b8339e522af27babde55a73a1452da3de2c3706297a"
+}

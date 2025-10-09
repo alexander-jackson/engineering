@@ -49,6 +49,7 @@ pub fn build(pool: PgPool) -> Result<Router> {
         .route("/", get(index))
         .route("/add-origin", get(add_origin_template).post(add_origin))
         .route("/origin/:origin_uid", get(origin_detail))
+        .route("/notifications", get(notifications))
         .nest_service("/assets", ServeDir::new("assets"))
         .with_state(state);
 
@@ -278,4 +279,48 @@ async fn origin_detail(
         .render_serialized("origin.tera.html", &context)
         .expect("failed to render template")
         .into_response()
+}
+
+#[derive(Serialize)]
+struct NotificationInfo {
+    notification_uid: Uuid,
+    origin_uid: Uuid,
+    uri: String,
+    notification_type: String,
+    subject: String,
+    message: String,
+    created: PrettyDuration,
+}
+
+#[derive(Serialize)]
+struct NotificationsContext {
+    notifications: Vec<NotificationInfo>,
+}
+
+async fn notifications(
+    State(ApplicationState {
+        pool,
+        template_engine,
+    }): State<ApplicationState>,
+) -> RenderedTemplate {
+    let notifications = crate::persistence::fetch_recent_notifications(&pool, 50)
+        .await
+        .expect("failed to fetch notifications")
+        .into_iter()
+        .map(|n| NotificationInfo {
+            notification_uid: n.notification_uid,
+            origin_uid: n.origin_uid,
+            uri: n.uri,
+            notification_type: n.notification_type,
+            subject: n.subject,
+            message: n.message,
+            created: PrettyDuration(n.created_at),
+        })
+        .collect();
+
+    let context = NotificationsContext { notifications };
+
+    template_engine
+        .render_serialized("notifications.tera.html", &context)
+        .expect("failed to render template")
 }
