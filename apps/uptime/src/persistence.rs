@@ -223,9 +223,24 @@ pub async fn failure_rate_exceeded(
     Ok(exceeded)
 }
 
+pub enum NotificationType {
+    Uptime,
+    CertificateExpiry,
+}
+
+impl NotificationType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Uptime => "Uptime",
+            Self::CertificateExpiry => "CertificateExpiry",
+        }
+    }
+}
+
 pub async fn insert_notification(
     pool: &PgPool,
     origin_uid: Uuid,
+    notification_type: NotificationType,
     topic: &str,
     subject: &str,
     message: &str,
@@ -235,18 +250,20 @@ pub async fn insert_notification(
 
     sqlx::query!(
         r#"
-            INSERT INTO notification (notification_uid, origin_id, topic, subject, message, created_at)
+            INSERT INTO notification (notification_uid, origin_id, notification_type_id, topic, subject, message, created_at)
             VALUES (
                 $1,
                 (SELECT id FROM origin WHERE origin_uid = $2),
-                $3,
+                (SELECT id FROM notification_type WHERE name = $3),
                 $4,
                 $5,
-                $6
+                $6,
+                $7
             )
         "#,
         notification_uid,
         origin_uid,
+        notification_type.as_str(),
         topic,
         subject,
         message,
@@ -261,6 +278,7 @@ pub async fn insert_notification(
 pub async fn latest_notification_older_than(
     pool: &PgPool,
     origin_uid: Uuid,
+    notification_type: NotificationType,
     cooldown: Duration,
 ) -> Result<bool> {
     let boundary = Utc::now() - cooldown;
@@ -271,12 +289,15 @@ pub async fn latest_notification_older_than(
                 SELECT
                 FROM notification n
                 JOIN origin o ON o.id = n.origin_id
+                JOIN notification_type nt ON nt.id = n.notification_type_id
                 WHERE o.origin_uid = $1
-                AND n.created_at > $2
+                AND nt.name = $2
+                AND n.created_at > $3
                 LIMIT 1
             )
         "#,
         origin_uid,
+        notification_type.as_str(),
         boundary,
     )
     .fetch_one(pool)
@@ -461,4 +482,31 @@ pub async fn fetch_most_recent_certificate_check(
     .await?;
 
     Ok(result)
+}
+
+pub async fn certificate_expires_within(
+    pool: &PgPool,
+    origin_uid: Uuid,
+    threshold: Duration,
+) -> Result<Option<CertificateCheck>> {
+    let boundary = Utc::now() + threshold;
+
+    let cert_check = sqlx::query_as!(
+        CertificateCheck,
+        r#"
+            SELECT cc.expires_at, cc.checked_at
+            FROM certificate_check cc
+            JOIN origin o ON o.id = cc.origin_id
+            WHERE o.origin_uid = $1
+            AND cc.expires_at <= $2
+            ORDER BY cc.checked_at DESC
+            LIMIT 1
+        "#,
+        origin_uid,
+        boundary,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(cert_check)
 }

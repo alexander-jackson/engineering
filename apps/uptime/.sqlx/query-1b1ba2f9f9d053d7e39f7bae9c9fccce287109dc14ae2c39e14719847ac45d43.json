@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT cc.expires_at, cc.checked_at\n            FROM certificate_check cc\n            JOIN origin o ON o.id = cc.origin_id\n            WHERE o.origin_uid = $1\n            AND cc.expires_at <= $2\n            ORDER BY cc.checked_at DESC\n            LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "checked_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1b1ba2f9f9d053d7e39f7bae9c9fccce287109dc14ae2c39e14719847ac45d43"
+}

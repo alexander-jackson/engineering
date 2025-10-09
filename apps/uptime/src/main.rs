@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use aws_config::BehaviorVersion;
 use color_eyre::eyre::Result;
-use poller::{AlertThreshold, PollerConfiguration};
+use poller::{AlertThreshold, CertificateAlertThreshold, PollerConfiguration};
 use reqwest::Client;
 use sqlx::PgPool;
 use tokio::net::TcpListener;
@@ -51,7 +51,11 @@ async fn main() -> Result<()> {
     let sns_client = aws_sdk_sns::Client::new(&sdk_config);
 
     let topic = get_env_var("SNS_TOPIC")?;
-    let configuration = PollerConfiguration::new(AlertThreshold::default(), topic);
+    let configuration = PollerConfiguration::new(
+        AlertThreshold::default(),
+        CertificateAlertThreshold::default(),
+        topic,
+    );
 
     let http_client = Client::new();
     let poller = Poller::new(pool.clone(), http_client.clone(), sns_client, configuration);

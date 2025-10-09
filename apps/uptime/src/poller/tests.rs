@@ -5,7 +5,9 @@ use sqlx::PgPool;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::poller::{AlertThreshold, FailureReason, Notifier, Poller, PollerConfiguration};
+use crate::poller::{
+    AlertThreshold, CertificateAlertThreshold, FailureReason, Notifier, Poller, PollerConfiguration,
+};
 
 const SNS_TOPIC: &str = "some-sns-topic";
 
@@ -69,7 +71,11 @@ async fn fetch_latest_query_failure(pool: &PgPool, uri: &str) -> Result<Option<S
 fn create_poller(pool: &PgPool) -> Poller<MockSnsClient> {
     let http_client = reqwest::Client::new();
     let sns_client = MockSnsClient::default();
-    let configuration = PollerConfiguration::new(AlertThreshold::default(), SNS_TOPIC);
+    let configuration = PollerConfiguration::new(
+        AlertThreshold::default(),
+        CertificateAlertThreshold::default(),
+        SNS_TOPIC,
+    );
 
     Poller::new(pool.clone(), http_client, sns_client.clone(), configuration)
 }
@@ -228,6 +234,162 @@ async fn alerts_can_cooldown_after_firing(pool: PgPool) -> Result<()> {
     // Check we sent 2 messages since the cooldown had passed
     let map = poller.notifier.sent_messages.read().await;
 
+    assert_eq!(map[SNS_TOPIC].len(), 2);
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn certificate_expiry_triggers_notification(pool: PgPool) -> Result<()> {
+    let mut server = mockito::Server::new_async().await;
+    let uri = server.url();
+
+    let poller = create_poller(&pool);
+
+    let origin_uid = Uuid::new_v4();
+    crate::persistence::insert_origin(&pool, origin_uid, &uri).await?;
+
+    // Insert a certificate check that expires in 20 days (< 30 day threshold)
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(20);
+    let checked_at = chrono::Utc::now();
+    crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
+
+    let mock = server
+        .mock("GET", "/")
+        .with_status(200)
+        .create_async()
+        .await;
+
+    poller.query_all_origins().await?;
+
+    mock.assert_async().await;
+
+    // Check that a certificate expiry notification was sent
+    let map = poller.notifier.sent_messages.read().await;
+    let messages = &map[SNS_TOPIC];
+
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].subject, "Certificate expiring soon");
+    assert!(messages[0].message.contains("will expire in"));
+    assert!(messages[0].message.contains("days"));
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn certificate_expiry_does_not_trigger_when_far_away(pool: PgPool) -> Result<()> {
+    let mut server = mockito::Server::new_async().await;
+    let uri = server.url();
+
+    let poller = create_poller(&pool);
+
+    let origin_uid = Uuid::new_v4();
+    crate::persistence::insert_origin(&pool, origin_uid, &uri).await?;
+
+    // Insert a certificate check that expires in 60 days (> 30 day threshold)
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(60);
+    let checked_at = chrono::Utc::now();
+    crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
+
+    let mock = server
+        .mock("GET", "/")
+        .with_status(200)
+        .create_async()
+        .await;
+
+    poller.query_all_origins().await?;
+
+    mock.assert_async().await;
+
+    // Check that no certificate expiry notification was sent
+    let map = poller.notifier.sent_messages.read().await;
+
+    assert!(map.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn notification_types_have_independent_cooldowns(pool: PgPool) -> Result<()> {
+    // Use a single origin that has both certificate and uptime issues
+    let uri = "https://mozilla.rust"; // Invalid TLD will cause request failures
+
+    let mut poller = create_poller(&pool);
+    poller.configuration.alert_threshold.cooldown = chrono::Duration::milliseconds(100);
+    poller.configuration.certificate_alert_threshold.cooldown = chrono::Duration::milliseconds(100);
+
+    let origin_uid = Uuid::new_v4();
+    crate::persistence::insert_origin(&pool, origin_uid, uri).await?;
+
+    // Insert a certificate check that expires soon
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(20);
+    let checked_at = chrono::Utc::now();
+    crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
+
+    // Trigger 3 queries - all will fail due to bad request, but should also trigger cert alert
+    for _ in 0..3 {
+        poller.query_all_origins().await?;
+    }
+
+    // Check that both notifications were sent
+    let map = poller.notifier.sent_messages.read().await;
+    let messages = &map[SNS_TOPIC];
+
+    // Should have both certificate and uptime notifications since they have independent cooldowns
+    assert_eq!(messages.len(), 2);
+    assert!(messages
+        .iter()
+        .any(|m| m.subject == "Certificate expiring soon"));
+    assert!(messages.iter().any(|m| m.subject == "Outage detected"));
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn certificate_notifications_respect_cooldown(pool: PgPool) -> Result<()> {
+    let mut server = mockito::Server::new_async().await;
+    let uri = server.url();
+
+    let mut poller = create_poller(&pool);
+    poller.configuration.certificate_alert_threshold.cooldown = chrono::Duration::milliseconds(100);
+
+    let origin_uid = Uuid::new_v4();
+    crate::persistence::insert_origin(&pool, origin_uid, &uri).await?;
+
+    // Insert a certificate check that expires soon
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(20);
+    let checked_at = chrono::Utc::now();
+    crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
+
+    let mock = server
+        .mock("GET", "/")
+        .with_status(200)
+        .expect_at_least(3)
+        .create_async()
+        .await;
+
+    // Trigger first certificate notification
+    poller.query_all_origins().await?;
+
+    // Should not send another notification immediately
+    poller.query_all_origins().await?;
+
+    // Check only 1 notification sent
+    {
+        let map = poller.notifier.sent_messages.read().await;
+        assert_eq!(map[SNS_TOPIC].len(), 1);
+    }
+
+    // Wait for cooldown to expire
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Should send another notification after cooldown
+    poller.query_all_origins().await?;
+
+    mock.assert_async().await;
+
+    // Check 2 notifications sent total
+    let map = poller.notifier.sent_messages.read().await;
     assert_eq!(map[SNS_TOPIC].len(), 2);
 
     Ok(())
