@@ -6,7 +6,7 @@ use sqlx::types::chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::persistence::Origin;
+use crate::persistence::{NotificationType, Origin};
 
 #[derive(Copy, Clone, Debug, sqlx::Type)]
 pub enum FailureReason {
@@ -102,16 +102,36 @@ impl Default for AlertThreshold {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct CertificateAlertThreshold {
+    /// The minimum amount of time between certificate expiry notifications.
+    cooldown: chrono::Duration,
+}
+
+impl Default for CertificateAlertThreshold {
+    fn default() -> Self {
+        Self {
+            cooldown: chrono::Duration::days(3),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PollerConfiguration {
     alert_threshold: AlertThreshold,
+    certificate_alert_threshold: CertificateAlertThreshold,
     topic: String,
 }
 
 impl PollerConfiguration {
-    pub fn new<T: Into<String>>(alert_threshold: AlertThreshold, topic: T) -> Self {
+    pub fn new<T: Into<String>>(
+        alert_threshold: AlertThreshold,
+        certificate_alert_threshold: CertificateAlertThreshold,
+        topic: T,
+    ) -> Self {
         Self {
             alert_threshold,
+            certificate_alert_threshold,
             topic: topic.into(),
         }
     }
@@ -217,9 +237,61 @@ impl<N: Notifier> Poller<N> {
     async fn check_for_pending_notifications(&self, origin_uid: Uuid, uri: &str) -> Result<()> {
         let PollerConfiguration {
             alert_threshold,
+            certificate_alert_threshold,
             topic,
         } = &self.configuration;
 
+        // Check for certificate expiry
+        let certificate_expiry_threshold = chrono::Duration::days(30);
+        let cert_check = crate::persistence::certificate_expires_within(
+            &self.pool,
+            origin_uid,
+            certificate_expiry_threshold,
+        )
+        .await?;
+
+        if let Some(check) = cert_check {
+            let cooled_down = crate::persistence::latest_notification_older_than(
+                &self.pool,
+                origin_uid,
+                NotificationType::CertificateExpiry,
+                certificate_alert_threshold.cooldown,
+            )
+            .await?;
+
+            if cooled_down {
+                let now = Utc::now();
+                let days_remaining = (check.expires_at - now).num_days();
+
+                let subject = "Certificate expiring soon";
+                let message = format!(
+                    "The TLS certificate for {uri} will expire in {} days (on {})",
+                    days_remaining,
+                    check.expires_at.format("%Y-%m-%d")
+                );
+
+                self.notifier.notify(topic, subject, &message).await?;
+
+                let created_at = Utc::now();
+
+                let notification_uid = crate::persistence::insert_notification(
+                    &self.pool,
+                    origin_uid,
+                    NotificationType::CertificateExpiry,
+                    topic,
+                    subject,
+                    &message,
+                    created_at,
+                )
+                .await?;
+
+                tracing::info!(%origin_uid, %notification_uid, days_remaining, "routed certificate expiry notification");
+            } else {
+                tracing::debug!(%origin_uid, "certificate expires soon, but a notification has been sent recently");
+            }
+        }
+
+        // Check for failure rate
         let exceeded = crate::persistence::failure_rate_exceeded(
             &self.pool,
             origin_uid,
@@ -236,6 +308,7 @@ impl<N: Notifier> Poller<N> {
         let cooled_down = crate::persistence::latest_notification_older_than(
             &self.pool,
             origin_uid,
+            NotificationType::Uptime,
             alert_threshold.cooldown,
         )
         .await?;
@@ -255,7 +328,13 @@ impl<N: Notifier> Poller<N> {
         let created_at = Utc::now();
 
         let notification_uid = crate::persistence::insert_notification(
-            &self.pool, origin_uid, topic, subject, &message, created_at,
+            &self.pool,
+            origin_uid,
+            NotificationType::Uptime,
+            topic,
+            subject,
+            &message,
+            created_at,
         )
         .await?;
 
