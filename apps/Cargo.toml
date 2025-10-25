@@ -6,6 +6,7 @@ members = [
 	"foundation/http-server",
 	"foundation/init",
 	"foundation/logging",
+	"foundation/shutdown",
 	"foundation/telemetry",
 	"foundation/uid",
 	"tag-updater",

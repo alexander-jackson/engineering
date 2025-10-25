@@ -6,7 +6,8 @@ edition = "2024"
 [dependencies]
 axum = "0.8.4"
 color-eyre = "0.6.5"
-tokio = { version = "1.47.1", default-features = false, features = ["net", "signal"] }
+foundation-shutdown = { version = "0.1.0", path = "../shutdown" }
+tokio = { version = "1.47.1", default-features = false, features = ["net"] }
 tower-http = { version = "0.6.6", features = ["trace"] }
 tower-layer = "0.3.3"
 tower-service = "0.3.3"

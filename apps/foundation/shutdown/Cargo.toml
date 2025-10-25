@@ -1,0 +1,9 @@
+[package]
+name = "foundation-shutdown"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+color-eyre = "0.6.5"
+tokio = { version = "1.48.0", default-features = false, features = ["macros", "signal", "sync"] }
+tracing.workspace = true

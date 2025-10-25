@@ -8,8 +8,8 @@ use axum::response::IntoResponse;
 use axum::routing::{MethodRouter, Route};
 use axum::Router;
 use color_eyre::eyre::Result;
+use foundation_shutdown::ShutdownCoordinator;
 use tokio::net::TcpListener;
-use tokio::signal::unix::SignalKind;
 use tower_http::trace::{
     DefaultOnRequest, DefaultOnResponse, MakeSpan, OnRequest, OnResponse, TraceLayer,
 };
@@ -110,13 +110,27 @@ where
 
 impl Server<()> {
     pub async fn run(self, listener: TcpListener) -> Result<()> {
+        let coordinator = ShutdownCoordinator::new();
+        let mut receiver = coordinator.subscribe();
+        tokio::spawn(async move { coordinator.spawn().await });
+
+        let signal = async move {
+            receiver.recv().await.unwrap();
+        };
+
+        self.run_with_graceful_shutdown(listener, signal).await
+    }
+
+    pub async fn run_with_graceful_shutdown<F>(self, listener: TcpListener, signal: F) -> Result<()>
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
         let trace_layer = TraceLayer::new_for_http()
             .make_span_with(SpanCreator)
             .on_request(RequestTracingFilter::default())
             .on_response(ResponseTracingFilter::default());
 
         let router = self.router.layer(trace_layer);
-        let signal = shutdown_signal();
 
         let addr = listener.local_addr()?;
         tracing::info!(%addr, "listening for incoming requests");
@@ -149,30 +163,6 @@ impl<S> DerefMut for Server<S> {
     }
 }
 
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-
-        tracing::info!("received ctrl+c, starting graceful shutdown");
-    };
-
-    let terminate = async {
-        tokio::signal::unix::signal(SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-
-        tracing::info!("received terminate signal, starting graceful shutdown");
-    };
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::net::{Ipv4Addr, SocketAddrV4};
@@ -182,14 +172,13 @@ mod tests {
     use axum::extract::State;
     use axum::http::Request;
     use axum::routing::get;
+    use color_eyre::eyre::Result;
     use reqwest::Client;
     use tokio::net::TcpListener;
     use tower_layer::Layer;
     use tower_service::Service;
 
     use crate::Server;
-
-    type TestResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
     #[tokio::test]
     async fn can_create_servers() {
@@ -206,7 +195,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn can_run_a_server() -> TestResult<()> {
+    async fn can_run_a_server() -> Result<()> {
         let server: Server<()> = Server::new().route("/", get(|| async { "Hello, World!" }));
 
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
@@ -235,7 +224,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn can_add_state_to_a_server() -> TestResult<()> {
+    async fn can_add_state_to_a_server() -> Result<()> {
         let server: Server<()> = Server::new()
             .route("/", get(stateful_handler))
             .with_state("Hello, World!".to_string());
@@ -305,7 +294,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn can_add_layers_to_a_server() -> TestResult<()> {
+    async fn can_add_layers_to_a_server() -> Result<()> {
         let buffer = Arc::new(RwLock::new(Vec::new()));
         let layer = LogLayer {
             messages: Arc::clone(&buffer),
@@ -335,6 +324,46 @@ mod tests {
 
         assert!(response.status().is_success());
         assert_eq!(buffer.read().unwrap().as_slice(), [path]);
+
+        task.abort();
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn can_run_with_custom_shutdown_signals() -> Result<()> {
+        let (tx, mut rx) = tokio::sync::broadcast::channel::<()>(1);
+
+        let signal = async move {
+            let _ = rx.recv().await;
+            tracing::info!("custom shutdown signal received, starting graceful shutdown");
+        };
+
+        let server: Server<()> = Server::new().route("/", get(|| async { "Hello, World!" }));
+
+        let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
+        let listener = TcpListener::bind(addr).await?;
+        let local_addr = listener.local_addr()?;
+
+        let task = tokio::spawn(async move {
+            if let Err(e) = server.run_with_graceful_shutdown(listener, signal).await {
+                eprintln!("Server error: {}", e);
+            }
+        });
+
+        // make a request to the server
+        let client = Client::new();
+        let response = client.get(format!("http://{}", local_addr)).send().await?;
+
+        assert!(response.status().is_success());
+
+        // shutdown the server and check we cannot call it anymore
+        let _ = tx.send(());
+
+        let client = Client::new();
+        let response = client.get(format!("http://{}", local_addr)).send().await;
+
+        assert!(response.is_err_and(|err| err.is_connect()));
 
         task.abort();
 
