@@ -2,11 +2,11 @@ use std::convert::Infallible;
 use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
+use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, Response};
 use axum::response::IntoResponse;
 use axum::routing::{MethodRouter, Route};
-use axum::Router;
 use color_eyre::eyre::Result;
 use foundation_shutdown::ShutdownCoordinator;
 use tokio::net::TcpListener;
@@ -15,8 +15,8 @@ use tower_http::trace::{
 };
 use tower_layer::Layer;
 use tower_service::Service;
-use tracing::field::Empty;
 use tracing::Span;
+use tracing::field::Empty;
 
 #[derive(Copy, Clone, Debug, Default)]
 struct SpanCreator;

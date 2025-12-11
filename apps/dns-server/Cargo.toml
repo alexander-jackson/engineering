@@ -1,0 +1,23 @@
+[package]
+name = "dns-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.89"
+bytes = "1.11.0"
+color-eyre = "0.6.5"
+foundation-configuration = { version = "0.1.0", path = "../foundation/configuration", features = ["external-bytes"] }
+foundation-init = { version = "0.1.0", path = "../foundation/init" }
+foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
+hickory-dns = { version = "0.25.2", default-features = false, features = ["resolver"] }
+hickory-proto = "0.25.2"
+hickory-resolver = { version = "0.25.2", features = ["https-ring", "webpki-roots"] }
+hickory-server = "0.25.2"
+moka = { version = "0.12.11", features = ["future"] }
+serde = { workspace = true, features = ["derive"] }
+tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread", "net", "time", "sync"] }
+tracing.workspace = true
+
+[dev-dependencies]
+serde_yaml = "0.9.34"
