@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
@@ -9,6 +8,7 @@ mod cache;
 mod config;
 mod handler;
 mod server;
+mod tls;
 mod upstream;
 
 use crate::config::ApplicationConfiguration;
@@ -17,9 +17,14 @@ use crate::config::ApplicationConfiguration;
 async fn main() -> Result<()> {
     let config: Configuration<ApplicationConfiguration> = foundation_init::run()?;
 
+    // Install rustls crypto provider if TLS is enabled (required for TLS support)
+    if config.server.protocols.tls.is_some() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+
     tracing::info!(
-        host = %config.server.host,
-        port = config.server.port,
+        udp_enabled = config.server.protocols.udp.is_some(),
+        tls_enabled = config.server.protocols.tls.is_some(),
         upstream = %config.upstream.resolver,
         "dns server initialized"
     );
@@ -50,8 +55,7 @@ async fn main() -> Result<()> {
     let cache = crate::cache::ResponseCache::new(&config.cache);
 
     // Build and run DNS server
-    let addr = SocketAddr::new(config.server.host.into(), config.server.port);
-    let server = crate::server::build(upstream, blocklist, cache, addr).await?;
+    let server = crate::server::build(upstream, blocklist, cache, &config.server.protocols).await?;
 
     server.run().await?;
 

@@ -2,7 +2,7 @@
 # Optimized for ARM64 (AWS Graviton) instances
 
 # Stage 1: Build stage
-FROM --platform=linux/arm64 rust:1.91.1-slim AS builder
+FROM rust:1.91-slim-bookworm AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -21,7 +21,7 @@ COPY . .
 RUN cargo build --release --package dns-server
 
 # Stage 2: Runtime stage
-FROM --platform=linux/arm64 debian:bookworm-slim
+FROM debian:bookworm-slim
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
