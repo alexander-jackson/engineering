@@ -13,8 +13,29 @@ pub struct ApplicationConfiguration {
 
 #[derive(Deserialize)]
 pub struct ServerConfig {
+    pub protocols: ProtocolsConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProtocolsConfig {
+    #[serde(default)]
+    pub udp: Option<UdpConfig>,
+    #[serde(default)]
+    pub tls: Option<TlsConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UdpConfig {
     pub host: Ipv4Addr,
     pub port: u16,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TlsConfig {
+    pub host: Ipv4Addr,
+    pub port: u16,
+    pub cert: ExternalBytes,
+    pub key: ExternalBytes,
 }
 
 #[derive(Deserialize)]
@@ -44,8 +65,10 @@ mod tests {
     fn test_config_deserialization_filesystem() {
         let yaml = r#"
 server:
-  host: 0.0.0.0
-  port: 5353
+  protocols:
+    udp:
+      host: 0.0.0.0
+      port: 5353
 
 upstream:
   resolver: all.dns.mullvad.net
@@ -64,7 +87,9 @@ cache:
 "#;
 
         let config: ApplicationConfiguration = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(config.server.port, 5353);
+        assert!(config.server.protocols.udp.is_some());
+        assert_eq!(config.server.protocols.udp.as_ref().unwrap().port, 5353);
+        assert!(config.server.protocols.tls.is_none());
         assert_eq!(config.upstream.resolver, "all.dns.mullvad.net");
         assert_eq!(config.upstream.port, 443);
         assert_eq!(config.upstream.timeout_seconds, 5);
@@ -77,8 +102,10 @@ cache:
     fn test_config_deserialization_s3() {
         let yaml = r#"
 server:
-  host: 127.0.0.1
-  port: 53
+  protocols:
+    udp:
+      host: 127.0.0.1
+      port: 53
 
 upstream:
   resolver: dns.example.com
@@ -98,7 +125,8 @@ cache:
 "#;
 
         let config: ApplicationConfiguration = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(config.server.port, 53);
+        assert!(config.server.protocols.udp.is_some());
+        assert_eq!(config.server.protocols.udp.as_ref().unwrap().port, 53);
         assert_eq!(config.upstream.timeout_seconds, 10);
         assert_eq!(config.blocklist.refresh_interval_seconds, 7200);
         assert_eq!(config.cache.max_entries, 5000);

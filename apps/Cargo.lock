@@ -1347,6 +1347,8 @@ dependencies = [
  "hickory-resolver",
  "hickory-server",
  "moka",
+ "rustls 0.23.31",
+ "rustls-pemfile",
  "serde",
  "serde_yaml",
  "tokio",
@@ -2052,10 +2054,12 @@ dependencies = [
  "hickory-resolver",
  "ipnet",
  "prefix-trie",
+ "rustls 0.23.31",
  "serde",
  "thiserror 2.0.16",
  "time",
  "tokio",
+ "tokio-rustls 0.26.2",
  "tokio-util",
  "toml",
  "tracing",
@@ -3805,6 +3809,15 @@ dependencies = [
  "rustls-pki-types",
  "schannel",
  "security-framework 3.3.0",
+]
+
+[[package]]
+name = "rustls-pemfile"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dce314e5fee3f39953d46bb63bb8a46d40c2f8fb7cc5a3b6cab2bde9721d6e50"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]

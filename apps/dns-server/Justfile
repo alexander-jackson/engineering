@@ -1,0 +1,19 @@
+default: lint
+
+lint:
+	cargo clippy -- -D warnings
+
+test:
+	cargo nextest run
+
+format:
+	cargo fmt
+
+validate: lint test format
+
+run:
+	cargo run -- --config local-config.yaml
+
+docker:
+	docker build -f Dockerfile -t alexanderjackson/dns-server:latest ..
+	docker push alexanderjackson/dns-server:latest

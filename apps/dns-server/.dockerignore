@@ -29,3 +29,6 @@ blocklist.txt
 Dockerfile
 .dockerignore
 docker-compose.yml
+
+# Build scripts
+Justfile

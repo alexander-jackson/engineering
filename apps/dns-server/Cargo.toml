@@ -13,11 +13,13 @@ foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 hickory-dns = { version = "0.25.2", default-features = false, features = ["resolver"] }
 hickory-proto = "0.25.2"
 hickory-resolver = { version = "0.25.2", features = ["https-ring", "webpki-roots"] }
-hickory-server = "0.25.2"
+hickory-server = { version = "0.25.2", features = ["tls-ring"] }
 moka = { version = "0.12.11", features = ["future"] }
 serde = { workspace = true, features = ["derive"] }
 tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread", "net", "time", "sync"] }
 tracing.workspace = true
+rustls-pemfile = "2.0"
+rustls = { version = "0.23", features = ["ring"] }
 
 [dev-dependencies]
 serde_yaml = "0.9.34"
