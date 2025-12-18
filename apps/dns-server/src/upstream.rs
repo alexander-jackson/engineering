@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
-use hickory_proto::op::Message;
+use hickory_proto::op::{Message, MessageType, OpCode};
 use hickory_proto::xfer::Protocol;
 use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
 use hickory_resolver::name_server::TokioConnectionProvider;
@@ -86,8 +86,8 @@ impl UpstreamResolver {
         // Build response message
         let mut response = Message::new();
         response.set_id(query.id());
-        response.set_message_type(hickory_proto::op::MessageType::Response);
-        response.set_op_code(hickory_proto::op::OpCode::Query);
+        response.set_message_type(MessageType::Response);
+        response.set_op_code(OpCode::Query);
         response.set_recursion_desired(query.recursion_desired());
         response.set_recursion_available(true);
 
