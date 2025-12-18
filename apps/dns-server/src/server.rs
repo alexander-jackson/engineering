@@ -18,6 +18,38 @@ pub struct DnsServer {
 }
 
 impl DnsServer {
+    #[tracing::instrument(skip(upstream, blocklist, cache))]
+    pub async fn new(
+        upstream: UpstreamResolver,
+        blocklist: BlocklistManager,
+        cache: ResponseCache,
+        protocols: &ProtocolsConfig,
+    ) -> Result<Self> {
+        let handler = DnsRequestHandler::new(upstream, blocklist, cache);
+        let mut server_future = ServerFuture::new(handler);
+
+        if protocols.udp.is_none() && protocols.tls.is_none() {
+            return Err(color_eyre::eyre::eyre!(
+                "at least one protocol (UDP or TLS) must be configured"
+            ));
+        }
+
+        if let Some(ref udp_config) = protocols.udp {
+            register_udp_listener(&mut server_future, udp_config).await?;
+        }
+
+        if let Some(ref tls_config) = protocols.tls {
+            register_tls_listener(&mut server_future, tls_config).await?;
+        }
+
+        let coordinator = ShutdownCoordinator::new();
+
+        Ok(Self {
+            server_future,
+            coordinator,
+        })
+    }
+
     #[tracing::instrument(skip(self))]
     pub async fn run(mut self) -> Result<()> {
         let mut receiver = self.coordinator.subscribe();
@@ -38,38 +70,6 @@ impl DnsServer {
 
         Ok(())
     }
-}
-
-#[tracing::instrument(skip(upstream, blocklist, cache))]
-pub async fn build(
-    upstream: UpstreamResolver,
-    blocklist: BlocklistManager,
-    cache: ResponseCache,
-    protocols: &ProtocolsConfig,
-) -> Result<DnsServer> {
-    let handler = DnsRequestHandler::new(upstream, blocklist, cache);
-    let mut server_future = ServerFuture::new(handler);
-
-    if protocols.udp.is_none() && protocols.tls.is_none() {
-        return Err(color_eyre::eyre::eyre!(
-            "at least one protocol (UDP or TLS) must be configured"
-        ));
-    }
-
-    if let Some(ref udp_config) = protocols.udp {
-        register_udp_listener(&mut server_future, udp_config).await?;
-    }
-
-    if let Some(ref tls_config) = protocols.tls {
-        register_tls_listener(&mut server_future, tls_config).await?;
-    }
-
-    let coordinator = ShutdownCoordinator::new();
-
-    Ok(DnsServer {
-        server_future,
-        coordinator,
-    })
 }
 
 async fn register_udp_listener(

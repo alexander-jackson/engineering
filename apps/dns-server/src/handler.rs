@@ -149,7 +149,6 @@ impl RequestHandler for DnsRequestHandler {
             }
         };
 
-        // Build response from the message
         let response = MessageResponseBuilder::from_message_request(request).build(
             *response_message.header(),
             response_message.answers().iter(),
@@ -158,7 +157,6 @@ impl RequestHandler for DnsRequestHandler {
             response_message.additionals().iter(),
         );
 
-        // Send response
         match response_handle.send_response(response).await {
             Ok(info) => info,
             Err(e) => {

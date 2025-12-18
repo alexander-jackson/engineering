@@ -4,7 +4,7 @@ use foundation_configuration::ExternalBytes;
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
-pub struct ApplicationConfiguration {
+pub struct Configuration {
     pub server: ServerConfig,
     pub upstream: UpstreamConfig,
     pub blocklist: BlocklistConfig,
@@ -65,15 +65,15 @@ mod tests {
     use foundation_configuration::ExternalBytes;
 
     use crate::config::{
-        ApplicationConfiguration, BlocklistConfig, CacheConfig, ProtocolsConfig, ServerConfig,
-        UdpConfig, UpstreamConfig,
+        BlocklistConfig, CacheConfig, Configuration, ProtocolsConfig, ServerConfig, UdpConfig,
+        UpstreamConfig,
     };
 
     #[test]
     fn can_deserialize_sample_configuration() -> Result<()> {
         let yaml = include_str!("../resources/sample-config.yaml");
 
-        let expected = ApplicationConfiguration {
+        let expected = Configuration {
             server: ServerConfig {
                 protocols: ProtocolsConfig {
                     udp: Some(UdpConfig {
@@ -100,7 +100,7 @@ mod tests {
             },
         };
 
-        let actual: ApplicationConfiguration = serde_yaml::from_str(yaml)?;
+        let actual: Configuration = serde_yaml::from_str(yaml)?;
 
         assert_eq!(actual, expected);
 
