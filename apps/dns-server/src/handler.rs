@@ -136,7 +136,7 @@ impl RequestHandler for DnsRequestHandler {
                 response
             }
             Err(e) => {
-                tracing::error!(error = ?e, src = %request.src(), "upstream resolution failed");
+                tracing::warn!(error = ?e, src = %request.src(), "upstream resolution failed");
                 // Build SERVFAIL response
                 let mut error_msg = hickory_proto::op::Message::new();
                 error_msg.set_id(request_message.id());

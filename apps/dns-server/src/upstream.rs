@@ -7,7 +7,7 @@ use hickory_proto::op::Message;
 use hickory_proto::xfer::Protocol;
 use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
 use hickory_resolver::name_server::TokioConnectionProvider;
-use hickory_resolver::Resolver;
+use hickory_resolver::{ResolveError, Resolver};
 
 use crate::config::UpstreamConfig;
 
@@ -68,14 +68,9 @@ impl UpstreamResolver {
     }
 
     #[tracing::instrument(skip(self, query))]
-    pub async fn resolve(&self, query: &Message) -> Result<Message> {
+    pub async fn resolve(&self, query: &Message) -> Result<Message, ResolveError> {
         // Extract query information for logging
-        let questions = query.queries();
-        if questions.is_empty() {
-            return Err(color_eyre::eyre::eyre!("query has no questions"));
-        }
-
-        let question = &questions[0];
+        let question = &query.queries()[0];
         let name = question.name();
         let query_type = question.query_type();
 
@@ -86,11 +81,7 @@ impl UpstreamResolver {
         );
 
         // Perform the lookup using the Name directly (not string)
-        let lookup = self
-            .resolver
-            .lookup(name.clone(), query_type)
-            .await
-            .wrap_err_with(|| format!("upstream resolution failed for {}", name))?;
+        let lookup = self.resolver.lookup(name.clone(), query_type).await?;
 
         // Build response message
         let mut response = Message::new();
