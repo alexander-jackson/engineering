@@ -80,7 +80,6 @@ impl UpstreamResolver {
             "forwarding query to upstream"
         );
 
-        // Perform the lookup using the Name directly (not string)
         let lookup = self.resolver.lookup(name.clone(), query_type).await?;
 
         // Build response message

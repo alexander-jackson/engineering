@@ -15,11 +15,15 @@ pub struct BlocklistManager {
 
 impl BlocklistManager {
     /// Create a new blocklist manager
-    pub fn new(config: BlocklistConfig) -> Self {
-        Self {
+    pub async fn new(config: BlocklistConfig) -> Result<Self> {
+        let manager = Self {
             config,
             domains: Arc::new(RwLock::new(HashSet::new())),
-        }
+        };
+
+        manager.refresh().await?;
+
+        Ok(manager)
     }
 
     /// Refresh the blocklist from external source

@@ -86,38 +86,48 @@ impl ResponseCache {
 
     /// Extract the minimum TTL from a DNS response
     pub fn extract_ttl(message: &Message) -> Option<Duration> {
-        let mut min_ttl: Option<u32> = None;
+        message
+            .answers()
+            .iter()
+            .fold(None, |min_ttl, record| {
+                let ttl = record.ttl();
 
-        // Check all answer records for TTL
-        for record in message.answers() {
-            let ttl = record.ttl();
-            min_ttl = Some(min_ttl.map_or(ttl, |current| current.min(ttl)));
-        }
-
-        min_ttl.map(|secs| Duration::from_secs(secs as u64))
+                Some(min_ttl.map_or(ttl, |current: u32| current.min(ttl)))
+            })
+            .map(|secs| Duration::from_secs(secs as u64))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::net::Ipv4Addr;
+    use std::str::FromStr;
+    use std::time::Duration;
+
     use hickory_proto::op::Message;
     use hickory_proto::rr::{Name, RData, Record};
-    use std::str::FromStr;
+
+    use crate::cache::ResponseCache;
+
+    fn some_record_with_ttl(name: &Name, ttl: u32) -> Record {
+        let rdata = RData::A(Ipv4Addr::LOCALHOST.into());
+
+        Record::from_rdata(name.clone(), ttl, rdata)
+    }
 
     #[test]
-    fn test_extract_ttl_no_answers() {
+    fn default_messages_have_no_time_to_live() {
         let message = Message::new();
+
         assert_eq!(ResponseCache::extract_ttl(&message), None);
     }
 
     #[test]
-    fn test_extract_ttl_single_answer() {
+    fn can_extract_ttl_for_single_record_messages() {
         let mut message = Message::new();
         let name = Name::from_str("example.com.").unwrap();
-        let rdata = RData::A(std::net::Ipv4Addr::new(1, 2, 3, 4).into());
-        let record = Record::from_rdata(name, 300, rdata);
-        message.add_answer(record);
+
+        message.add_answer(some_record_with_ttl(&name, 300));
 
         assert_eq!(
             ResponseCache::extract_ttl(&message),
@@ -126,26 +136,14 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_ttl_multiple_answers_returns_minimum() {
+    fn can_extract_minimum_ttl_for_multiple_record_messages() {
         let mut message = Message::new();
         let name = Name::from_str("example.com.").unwrap();
 
-        // Add record with TTL 300
-        let rdata1 = RData::A(std::net::Ipv4Addr::new(1, 2, 3, 4).into());
-        let record1 = Record::from_rdata(name.clone(), 300, rdata1);
-        message.add_answer(record1);
+        message.add_answer(some_record_with_ttl(&name, 300));
+        message.add_answer(some_record_with_ttl(&name, 100));
+        message.add_answer(some_record_with_ttl(&name, 500));
 
-        // Add record with TTL 100 (minimum)
-        let rdata2 = RData::A(std::net::Ipv4Addr::new(5, 6, 7, 8).into());
-        let record2 = Record::from_rdata(name.clone(), 100, rdata2);
-        message.add_answer(record2);
-
-        // Add record with TTL 500
-        let rdata3 = RData::A(std::net::Ipv4Addr::new(9, 10, 11, 12).into());
-        let record3 = Record::from_rdata(name, 500, rdata3);
-        message.add_answer(record3);
-
-        // Should return the minimum TTL
         assert_eq!(
             ResponseCache::extract_ttl(&message),
             Some(Duration::from_secs(100))
