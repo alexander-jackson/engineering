@@ -7,14 +7,12 @@ use moka::Expiry;
 
 use crate::config::CacheConfig;
 
-/// Cached DNS response with TTL metadata
 #[derive(Clone)]
 struct CachedResponse {
     message: Message,
     ttl: Duration,
 }
 
-/// Custom expiry policy that respects per-entry TTL
 struct DnsExpiry;
 
 impl Expiry<String, Arc<CachedResponse>> for DnsExpiry {
@@ -28,7 +26,6 @@ impl Expiry<String, Arc<CachedResponse>> for DnsExpiry {
     }
 }
 
-/// DNS response cache with TTL-based eviction
 #[derive(Clone)]
 pub struct ResponseCache {
     cache: Cache<String, Arc<CachedResponse>>,
@@ -36,7 +33,6 @@ pub struct ResponseCache {
 }
 
 impl ResponseCache {
-    /// Create a new response cache
     pub fn new(config: &CacheConfig) -> Self {
         let cache = Cache::builder()
             .max_capacity(config.max_entries)
@@ -54,7 +50,6 @@ impl ResponseCache {
         Self { cache, default_ttl }
     }
 
-    /// Get a cached response
     #[tracing::instrument(skip(self))]
     pub async fn get(&self, key: &str) -> Option<Message> {
         match self.cache.get(key).await {
@@ -69,7 +64,6 @@ impl ResponseCache {
         }
     }
 
-    /// Insert a response into the cache with optional TTL
     #[tracing::instrument(skip(self, message))]
     pub async fn insert(&self, key: &str, message: Message, ttl: Option<Duration>) {
         let ttl = ttl.unwrap_or(self.default_ttl);
@@ -84,7 +78,6 @@ impl ResponseCache {
         self.cache.insert(key.to_string(), cached).await;
     }
 
-    /// Extract the minimum TTL from a DNS response
     pub fn extract_ttl(message: &Message) -> Option<Duration> {
         message
             .answers()

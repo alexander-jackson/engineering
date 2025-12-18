@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
 use tokio::sync::RwLock;
@@ -22,8 +23,26 @@ impl BlocklistManager {
         };
 
         manager.refresh().await?;
+        manager.spawn_refresh_task();
 
         Ok(manager)
+    }
+
+    pub fn spawn_refresh_task(&self) {
+        let manager = self.clone();
+        let interval = Duration::from_secs(self.config.refresh_interval_seconds);
+
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+
+            loop {
+                ticker.tick().await;
+
+                if let Err(e) = manager.refresh().await {
+                    tracing::error!(error = ?e, "failed to refresh blocklist");
+                }
+            }
+        });
     }
 
     /// Refresh the blocklist from external source
