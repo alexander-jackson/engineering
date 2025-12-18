@@ -1,6 +1,6 @@
+use hickory_proto::op::{Message, MessageType, OpCode, ResponseCode};
 use hickory_server::authority::MessageResponseBuilder;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
-use hickory_proto::op::{Message, MessageType, ResponseCode, OpCode};
 
 use crate::blocklist::BlocklistManager;
 use crate::cache::ResponseCache;
@@ -40,10 +40,10 @@ impl RequestHandler for DnsRequestHandler {
             Ok(info) => info,
             Err(e) => {
                 tracing::error!(error = ?e, "failed to parse request");
-                let response = MessageResponseBuilder::from_message_request(request).error_msg(
-                    &request.header().clone(),
-                    ResponseCode::FormErr,
-                );
+
+                let response = MessageResponseBuilder::from_message_request(request)
+                    .error_msg(&request.header().clone(), ResponseCode::FormErr);
+
                 return match response_handle.send_response(response).await {
                     Ok(info) => info,
                     Err(e) => {
@@ -70,10 +70,10 @@ impl RequestHandler for DnsRequestHandler {
                 src = %request.src(),
                 "blocked domain query"
             );
-            let response = MessageResponseBuilder::from_message_request(request).error_msg(
-                &request.header().clone(),
-                ResponseCode::Refused,
-            );
+
+            let response = MessageResponseBuilder::from_message_request(request)
+                .error_msg(&request.header().clone(), ResponseCode::Refused);
+
             return match response_handle.send_response(response).await {
                 Ok(info) => info,
                 Err(e) => {
