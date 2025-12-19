@@ -1,6 +1,7 @@
 use std::net::Ipv4Addr;
 
 use foundation_configuration::ExternalBytes;
+use hickory_proto::xfer::Protocol;
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -42,6 +43,7 @@ pub struct TlsConfig {
 pub struct UpstreamConfig {
     pub resolver: String,
     pub port: u16,
+    pub protocol: Protocol,
     pub timeout_seconds: u64,
 }
 
@@ -63,6 +65,7 @@ mod tests {
 
     use color_eyre::eyre::Result;
     use foundation_configuration::ExternalBytes;
+    use hickory_proto::xfer::Protocol;
 
     use crate::config::{
         BlocklistConfig, CacheConfig, Configuration, ProtocolsConfig, ServerConfig, UdpConfig,
@@ -86,6 +89,7 @@ mod tests {
             upstream: UpstreamConfig {
                 resolver: "all.dns.mullvad.net".to_string(),
                 port: 443,
+                protocol: Protocol::Https,
                 timeout_seconds: 5,
             },
             blocklist: BlocklistConfig {

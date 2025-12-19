@@ -22,4 +22,5 @@ rustls-pemfile = "2.0"
 rustls = { version = "0.23", features = ["ring"] }
 
 [dev-dependencies]
+dns-mock-server = "0.1.6"
 serde_yaml = "0.9.34"
