@@ -7,11 +7,51 @@ use tokio::sync::RwLock;
 
 use crate::config::BlocklistConfig;
 
+#[derive(Clone, Debug, Default)]
+struct Blocklist {
+    domains: HashSet<String>,
+}
+
+impl Blocklist {
+    fn new(domains: HashSet<String>) -> Self {
+        Self { domains }
+    }
+
+    fn is_blocked(&self, domain: &str) -> bool {
+        let normalized = domain.trim_end_matches('.').to_lowercase();
+
+        if self.domains.contains(&normalized) {
+            tracing::debug!(domain = %normalized, "exact match on blocklist");
+
+            return true;
+        }
+
+        // Check subdomain matches
+        let parts: Vec<&str> = normalized.split('.').collect();
+
+        for i in 1..parts.len() {
+            let parent = parts[i..].join(".");
+
+            if self.domains.contains(&parent) {
+                tracing::debug!(
+                    domain = %normalized,
+                    parent = %parent,
+                    "subdomain match on blocklist"
+                );
+
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
 /// Manages domain blocklist loaded from external source
 #[derive(Clone)]
 pub struct BlocklistManager {
     config: BlocklistConfig,
-    domains: Arc<RwLock<HashSet<String>>>,
+    blocklist: Arc<RwLock<Blocklist>>,
 }
 
 impl BlocklistManager {
@@ -19,7 +59,7 @@ impl BlocklistManager {
     pub async fn new(config: BlocklistConfig) -> Result<Self> {
         let manager = Self {
             config,
-            domains: Arc::new(RwLock::new(HashSet::new())),
+            blocklist: Default::default(),
         };
 
         manager.refresh().await?;
@@ -61,54 +101,71 @@ impl BlocklistManager {
             .await
             .wrap_err("failed to load blocklist")?;
 
-        let content = String::from_utf8(data).wrap_err("blocklist is not valid UTF-8")?;
+        let content = str::from_utf8(&data).wrap_err("blocklist is not valid UTF-8")?;
 
         // Parse domains (one per line)
-        let domains: HashSet<String> = content
+        let domains: HashSet<_> = content
             .lines()
-            .map(|line| line.trim())
-            .filter(|line| !line.is_empty() && !line.starts_with('#'))
-            .map(|domain| domain.to_lowercase())
+            .filter_map(|line| {
+                let sanitised = line.trim();
+
+                if sanitised.is_empty() || sanitised.starts_with('#') {
+                    None
+                } else {
+                    Some(sanitised.to_lowercase())
+                }
+            })
             .collect();
 
         let count = domains.len();
 
         // Update the blocklist atomically
-        let mut guard = self.domains.write().await;
-        *guard = domains;
+        let mut guard = self.blocklist.write().await;
+        *guard = Blocklist::new(domains);
 
         tracing::info!(count, "blocklist refreshed successfully");
 
         Ok(())
     }
 
-    /// Check if a domain is blocked
     #[tracing::instrument(skip(self))]
     pub async fn is_blocked(&self, domain: &str) -> bool {
-        let normalized = domain.trim_end_matches('.').to_lowercase();
+        self.blocklist.read().await.is_blocked(domain)
+    }
+}
 
-        let guard = self.domains.read().await;
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
 
-        // Check exact match
-        if guard.contains(&normalized) {
-            tracing::debug!(domain = %normalized, "exact match on blocklist");
-            return true;
-        }
+    use crate::blocklist::Blocklist;
 
-        // Check subdomain matches (e.g., "ads.example.com" blocked if "example.com" in list)
-        let parts: Vec<&str> = normalized.split('.').collect();
-        for i in 1..parts.len() {
-            let parent = parts[i..].join(".");
-            if guard.contains(&parent) {
-                tracing::debug!(
-                    domain = %normalized,
-                    parent = %parent,
-                    "subdomain match on blocklist"
-                );
-                return true;
-            }
-        }
+    #[test]
+    fn empty_blocklist_allows_domains() {
+        let blocklist = Blocklist::default();
 
-        false
+        assert!(!blocklist.is_blocked("example.com"));
+        assert!(!blocklist.is_blocked("sub.example.com"));
+    }
+
+    #[test]
+    fn can_block_specific_domains() {
+        let mut domains = HashSet::new();
+        domains.insert("example.com".to_string());
+
+        let blocklist = Blocklist::new(domains);
+
+        assert!(blocklist.is_blocked("example.com"));
+    }
+
+    #[test]
+    fn can_block_subdomains() {
+        let mut domains = HashSet::new();
+        domains.insert("example.com".to_string());
+
+        let blocklist = Blocklist::new(domains);
+
+        assert!(blocklist.is_blocked("sub.example.com"));
+        assert!(blocklist.is_blocked("deep.sub.example.com"));
     }
 }
