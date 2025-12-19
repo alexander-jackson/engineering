@@ -17,6 +17,23 @@ impl Blocklist {
         Self { domains }
     }
 
+    fn parse(content: &str) -> Self {
+        let domains = content
+            .lines()
+            .filter_map(|line| {
+                let sanitised = line.trim();
+
+                if sanitised.is_empty() || sanitised.starts_with('#') {
+                    None
+                } else {
+                    Some(sanitised.to_lowercase())
+                }
+            })
+            .collect();
+
+        Self::new(domains)
+    }
+
     fn is_blocked(&self, domain: &str) -> bool {
         let normalized = domain.trim_end_matches('.').to_lowercase();
 
@@ -103,25 +120,11 @@ impl BlocklistManager {
 
         let content = str::from_utf8(&data).wrap_err("blocklist is not valid UTF-8")?;
 
-        // Parse domains (one per line)
-        let domains: HashSet<_> = content
-            .lines()
-            .filter_map(|line| {
-                let sanitised = line.trim();
-
-                if sanitised.is_empty() || sanitised.starts_with('#') {
-                    None
-                } else {
-                    Some(sanitised.to_lowercase())
-                }
-            })
-            .collect();
-
-        let count = domains.len();
+        let blocklist = Blocklist::parse(content);
+        let count = blocklist.domains.len();
 
         // Update the blocklist atomically
-        let mut guard = self.blocklist.write().await;
-        *guard = Blocklist::new(domains);
+        *self.blocklist.write().await = blocklist;
 
         tracing::info!(count, "blocklist refreshed successfully");
 
@@ -167,5 +170,41 @@ mod tests {
 
         assert!(blocklist.is_blocked("sub.example.com"));
         assert!(blocklist.is_blocked("deep.sub.example.com"));
+    }
+
+    #[test]
+    fn allows_non_blocked_domains() {
+        let mut domains = HashSet::new();
+        domains.insert("example.com".to_string());
+
+        let blocklist = Blocklist::new(domains);
+
+        assert!(!blocklist.is_blocked("other.com"));
+        assert!(!blocklist.is_blocked("example.org"));
+    }
+
+    #[test]
+    fn can_parse_blocklist_content() {
+        let content = r#"
+            # This is a comment
+            example.com
+            test.org
+
+            # Another comment
+            sub.domain.net
+
+            # Domain which we used to block
+            # google.com
+        "#;
+
+        let blocklist = Blocklist::parse(content);
+
+        let expected = HashSet::from([
+            "example.com".to_string(),
+            "test.org".to_string(),
+            "sub.domain.net".to_string(),
+        ]);
+
+        assert_eq!(blocklist.domains, expected);
     }
 }
