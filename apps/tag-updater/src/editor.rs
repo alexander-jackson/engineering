@@ -42,6 +42,7 @@ pub fn make_tag_edit(path: &Path, service: &str, tag: &str) -> Result<(), TagEdi
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::enum_variant_names)]
 pub enum RawTagEditError {
     ServicesBlockNotFound,
     ServiceNotFound(String),
