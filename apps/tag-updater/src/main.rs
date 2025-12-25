@@ -60,11 +60,7 @@ async fn main() -> Result<()> {
     let repository_path = Path::new("/tmp/infrastructure");
     let repository_url = "git@github.com:alexander-jackson/infrastructure.git";
 
-    let repository = get_repository_or_clone(
-        repository_path,
-        repository_url,
-        &ssh_private_key,
-    )?;
+    let repository = get_repository_or_clone(repository_path, repository_url, &ssh_private_key)?;
 
     tracing::info!("successfully opened a repository for processing");
 
@@ -114,12 +110,20 @@ async fn handle_tag_update(
     let repository = match state.repository.lock() {
         Ok(repo) => repo,
         Err(err) => {
-            tracing::warn!(?err, "failed to acquire repository lock, attempting to recover");
+            tracing::warn!(
+                ?err,
+                "failed to acquire repository lock, attempting to recover"
+            );
 
             // remove the existing repository and re-clone it as we don't know the state
             std::fs::remove_dir_all(&state.repository_path).unwrap();
 
-            *state.repository.lock().unwrap() = get_repository_or_clone(&state.repository_path, &state.repository_url, &state.ssh_private_key).unwrap();
+            *state.repository.lock().unwrap() = get_repository_or_clone(
+                &state.repository_path,
+                &state.repository_url,
+                &state.ssh_private_key,
+            )
+            .unwrap();
             state.repository.clear_poison();
 
             state.repository.lock().unwrap()
