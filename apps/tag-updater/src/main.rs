@@ -1,5 +1,5 @@
 use std::net::SocketAddrV4;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use axum::Json;
@@ -12,7 +12,6 @@ use axum_extra::headers::authorization::Bearer;
 use color_eyre::eyre::{Context, Result, eyre};
 use foundation_configuration::Secret;
 use foundation_http_server::Server;
-use foundation_init::Configuration;
 use git2::Repository;
 use serde::Deserialize;
 use tokio::net::TcpListener;
@@ -21,7 +20,7 @@ mod config;
 mod editor;
 mod git;
 
-use crate::config::ApplicationConfiguration;
+use crate::config::{Configuration, RepositoryConfiguration};
 use crate::editor::make_tag_edit;
 
 #[derive(Clone)]
@@ -29,8 +28,7 @@ struct SharedState {
     passphrase: Arc<Secret<String>>,
     ssh_private_key: Arc<Secret<String>>,
     repository: Arc<Mutex<Repository>>,
-    repository_path: PathBuf,
-    repository_url: String,
+    repository_configuration: RepositoryConfiguration,
 }
 
 #[tracing::instrument]
@@ -51,15 +49,15 @@ fn get_repository_or_clone(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config: Configuration<ApplicationConfiguration> = foundation_init::run()?;
+    let config = foundation_init::run::<Configuration>()?;
 
     let private_key_bytes = config.private_key.resolve().await?;
     let private_key = String::from_utf8(private_key_bytes)
         .wrap_err("Failed to parse private key as UTF-8 string")?;
 
     let ssh_private_key = Arc::from(Secret::from(private_key));
-    let repository_path = Path::new("/tmp/infrastructure");
-    let repository_url = "git@github.com:alexander-jackson/infrastructure.git";
+    let repository_path = &config.repository.local_path;
+    let repository_url = &config.repository.url;
 
     let repository = get_repository_or_clone(repository_path, repository_url, &ssh_private_key)?;
 
@@ -69,8 +67,7 @@ async fn main() -> Result<()> {
         passphrase: Arc::from(config.passphrase.clone()),
         ssh_private_key,
         repository: Arc::new(Mutex::new(repository)),
-        repository_path: repository_path.to_owned(),
-        repository_url: repository_url.to_string(),
+        repository_configuration: config.repository.clone(),
     };
 
     let server = Server::new()
@@ -117,11 +114,11 @@ async fn handle_tag_update(
             );
 
             // remove the existing repository and re-clone it as we don't know the state
-            std::fs::remove_dir_all(&state.repository_path).unwrap();
+            std::fs::remove_dir_all(&state.repository_configuration.local_path).unwrap();
 
             *state.repository.lock().unwrap() = get_repository_or_clone(
-                &state.repository_path,
-                &state.repository_url,
+                &state.repository_configuration.local_path,
+                &state.repository_configuration.url,
                 &state.ssh_private_key,
             )
             .unwrap();
@@ -149,15 +146,15 @@ async fn handle_tag_update(
 
     // Make the tag update
     let root = path.parent().unwrap();
-    let config = Path::new("configuration").join("f2").join("config.yaml");
+    let config = &state.repository_configuration.target_path;
 
-    if let Err(e) = make_tag_edit(&root.join(&config), service, tag) {
+    if let Err(e) = make_tag_edit(&root.join(config), service, tag) {
         tracing::error!(?e, "failed to make the tag edit");
         return StatusCode::INTERNAL_SERVER_ERROR;
     }
 
     // Add the file to the index and write it to disk
-    let mut index = git::add(&repository, &config).unwrap();
+    let mut index = git::add(&repository, config).unwrap();
 
     // Make a new commit
     let commit_oid = git::commit(&repository, &mut index, service).unwrap();
