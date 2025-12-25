@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use axum::Json;
 use axum::extract::State;
+use axum::http::StatusCode;
 use axum::routing::put;
 use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
@@ -95,14 +96,14 @@ async fn handle_tag_update(
     State(state): State<SharedState>,
     TypedHeader(authorization): TypedHeader<Authorization<Bearer>>,
     Json(update): Json<TagUpdate>,
-) {
+) -> StatusCode {
     let token = authorization.token();
 
     // Check the request state
     if token != **state.passphrase {
-        return tracing::warn!(
-            "Invalid request, token was {token} which did not match the passphrase"
-        );
+        tracing::warn!("Invalid request, token was {token} which did not match the passphrase");
+
+        return StatusCode::UNAUTHORIZED;
     }
 
     let TagUpdate { service, tag } = &update;
@@ -150,7 +151,10 @@ async fn handle_tag_update(
     let root = path.parent().unwrap();
     let config = Path::new("configuration").join("f2").join("config.yaml");
 
-    make_tag_edit(&root.join(&config), service, tag).unwrap();
+    if let Err(e) = make_tag_edit(&root.join(&config), service, tag) {
+        tracing::error!(?e, "failed to make the tag edit");
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    }
 
     // Add the file to the index and write it to disk
     let mut index = git::add(&repository, &config).unwrap();
@@ -166,4 +170,6 @@ async fn handle_tag_update(
     git::push(&repository, remote_name, remote_ref, &state.ssh_private_key).unwrap();
 
     tracing::info!(%remote_name, %remote_ref, "pushed the changes to the remote");
+
+    StatusCode::OK
 }
