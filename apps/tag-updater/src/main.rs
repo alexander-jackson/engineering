@@ -1,5 +1,5 @@
 use std::net::SocketAddrV4;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use axum::Json;
@@ -28,6 +28,8 @@ struct SharedState {
     passphrase: Arc<Secret<String>>,
     ssh_private_key: Arc<Secret<String>>,
     repository: Arc<Mutex<Repository>>,
+    repository_path: PathBuf,
+    repository_url: String,
 }
 
 #[tracing::instrument]
@@ -35,7 +37,7 @@ fn get_repository_or_clone(
     filepath: &Path,
     url: &str,
     private_key: &Secret<String>,
-) -> Result<Arc<Mutex<Repository>>> {
+) -> Result<Repository> {
     let repository = if filepath.exists() {
         Repository::open(filepath)
             .wrap_err_with(|| eyre!("Failed to open repository at {filepath:?}"))?
@@ -43,7 +45,7 @@ fn get_repository_or_clone(
         git::clone(url, filepath, private_key)?
     };
 
-    Ok(Arc::new(Mutex::new(repository)))
+    Ok(repository)
 }
 
 #[tokio::main]
@@ -54,20 +56,20 @@ async fn main() -> Result<()> {
     let private_key = String::from_utf8(private_key_bytes)
         .wrap_err("Failed to parse private key as UTF-8 string")?;
 
-    let private_key = Arc::from(Secret::from(private_key));
+    let ssh_private_key = Arc::from(Secret::from(private_key));
+    let repository_path = Path::new("/tmp/infrastructure");
+    let repository_url = "git@github.com:alexander-jackson/infrastructure.git";
 
-    let repository = get_repository_or_clone(
-        Path::new("/tmp/infrastructure"),
-        "git@github.com:alexander-jackson/infrastructure.git",
-        &private_key,
-    )?;
+    let repository = get_repository_or_clone(repository_path, repository_url, &ssh_private_key)?;
 
     tracing::info!("successfully opened a repository for processing");
 
     let shared_state = SharedState {
         passphrase: Arc::from(config.passphrase.clone()),
-        ssh_private_key: private_key,
-        repository,
+        ssh_private_key,
+        repository: Arc::new(Mutex::new(repository)),
+        repository_path: repository_path.to_owned(),
+        repository_url: repository_url.to_string(),
     };
 
     let server = Server::new()
@@ -105,7 +107,29 @@ async fn handle_tag_update(
 
     let TagUpdate { service, tag } = &update;
 
-    let repository = state.repository.lock().unwrap();
+    let repository = match state.repository.lock() {
+        Ok(repo) => repo,
+        Err(err) => {
+            tracing::warn!(
+                ?err,
+                "failed to acquire repository lock, attempting to recover"
+            );
+
+            // remove the existing repository and re-clone it as we don't know the state
+            std::fs::remove_dir_all(&state.repository_path).unwrap();
+
+            *state.repository.lock().unwrap() = get_repository_or_clone(
+                &state.repository_path,
+                &state.repository_url,
+                &state.ssh_private_key,
+            )
+            .unwrap();
+            state.repository.clear_poison();
+
+            state.repository.lock().unwrap()
+        }
+    };
+
     let path = repository.path();
 
     tracing::info!(?path, "fetching the latest changes");
