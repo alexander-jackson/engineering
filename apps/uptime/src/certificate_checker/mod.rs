@@ -2,7 +2,7 @@ use chrono::Utc;
 use color_eyre::eyre::Result;
 use reqwest::Client;
 use sqlx::PgPool;
-use tokio::time::{interval, Duration};
+use tokio::time::{Duration, interval};
 use tracing::{error, info};
 
 mod tls;

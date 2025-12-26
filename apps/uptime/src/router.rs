@@ -9,8 +9,8 @@ use chrono::Utc;
 use color_eyre::eyre::Result;
 use humantime::format_duration;
 use serde::{Deserialize, Serialize, Serializer};
-use sqlx::types::chrono::DateTime;
 use sqlx::PgPool;
+use sqlx::types::chrono::DateTime;
 use tower_http::services::ServeDir;
 use uuid::Uuid;
 

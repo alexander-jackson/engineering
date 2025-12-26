@@ -1,8 +1,8 @@
 use axum::body::Body;
 use axum::response::{IntoResponse, Response};
 use color_eyre::eyre::Result;
-use reqwest::header::{CACHE_CONTROL, CONTENT_TYPE};
 use reqwest::StatusCode;
+use reqwest::header::{CACHE_CONTROL, CONTENT_TYPE};
 use serde::Serialize;
 use tera::{Context, Tera};
 
