@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use chrono::NaiveTime;
 use color_eyre::eyre::Result;
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use flate2::write::GzEncoder;
 
 #[tracing::instrument(skip(content))]
 pub fn compress(content: &[u8]) -> Result<Vec<u8>> {

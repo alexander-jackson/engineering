@@ -4,7 +4,7 @@ use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
 use foundation_http_server::Server;
 use http_body_util::BodyExt;
-use serde_test::{assert_ser_tokens, Token};
+use serde_test::{Token, assert_ser_tokens};
 use sqlx::PgPool;
 use tower::Service;
 

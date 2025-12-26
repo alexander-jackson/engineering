@@ -1,14 +1,14 @@
 use chrono::{DateTime, Utc};
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::{Result, eyre};
 use reqwest::Client;
 use std::sync::Arc;
 use tokio::net::TcpStream;
+use tokio_rustls::TlsConnector;
 use tokio_rustls::rustls::client::danger::{
     HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
 };
 use tokio_rustls::rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use tokio_rustls::rustls::{ClientConfig, DigitallySignedStruct, SignatureScheme};
-use tokio_rustls::TlsConnector;
 use x509_parser::certificate::X509Certificate;
 use x509_parser::nom::Err as NomErr;
 use x509_parser::prelude::FromDer;

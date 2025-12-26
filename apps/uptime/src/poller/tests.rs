@@ -337,9 +337,11 @@ async fn notification_types_have_independent_cooldowns(pool: PgPool) -> Result<(
 
     // Should have both certificate and uptime notifications since they have independent cooldowns
     assert_eq!(messages.len(), 2);
-    assert!(messages
-        .iter()
-        .any(|m| m.subject == "Certificate expiring soon"));
+    assert!(
+        messages
+            .iter()
+            .any(|m| m.subject == "Certificate expiring soon")
+    );
     assert!(messages.iter().any(|m| m.subject == "Outage detected"));
 
     Ok(())

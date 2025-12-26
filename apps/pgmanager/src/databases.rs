@@ -1,6 +1,6 @@
 use std::process::Stdio;
 
-use color_eyre::eyre::{eyre, Context, Result};
+use color_eyre::eyre::{Context, Result, eyre};
 use tokio::process::Command;
 use tokio_postgres::Client;
 

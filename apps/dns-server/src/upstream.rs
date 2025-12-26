@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use color_eyre::eyre::{eyre, Context, Result};
+use color_eyre::eyre::{Context, Result, eyre};
 use hickory_proto::op::{Message, MessageType, OpCode};
 use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
 use hickory_resolver::name_server::TokioConnectionProvider;
@@ -111,8 +111,8 @@ mod tests {
     use color_eyre::eyre::Result;
     use dns_mock_server::Server;
     use hickory_proto::op::{Message, Query};
-    use hickory_proto::rr::record_type::RecordType;
     use hickory_proto::rr::DNSClass;
+    use hickory_proto::rr::record_type::RecordType;
     use hickory_proto::xfer::Protocol;
     use hickory_resolver::Name;
     use tokio::net::UdpSocket;

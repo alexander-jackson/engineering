@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hickory_proto::op::Message;
-use moka::future::Cache;
 use moka::Expiry;
+use moka::future::Cache;
 
 use crate::config::CacheConfig;
 

@@ -8,9 +8,9 @@ use reqwest::Client;
 use sqlx::PgPool;
 use tokio::net::TcpListener;
 use tracing::level_filters::LevelFilter;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 
 mod certificate_checker;
 mod persistence;

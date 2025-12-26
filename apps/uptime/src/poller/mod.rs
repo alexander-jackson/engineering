@@ -2,8 +2,8 @@ use std::fmt::{self, Display};
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
-use sqlx::types::chrono::Utc;
 use sqlx::PgPool;
+use sqlx::types::chrono::Utc;
 use uuid::Uuid;
 
 use crate::persistence::{NotificationType, Origin};
