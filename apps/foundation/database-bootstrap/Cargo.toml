@@ -1,0 +1,11 @@
+[package]
+name = "foundation-database-bootstrap"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+color-eyre = "0.6.3"
+foundation-configuration = { version = "0.1.0", path = "../configuration" }
+serde = { workspace = true, features = ["derive"] }
+sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls"] }
+sqlx-bootstrap = { git = "https://github.com/alexander-jackson/sqlx-bootstrap.git", version = "0.1.0" }

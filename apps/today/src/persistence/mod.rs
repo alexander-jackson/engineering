@@ -6,8 +6,6 @@ use sqlx::PgPool;
 
 use crate::uid::ItemUid;
 
-pub mod bootstrap;
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ItemState {
     Checked,

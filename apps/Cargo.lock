@@ -1561,6 +1561,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "foundation-database-bootstrap"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "foundation-configuration",
+ "serde",
+ "sqlx",
+ "sqlx-bootstrap",
+]
+
+[[package]]
 name = "foundation-http-server"
 version = "0.1.0"
 dependencies = [
@@ -4674,7 +4685,7 @@ dependencies = [
  "chrono",
  "color-eyre",
  "dotenvy",
- "foundation-configuration",
+ "foundation-database-bootstrap",
  "foundation-http-server",
  "foundation-init",
  "foundation-telemetry",
@@ -5146,6 +5157,9 @@ dependencies = [
  "chrono",
  "color-eyre",
  "dotenvy",
+ "foundation-configuration",
+ "foundation-database-bootstrap",
+ "foundation-init",
  "humantime",
  "mockito",
  "reqwest",

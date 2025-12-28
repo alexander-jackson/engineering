@@ -1,7 +1,7 @@
 default: run
 
 run:
-	cargo run
+	cargo run -- --config local-config.yaml
 
 test:
 	cargo nextest run

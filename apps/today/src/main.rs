@@ -1,7 +1,6 @@
 use std::net::SocketAddrV4;
 
 use color_eyre::eyre::Result;
-use foundation_init::Configuration;
 use tokio::net::TcpListener;
 
 use crate::server::IndexCache;
@@ -13,15 +12,15 @@ mod server;
 mod templates;
 mod uid;
 
-use crate::config::ApplicationConfiguration;
+use crate::config::Configuration;
 use crate::templates::TemplateEngine;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config: Configuration<ApplicationConfiguration> = foundation_init::run()?;
+    let config = foundation_init::run::<Configuration>()?;
 
     let template_engine = TemplateEngine::new()?;
-    let pool = crate::persistence::bootstrap::run(&config.database).await?;
+    let pool = foundation_database_bootstrap::run(&config.database).await?;
     let index_cache = IndexCache::new(32);
 
     let addr = SocketAddrV4::new(config.server.host, config.server.port);

@@ -4,7 +4,7 @@ use color_eyre::eyre::{Context, Result, eyre};
 use tokio::process::Command;
 use tokio_postgres::Client;
 
-use crate::config::DatabaseConfig;
+use crate::config::DatabaseConfiguration;
 
 #[tracing::instrument(skip(client), ret)]
 pub async fn discover(client: &Client) -> Result<Vec<String>> {
@@ -27,7 +27,7 @@ pub async fn discover(client: &Client) -> Result<Vec<String>> {
 }
 
 #[tracing::instrument(skip(config))]
-pub async fn dump(config: &DatabaseConfig, database: &str) -> Result<Vec<u8>> {
+pub async fn dump(config: &DatabaseConfiguration, database: &str) -> Result<Vec<u8>> {
     let mut command = Command::new("pg_dump");
 
     command

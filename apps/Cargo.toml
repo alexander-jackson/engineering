@@ -4,6 +4,7 @@ members = [
 	"dns-server",
 	"foundation/args",
 	"foundation/configuration",
+	"foundation/database-bootstrap",
 	"foundation/http-server",
 	"foundation/init",
 	"foundation/logging",

@@ -1,0 +1,19 @@
+server:
+  addr: 127.0.0.1:8000
+
+database:
+  host: localhost
+  port: 5432
+  
+  root:
+    username: alex
+    password: ""
+    database: postgres
+
+  application:
+    username: uptimeblue
+    password: test
+    database: uptime
+
+routing:
+  sns_topic: ""

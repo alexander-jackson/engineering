@@ -1,0 +1,12 @@
+backup_location:
+  type: filesystem
+  root: ./backups
+
+backup_schedule:
+  type: oneshot
+
+database:
+  username: alex
+  database: postgres
+  host: localhost
+  port: 5432

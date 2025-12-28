@@ -8,7 +8,7 @@ axum.workspace = true
 chrono = { version = "0.4.38", default-features = false, features = ["now"] }
 color-eyre = "0.6.3"
 dotenvy = "0.15.7"
-foundation-configuration = { version = "0.1.0", path = "../foundation/configuration" }
+foundation-database-bootstrap = { version = "0.1.0", path = "../foundation/database-bootstrap" }
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
 foundation-init = { version = "0.1.0", path = "../foundation/init" }
 foundation-telemetry = { version = "0.1.0", path = "../foundation/telemetry" }

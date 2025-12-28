@@ -1,60 +1,31 @@
-use std::net::SocketAddr;
-use std::str::FromStr;
-
 use aws_config::BehaviorVersion;
 use color_eyre::eyre::Result;
-use poller::{AlertThreshold, CertificateAlertThreshold, PollerConfiguration};
 use reqwest::Client;
-use sqlx::PgPool;
 use tokio::net::TcpListener;
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 mod certificate_checker;
+mod config;
 mod persistence;
 mod poller;
 mod router;
 mod templates;
-mod utils;
 
 use crate::certificate_checker::CertificateChecker;
-use crate::poller::Poller;
-use crate::utils::get_env_var;
-
-async fn setup() -> Result<PgPool> {
-    dotenvy::dotenv().ok();
-
-    color_eyre::install()?;
-
-    let fmt_layer = tracing_subscriber::fmt::layer();
-    let env_filter_layer = EnvFilter::builder()
-        .with_default_directive(LevelFilter::INFO.into())
-        .from_env()?;
-
-    tracing_subscriber::registry()
-        .with(fmt_layer)
-        .with(env_filter_layer)
-        .init();
-
-    let pool = crate::persistence::bootstrap().await?;
-
-    Ok(pool)
-}
+use crate::config::Configuration;
+use crate::poller::{AlertThreshold, CertificateAlertThreshold, Poller, PollerConfiguration};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    let pool = setup().await?;
+    let config = foundation_init::run::<Configuration>()?;
+    let pool = foundation_database_bootstrap::run(&config.database).await?;
 
     let sdk_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let sns_client = aws_sdk_sns::Client::new(&sdk_config);
 
-    let topic = get_env_var("SNS_TOPIC")?;
     let configuration = PollerConfiguration::new(
         AlertThreshold::default(),
         CertificateAlertThreshold::default(),
-        topic,
+        config.routing.sns_topic.clone(),
     );
 
     let http_client = Client::new();
@@ -62,10 +33,9 @@ async fn main() -> Result<()> {
     let cert_checker = CertificateChecker::new(pool.clone(), http_client);
 
     let router = crate::router::build(pool.clone())?;
-    let addr = SocketAddr::from_str(&get_env_var("SERVER_ADDR")?)?;
-    let listener = TcpListener::bind(addr).await?;
+    let listener = TcpListener::bind(config.server.addr).await?;
 
-    tracing::info!(%addr, "listening for incoming requests");
+    tracing::info!(%config.server.addr, "listening for incoming requests");
 
     let _ = tokio::join!(
         poller.run(),

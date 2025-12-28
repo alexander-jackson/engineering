@@ -11,7 +11,7 @@ mod config;
 mod databases;
 mod utils;
 
-use crate::config::{BackupLocation, BackupSchedule, Configuration, DatabaseConfig};
+use crate::config::{BackupLocation, BackupSchedule, Configuration, DatabaseConfiguration};
 use crate::databases::{discover, dump};
 use crate::utils::{compress, get_initial_offset};
 
@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
 async fn take_backups(
     s3_client: &aws_sdk_s3::Client,
     backup_location: &BackupLocation,
-    database_config: &DatabaseConfig,
+    database_config: &DatabaseConfiguration,
 ) -> Result<()> {
     let date = Utc::now().format("%Y-%m-%d");
 
