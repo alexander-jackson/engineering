@@ -111,11 +111,11 @@ where
 impl Server<()> {
     pub async fn run(self, listener: TcpListener) -> Result<()> {
         let coordinator = ShutdownCoordinator::new();
-        let mut receiver = coordinator.subscribe();
+        let token = coordinator.token();
         tokio::spawn(async move { coordinator.spawn().await });
 
         let signal = async move {
-            receiver.recv().await.unwrap();
+            token.cancelled().await;
         };
 
         self.run_with_graceful_shutdown(listener, signal).await

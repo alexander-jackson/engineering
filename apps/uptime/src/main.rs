@@ -1,5 +1,6 @@
 use aws_config::BehaviorVersion;
 use color_eyre::eyre::Result;
+use foundation_shutdown::ShutdownCoordinator;
 use reqwest::Client;
 use tokio::net::TcpListener;
 
@@ -7,7 +8,7 @@ mod certificate_checker;
 mod config;
 mod persistence;
 mod poller;
-mod router;
+mod server;
 mod templates;
 
 use crate::certificate_checker::CertificateChecker;
@@ -31,15 +32,25 @@ async fn main() -> Result<()> {
     let poller = Poller::new(pool.clone(), http_client.clone(), sns_client, configuration);
     let cert_checker = CertificateChecker::new(pool.clone(), http_client);
 
-    let router = crate::router::build(pool.clone())?;
+    let server = crate::server::build(pool.clone())?;
     let listener = TcpListener::bind(config.server.addr).await?;
 
-    tracing::info!(%config.server.addr, "listening for incoming requests");
+    let coordinator = ShutdownCoordinator::new();
+
+    let poller_token = coordinator.token();
+    let cert_token = coordinator.token();
+    let server_token = coordinator.token();
+
+    tokio::spawn(async move {
+        coordinator.spawn().await.ok();
+    });
 
     let _ = tokio::join!(
-        poller.run(),
-        cert_checker.run(),
-        axum::serve(listener, router)
+        poller.run(poller_token),
+        cert_checker.run(cert_token),
+        server.run_with_graceful_shutdown(listener, async move {
+            server_token.cancelled().await;
+        })
     );
 
     Ok(())

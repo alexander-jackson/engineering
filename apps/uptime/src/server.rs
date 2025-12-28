@@ -1,12 +1,13 @@
 use std::time::Duration;
 
+use axum::Form;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
-use axum::{Form, Router};
 use chrono::Utc;
 use color_eyre::eyre::Result;
+use foundation_http_server::Server;
 use humantime::format_duration;
 use serde::{Deserialize, Serialize, Serializer};
 use sqlx::PgPool;
@@ -38,22 +39,22 @@ struct ApplicationState {
     template_engine: TemplateEngine,
 }
 
-pub fn build(pool: PgPool) -> Result<Router> {
+pub fn build(pool: PgPool) -> Result<Server> {
     let template_engine = TemplateEngine::new()?;
     let state = ApplicationState {
         pool,
         template_engine,
     };
 
-    let router = Router::new()
+    let server = Server::new()
         .route("/", get(index))
         .route("/add-origin", get(add_origin_template).post(add_origin))
-        .route("/origin/:origin_uid", get(origin_detail))
+        .route("/origin/{origin_uid}", get(origin_detail))
         .route("/notifications", get(notifications))
         .nest_service("/assets", ServeDir::new("assets"))
         .with_state(state);
 
-    Ok(router)
+    Ok(server)
 }
 
 #[derive(Serialize)]

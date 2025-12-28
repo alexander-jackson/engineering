@@ -52,7 +52,7 @@ impl DnsServer {
 
     #[tracing::instrument(skip(self))]
     pub async fn run(mut self) -> Result<()> {
-        let mut receiver = self.coordinator.subscribe();
+        let token = self.coordinator.token();
         let coordinator = self.coordinator;
         tokio::spawn(async move { coordinator.spawn().await });
 
@@ -63,7 +63,7 @@ impl DnsServer {
                 result?;
                 tracing::info!("dns server stopped normally");
             }
-            _ = receiver.recv() => {
+            _ = token.cancelled() => {
                 tracing::info!("received shutdown signal, stopping dns server");
             }
         }

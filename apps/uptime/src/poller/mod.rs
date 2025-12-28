@@ -2,6 +2,7 @@ use std::fmt::{self, Display};
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
+use foundation_shutdown::CancellationToken;
 use sqlx::PgPool;
 use sqlx::types::chrono::Utc;
 use uuid::Uuid;
@@ -159,13 +160,21 @@ impl<N: Notifier> Poller<N> {
         }
     }
 
-    pub async fn run(&self) {
-        loop {
-            if let Err(e) = self.query_all_origins().await {
-                tracing::warn!(%e, "failed to query all the origins");
-            }
+    pub async fn run(&self, shutdown: CancellationToken) {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
 
-            tokio::time::sleep(Duration::from_secs(60)).await;
+        loop {
+            tokio::select! {
+                _ = shutdown.cancelled() => {
+                    tracing::info!("poller shutting down gracefully");
+                    break;
+                }
+                _ = interval.tick() => {
+                    if let Err(e) = self.query_all_origins().await {
+                        tracing::warn!(%e, "failed to query all the origins");
+                    }
+                }
+            }
         }
     }
 

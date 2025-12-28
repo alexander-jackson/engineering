@@ -1,23 +1,24 @@
 use color_eyre::eyre::Result;
 use tokio::signal::unix::SignalKind;
-use tokio::sync::broadcast::{Receiver, Sender};
+
+pub use tokio_util::sync::CancellationToken;
 
 pub struct ShutdownCoordinator {
-    sender: Sender<()>,
+    token: CancellationToken,
 }
 
 impl ShutdownCoordinator {
     pub fn new() -> Self {
-        let (sender, _) = tokio::sync::broadcast::channel(1);
-
-        Self { sender }
+        Self {
+            token: CancellationToken::new(),
+        }
     }
 
-    pub fn subscribe(&self) -> Receiver<()> {
-        self.sender.subscribe()
+    pub fn token(&self) -> CancellationToken {
+        self.token.clone()
     }
 
-    pub async fn spawn(&self) -> Result<()> {
+    pub async fn spawn(self) -> Result<()> {
         let ctrl_c = async {
             tokio::signal::ctrl_c()
                 .await
@@ -40,7 +41,7 @@ impl ShutdownCoordinator {
             _ = terminate => {},
         }
 
-        let _ = self.sender.send(());
+        self.token.cancel();
 
         Ok(())
     }
