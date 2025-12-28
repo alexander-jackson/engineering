@@ -3,9 +3,10 @@ use std::path::Path;
 use color_eyre::eyre::Result;
 use foundation_configuration::Secret;
 use serde::Deserialize;
-use sqlx::PgPool;
 use sqlx::migrate::Migrator;
 use sqlx_bootstrap::{ApplicationConfig, BootstrapConfig, ConnectionConfig, RootConfig};
+
+pub use sqlx::PgPool;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct DatabaseConfiguration {

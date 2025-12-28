@@ -17,10 +17,9 @@ use crate::templates::TemplateEngine;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = foundation_init::run::<Configuration>()?;
+    let (config, pool) = foundation_init::run_with_bootstrap::<Configuration>().await?;
 
     let template_engine = TemplateEngine::new()?;
-    let pool = foundation_database_bootstrap::run(&config.database).await?;
     let index_cache = IndexCache::new(32);
 
     let addr = SocketAddrV4::new(config.server.host, config.server.port);

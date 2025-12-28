@@ -8,10 +8,15 @@ use serde::Deserialize;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+#[cfg(feature = "database")]
+use foundation_database_bootstrap::{DatabaseConfiguration, PgPool};
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Configuration<T> {
     #[serde(flatten)]
     pub application: T,
+    #[cfg(feature = "database")]
+    pub database: DatabaseConfiguration,
     pub telemetry: Option<TelemetryConfig>,
 }
 
@@ -58,4 +63,15 @@ where
     tracing::info!(name = %application_name, "initialised application");
 
     Ok(config)
+}
+
+#[cfg(feature = "database")]
+pub async fn run_with_bootstrap<T>() -> Result<(Configuration<T>, PgPool)>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let config = run()?;
+    let pool = foundation_database_bootstrap::run(&config.database).await?;
+
+    Ok((config, pool))
 }

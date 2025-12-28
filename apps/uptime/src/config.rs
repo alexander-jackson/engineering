@@ -1,12 +1,10 @@
 use std::net::SocketAddr;
 
-use foundation_database_bootstrap::DatabaseConfiguration;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Configuration {
     pub server: ServerConfiguration,
-    pub database: DatabaseConfiguration,
     pub routing: RoutingConfiguration,
 }
 

@@ -11,7 +11,7 @@ mod config;
 mod databases;
 mod utils;
 
-use crate::config::{BackupLocation, BackupSchedule, Configuration, DatabaseConfiguration};
+use crate::config::{BackupLocation, BackupSchedule, Configuration, TargetDatabaseConfiguration};
 use crate::databases::{discover, dump};
 use crate::utils::{compress, get_initial_offset};
 
@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
 
     match config.backup_schedule {
         BackupSchedule::Oneshot => {
-            take_backups(&s3_client, &config.backup_location, &config.database).await?
+            take_backups(&s3_client, &config.backup_location, &config.target_database).await?
         }
         BackupSchedule::Daily { time } => {
             let offset = get_initial_offset(Utc::now().time(), time);
@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
 
             loop {
                 interval.tick().await;
-                take_backups(&s3_client, &config.backup_location, &config.database).await?;
+                take_backups(&s3_client, &config.backup_location, &config.target_database).await?;
             }
         }
     }
@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
 async fn take_backups(
     s3_client: &aws_sdk_s3::Client,
     backup_location: &BackupLocation,
-    database_config: &DatabaseConfiguration,
+    database_config: &TargetDatabaseConfiguration,
 ) -> Result<()> {
     let date = Utc::now().format("%Y-%m-%d");
 

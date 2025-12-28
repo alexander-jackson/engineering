@@ -8,17 +8,14 @@ axum.workspace = true
 chrono = { version = "0.4.38", default-features = false, features = ["now"] }
 color-eyre = "0.6.3"
 dotenvy = "0.15.7"
-foundation-database-bootstrap = { version = "0.1.0", path = "../foundation/database-bootstrap" }
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
-foundation-init = { version = "0.1.0", path = "../foundation/init" }
-foundation-telemetry = { version = "0.1.0", path = "../foundation/telemetry" }
+foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
 foundation-uid = { version = "0.1.0", path = "../foundation/uid" }
 moka = { version = "0.12.8", features = ["future"] }
 pico-args = "0.5.0"
 pulldown-cmark = "0.12.2"
 serde = { workspace = true, features = ["derive"] }
 sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
-sqlx-bootstrap = { git = "https://github.com/alexander-jackson/sqlx-bootstrap.git", version = "0.1.0" }
 tera = "1.20.0"
 tokio = { version = "1.39.3", features = ["rt-multi-thread", "macros"] }
 tower = { version = "0.5.0", features = ["tracing"] }

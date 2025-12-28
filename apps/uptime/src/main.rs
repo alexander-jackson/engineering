@@ -16,8 +16,7 @@ use crate::poller::{AlertThreshold, CertificateAlertThreshold, Poller, PollerCon
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    let config = foundation_init::run::<Configuration>()?;
-    let pool = foundation_database_bootstrap::run(&config.database).await?;
+    let (config, pool) = foundation_init::run_with_bootstrap::<Configuration>().await?;
 
     let sdk_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let sns_client = aws_sdk_sns::Client::new(&sdk_config);

@@ -8,7 +8,7 @@ use serde::Deserialize;
 pub struct Configuration {
     pub backup_location: BackupLocation,
     pub backup_schedule: BackupSchedule,
-    pub database: DatabaseConfiguration,
+    pub target_database: TargetDatabaseConfiguration,
 }
 
 #[derive(Debug, Deserialize)]
@@ -26,7 +26,7 @@ pub enum BackupSchedule {
 }
 
 #[derive(Deserialize)]
-pub struct DatabaseConfiguration {
+pub struct TargetDatabaseConfiguration {
     pub username: String,
     pub password: Option<Secret<String>>,
     pub database: String,
@@ -34,8 +34,8 @@ pub struct DatabaseConfiguration {
     pub port: u16,
 }
 
-impl From<&DatabaseConfiguration> for tokio_postgres::Config {
-    fn from(value: &DatabaseConfiguration) -> Self {
+impl From<&TargetDatabaseConfiguration> for tokio_postgres::Config {
+    fn from(value: &TargetDatabaseConfiguration) -> Self {
         let mut config = tokio_postgres::Config::new();
 
         config
