@@ -1,20 +1,14 @@
-use std::convert::Infallible;
-use std::ops::{Deref, DerefMut};
+use std::future::Future;
 use std::time::Duration;
 
 use axum::Router;
-use axum::body::Body;
 use axum::http::{Request, Response};
-use axum::response::IntoResponse;
-use axum::routing::{MethodRouter, Route};
 use color_eyre::eyre::Result;
-use foundation_shutdown::ShutdownCoordinator;
+use foundation_shutdown::{CancellationToken, GracefulTask};
 use tokio::net::TcpListener;
 use tower_http::trace::{
     DefaultOnRequest, DefaultOnResponse, MakeSpan, OnRequest, OnResponse, TraceLayer,
 };
-use tower_layer::Layer;
-use tower_service::Service;
 use tracing::Span;
 use tracing::field::Empty;
 
@@ -57,71 +51,45 @@ impl<B> OnResponse<B> for ResponseTracingFilter {
     }
 }
 
-pub struct Server<S = ()> {
-    router: Router<S>,
+pub struct Server {
+    router: Router<()>,
+    listener: TcpListener,
 }
 
-impl<S> Server<S>
-where
-    S: Clone + Send + Sync + 'static,
-{
-    pub fn new() -> Self {
-        let router = Router::new();
-
-        Server { router }
+impl Server {
+    pub fn new(router: Router<()>, listener: TcpListener) -> Self {
+        Self { router, listener }
     }
 
-    pub fn route(self, path: &str, method_router: MethodRouter<S>) -> Self {
-        let router = self.router.route(path, method_router);
+    pub async fn run(self) -> Result<()> {
+        let ctrl_c = async {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("failed to install Ctrl+C handler");
 
-        Server { router }
-    }
-
-    pub fn with_state<S2>(self, state: S) -> Server<S2> {
-        let router = self.router.with_state(state);
-
-        Server { router }
-    }
-
-    pub fn nest_service<T>(self, path: &str, service: T) -> Self
-    where
-        T: Service<Request<Body>, Error = Infallible> + Clone + Send + Sync + 'static,
-        T::Response: IntoResponse,
-        T::Future: Send + 'static,
-    {
-        let router = self.router.nest_service(path, service);
-
-        Server { router }
-    }
-
-    pub fn layer<L>(self, layer: L) -> Self
-    where
-        L: Layer<Route> + Clone + Send + Sync + 'static,
-        L::Service: Service<Request<Body>> + Clone + Send + Sync + 'static,
-        <L::Service as Service<Request<Body>>>::Response: IntoResponse + 'static,
-        <L::Service as Service<Request<Body>>>::Error: Into<Infallible> + 'static,
-        <L::Service as Service<Request<Body>>>::Future: Send + 'static,
-    {
-        let router = self.router.layer(layer);
-
-        Server { router }
-    }
-}
-
-impl Server<()> {
-    pub async fn run(self, listener: TcpListener) -> Result<()> {
-        let coordinator = ShutdownCoordinator::new();
-        let token = coordinator.token();
-        tokio::spawn(async move { coordinator.spawn().await });
-
-        let signal = async move {
-            token.cancelled().await;
+            tracing::info!("received ctrl+c, starting graceful shutdown");
         };
 
-        self.run_with_graceful_shutdown(listener, signal).await
+        let terminate = async {
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("failed to install signal handler")
+                .recv()
+                .await;
+
+            tracing::info!("received terminate signal, starting graceful shutdown");
+        };
+
+        let signal = async {
+            tokio::select! {
+                _ = ctrl_c => {},
+                _ = terminate => {},
+            }
+        };
+
+        self.run_with_graceful_shutdown(signal).await
     }
 
-    pub async fn run_with_graceful_shutdown<F>(self, listener: TcpListener, signal: F) -> Result<()>
+    async fn run_with_graceful_shutdown<F>(self, signal: F) -> Result<()>
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -132,10 +100,10 @@ impl Server<()> {
 
         let router = self.router.layer(trace_layer);
 
-        let addr = listener.local_addr()?;
+        let addr = self.listener.local_addr()?;
         tracing::info!(%addr, "listening for incoming requests");
 
-        axum::serve(listener, router)
+        axum::serve(self.listener, router)
             .with_graceful_shutdown(signal)
             .await?;
 
@@ -143,23 +111,13 @@ impl Server<()> {
     }
 }
 
-impl Default for Server {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+impl GracefulTask for Server {
+    async fn run_until_shutdown(self, shutdown: CancellationToken) -> Result<()> {
+        let signal = async move {
+            shutdown.cancelled().await;
+        };
 
-impl<S> Deref for Server<S> {
-    type Target = Router<S>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.router
-    }
-}
-
-impl<S> DerefMut for Server<S> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.router
+        self.run_with_graceful_shutdown(signal).await
     }
 }
 
@@ -169,6 +127,7 @@ mod tests {
     use std::sync::{Arc, RwLock};
     use std::task::{Context, Poll};
 
+    use axum::Router;
     use axum::extract::State;
     use axum::http::Request;
     use axum::routing::get;
@@ -181,29 +140,17 @@ mod tests {
     use crate::Server;
 
     #[tokio::test]
-    async fn can_create_servers() {
-        let server: Server<()> = Server::new();
-
-        assert!(!server.router.has_routes());
-    }
-
-    #[tokio::test]
-    async fn can_add_routes_to_a_server() {
-        let server: Server<()> = Server::new().route("/", get(|| async { "Hello, World!" }));
-
-        assert!(server.router.has_routes());
-    }
-
-    #[tokio::test]
     async fn can_run_a_server() -> Result<()> {
-        let server: Server<()> = Server::new().route("/", get(|| async { "Hello, World!" }));
+        let router = Router::new().route("/", get(|| async { "Hello, World!" }));
 
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
         let listener = TcpListener::bind(addr).await?;
         let local_addr = listener.local_addr()?;
 
+        let server = Server::new(router, listener);
+
         let task = tokio::spawn(async move {
-            if let Err(e) = server.run(listener).await {
+            if let Err(e) = server.run().await {
                 eprintln!("Server error: {}", e);
             }
         });
@@ -225,7 +172,7 @@ mod tests {
 
     #[tokio::test]
     async fn can_add_state_to_a_server() -> Result<()> {
-        let server: Server<()> = Server::new()
+        let router = Router::new()
             .route("/", get(stateful_handler))
             .with_state("Hello, World!".to_string());
 
@@ -233,8 +180,10 @@ mod tests {
         let listener = TcpListener::bind(addr).await?;
         let local_addr = listener.local_addr()?;
 
+        let server = Server::new(router, listener);
+
         let task = tokio::spawn(async move {
-            if let Err(e) = server.run(listener).await {
+            if let Err(e) = server.run().await {
                 eprintln!("Server error: {}", e);
             }
         });
@@ -300,7 +249,7 @@ mod tests {
             messages: Arc::clone(&buffer),
         };
 
-        let server: Server<()> = Server::new()
+        let router = Router::new()
             .route("/{capture}", get(|| async { "Hello, World!" }))
             .layer(layer);
 
@@ -308,8 +257,10 @@ mod tests {
         let listener = TcpListener::bind(addr).await?;
         let local_addr = listener.local_addr()?;
 
+        let server = Server::new(router, listener);
+
         let task = tokio::spawn(async move {
-            if let Err(e) = server.run(listener).await {
+            if let Err(e) = server.run().await {
                 eprintln!("Server error: {}", e);
             }
         });
@@ -339,14 +290,16 @@ mod tests {
             tracing::info!("custom shutdown signal received, starting graceful shutdown");
         };
 
-        let server: Server<()> = Server::new().route("/", get(|| async { "Hello, World!" }));
+        let router = Router::new().route("/", get(|| async { "Hello, World!" }));
 
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
         let listener = TcpListener::bind(addr).await?;
         let local_addr = listener.local_addr()?;
 
+        let server = Server::new(router, listener);
+
         let task = tokio::spawn(async move {
-            if let Err(e) = server.run_with_graceful_shutdown(listener, signal).await {
+            if let Err(e) = server.run_with_graceful_shutdown(signal).await {
                 eprintln!("Server error: {}", e);
             }
         });

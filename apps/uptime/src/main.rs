@@ -1,5 +1,8 @@
+use std::time::Duration;
+
 use aws_config::BehaviorVersion;
 use color_eyre::eyre::Result;
+use foundation_recurring_job::RecurringJob;
 use foundation_shutdown::ShutdownCoordinator;
 use reqwest::Client;
 use tokio::net::TcpListener;
@@ -32,26 +35,26 @@ async fn main() -> Result<()> {
     let poller = Poller::new(pool.clone(), http_client.clone(), sns_client, configuration);
     let cert_checker = CertificateChecker::new(pool.clone(), http_client);
 
-    let server = crate::server::build(pool.clone())?;
     let listener = TcpListener::bind(config.server.addr).await?;
+    let server = crate::server::build(pool.clone(), listener)?;
 
-    let coordinator = ShutdownCoordinator::new();
-
-    let poller_token = coordinator.token();
-    let cert_token = coordinator.token();
-    let server_token = coordinator.token();
-
-    tokio::spawn(async move {
-        coordinator.spawn().await.ok();
+    let poller_job = RecurringJob::new("uptime-poller", Duration::from_secs(60), poller, |p| {
+        Box::pin(async { p.query_all_origins().await })
     });
 
-    let _ = tokio::join!(
-        poller.run(poller_token),
-        cert_checker.run(cert_token),
-        server.run_with_graceful_shutdown(listener, async move {
-            server_token.cancelled().await;
-        })
+    let cert_job = RecurringJob::new(
+        "certificate-checker",
+        Duration::from_secs(86400),
+        cert_checker,
+        |c| Box::pin(async { c.check_all_certificates().await }),
     );
+
+    ShutdownCoordinator::new()
+        .with_task(poller_job)
+        .with_task(cert_job)
+        .with_task(server)
+        .run()
+        .await?;
 
     Ok(())
 }

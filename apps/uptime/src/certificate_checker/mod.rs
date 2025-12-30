@@ -1,9 +1,7 @@
 use chrono::Utc;
 use color_eyre::eyre::Result;
-use foundation_shutdown::CancellationToken;
 use reqwest::Client;
 use sqlx::PgPool;
-use tokio::time::{Duration, interval};
 use tracing::{error, info};
 
 mod tls;
@@ -20,27 +18,7 @@ impl CertificateChecker {
         Self { pool, http_client }
     }
 
-    pub async fn run(self, shutdown: CancellationToken) {
-        let mut ticker = interval(Duration::from_secs(86400)); // 24 hours
-
-        loop {
-            tokio::select! {
-                _ = shutdown.cancelled() => {
-                    info!("certificate checker shutting down gracefully");
-                    break;
-                }
-                _ = ticker.tick() => {
-                    info!("starting certificate expiry check");
-
-                    if let Err(e) = self.check_all_certificates().await {
-                        error!("failed to check certificates: {}", e);
-                    }
-                }
-            }
-        }
-    }
-
-    async fn check_all_certificates(&self) -> Result<()> {
+    pub async fn check_all_certificates(&self) -> Result<()> {
         let origins = crate::persistence::fetch_origins(&self.pool).await?;
 
         for origin in origins {

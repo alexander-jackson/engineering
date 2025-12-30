@@ -2,10 +2,10 @@ use std::net::SocketAddrV4;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::put;
+use axum::{Json, Router};
 use axum_extra::TypedHeader;
 use axum_extra::headers::Authorization;
 use axum_extra::headers::authorization::Bearer;
@@ -70,14 +70,15 @@ async fn main() -> Result<()> {
         repository_configuration: config.repository.clone(),
     };
 
-    let server = Server::new()
+    let router = Router::new()
         .route("/update", put(handle_tag_update))
         .with_state(shared_state);
 
     let addr = SocketAddrV4::new(config.addr, config.port);
     let listener = TcpListener::bind(addr).await?;
 
-    server.run(listener).await?;
+    let server = Server::new(router, listener);
+    server.run().await?;
 
     Ok(())
 }

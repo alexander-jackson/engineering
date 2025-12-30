@@ -23,10 +23,10 @@ async fn main() -> Result<()> {
     let index_cache = IndexCache::new(32);
 
     let addr = SocketAddrV4::new(config.server.host, config.server.port);
-    let server = crate::server::build(template_engine, pool, index_cache);
     let listener = TcpListener::bind(addr).await?;
+    let server = crate::server::build(template_engine, pool, index_cache, listener);
 
-    server.run(listener).await?;
+    server.run().await?;
 
     Ok(())
 }

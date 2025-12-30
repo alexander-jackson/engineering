@@ -8,6 +8,7 @@ members = [
 	"foundation/http-server",
 	"foundation/init",
 	"foundation/logging",
+	"foundation/recurring-job",
 	"foundation/shutdown",
 	"foundation/telemetry",
 	"foundation/uid",

@@ -1,12 +1,12 @@
+use axum::Router;
 use axum::body::Body;
 use axum::http::header::{AsHeaderName, CONTENT_TYPE, LOCATION};
 use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
-use foundation_http_server::Server;
 use http_body_util::BodyExt;
 use serde_test::{Token, assert_ser_tokens};
 use sqlx::PgPool;
-use tower::Service;
+use tower::ServiceExt;
 
 use crate::persistence::Content;
 use crate::server::IndexCache;
@@ -16,13 +16,13 @@ const FORM_MIME_TYPE: &str = "application/x-www-form-urlencoded";
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-fn build_server(pool: PgPool) -> Result<Server> {
+fn build_router(pool: PgPool) -> Result<Router> {
     let template_engine = TemplateEngine::new()?;
     let index_cache = IndexCache::new(1);
 
-    let server = crate::server::build(template_engine, pool, index_cache);
+    let router = crate::server::build_router(template_engine, pool, index_cache);
 
-    Ok(server)
+    Ok(router)
 }
 
 async fn read_full_body(response: Response) -> Result<String> {
@@ -38,12 +38,12 @@ fn get_response_header<'a, K: AsHeaderName>(response: &'a Response, header: K) -
 
 #[sqlx::test]
 async fn invalid_requests_get_404s(pool: PgPool) -> Result<()> {
-    let mut server = build_server(pool)?;
+    let router = build_router(pool)?;
     let request = Request::builder()
         .uri("/unknown-path")
         .body(Body::empty())?;
 
-    let response = server.call(request).await?;
+    let response = router.oneshot(request).await?;
     let status = response.status();
 
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -53,7 +53,7 @@ async fn invalid_requests_get_404s(pool: PgPool) -> Result<()> {
 
 #[sqlx::test]
 async fn can_add_items(pool: PgPool) -> Result<()> {
-    let mut server = build_server(pool)?;
+    let router = build_router(pool)?;
 
     let request = Request::builder()
         .method(Method::POST)
@@ -61,7 +61,7 @@ async fn can_add_items(pool: PgPool) -> Result<()> {
         .header(CONTENT_TYPE, FORM_MIME_TYPE)
         .body(Body::from("content=Task"))?;
 
-    let response = server.call(request).await?;
+    let response = router.clone().oneshot(request).await?;
 
     // Get redirected to the index page
     assert_eq!(response.status(), StatusCode::FOUND);
@@ -72,7 +72,7 @@ async fn can_add_items(pool: PgPool) -> Result<()> {
         .uri("/")
         .body(Body::empty())?;
 
-    let response = server.call(request).await?;
+    let response = router.oneshot(request).await?;
 
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(

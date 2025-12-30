@@ -53,8 +53,7 @@ impl DnsServer {
     #[tracing::instrument(skip(self))]
     pub async fn run(mut self) -> Result<()> {
         let token = self.coordinator.token();
-        let coordinator = self.coordinator;
-        tokio::spawn(async move { coordinator.spawn().await });
+        self.coordinator.listen_for_signals();
 
         tracing::info!("dns server started");
 

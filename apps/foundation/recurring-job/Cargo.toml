@@ -1,0 +1,10 @@
+[package]
+name = "foundation-recurring-job"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+color-eyre = "0.6.5"
+foundation-shutdown = { path = "../shutdown" }
+tokio = { version = "1.48.0", default-features = false, features = ["macros", "time"] }
+tracing.workspace = true

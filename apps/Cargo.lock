@@ -1556,6 +1556,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "foundation-recurring-job"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "foundation-shutdown",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "foundation-shutdown"
 version = "0.1.0"
 dependencies = [
@@ -5097,6 +5107,7 @@ dependencies = [
  "dotenvy",
  "foundation-http-server",
  "foundation-init",
+ "foundation-recurring-job",
  "foundation-shutdown",
  "humantime",
  "mockito",

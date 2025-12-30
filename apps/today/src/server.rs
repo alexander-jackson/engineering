@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use axum::Router;
 use axum::body::Body;
 use axum::extract::{Form, Json, Path, State};
 use axum::http::StatusCode;
@@ -12,6 +13,7 @@ use foundation_http_server::Server;
 use moka::future::Cache;
 use serde::Deserialize;
 use sqlx::PgPool;
+use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 
 use crate::error::ServerResult;
@@ -28,19 +30,33 @@ struct ApplicationState {
     index_cache: IndexCache,
 }
 
-pub fn build(template_engine: TemplateEngine, pool: PgPool, index_cache: IndexCache) -> Server {
+pub fn build_router(
+    template_engine: TemplateEngine,
+    pool: PgPool,
+    index_cache: IndexCache,
+) -> Router {
     let state = ApplicationState {
         template_engine,
         pool,
         index_cache,
     };
 
-    Server::new()
+    Router::new()
         .route("/", get(templated))
         .route("/add", post(add_item))
         .route("/update/{item_uid}", patch(update_item))
         .nest_service("/assets", ServeDir::new("assets"))
         .with_state(state)
+}
+
+pub fn build(
+    template_engine: TemplateEngine,
+    pool: PgPool,
+    index_cache: IndexCache,
+    listener: TcpListener,
+) -> Server {
+    let router = build_router(template_engine, pool, index_cache);
+    Server::new(router, listener)
 }
 
 #[tracing::instrument(skip(template_engine, pool, index_cache))]

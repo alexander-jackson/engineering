@@ -12,6 +12,7 @@ color-eyre = "0.6.3"
 dotenvy = "0.15.7"
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
 foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
+foundation-recurring-job = { version = "0.1.0", path = "../foundation/recurring-job" }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 humantime = "2.1.0"
 reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls", "rustls-tls-webpki-roots"] }
