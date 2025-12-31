@@ -20,6 +20,7 @@ WORKDIR /usr/src/app
 # Copy the built binary from the previous stage, as well as the runtime files
 COPY --from=builder /usr/src/app/today/templates ./templates
 COPY --from=builder /usr/src/app/today/assets ./assets
+COPY --from=builder /usr/src/app/today/migrations ./migrations
 COPY --from=builder /usr/src/app/target/release/today ./
 
 # Command to run the application

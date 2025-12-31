@@ -20,6 +20,7 @@ WORKDIR /usr/src/app
 # Copy the built binary from the previous stage, as well as the runtime files
 COPY --from=builder /usr/src/app/uptime/templates ./templates
 COPY --from=builder /usr/src/app/uptime/assets ./assets
+COPY --from=builder /usr/src/app/uptime/migrations ./migrations
 COPY --from=builder /usr/src/app/target/release/uptime ./
 
 # Command to run the application
