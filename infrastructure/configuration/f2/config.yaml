@@ -149,7 +149,7 @@ services:
 
   pgmanager:
     image: alexanderjackson/pgmanager
-    tag: 20251226-1655
+    tag: 20251231-1427
     replicas: 1
     volumes:
       config:
