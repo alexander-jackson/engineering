@@ -5,7 +5,7 @@ backup_location:
 backup_schedule:
   type: oneshot
 
-database:
+target_database:
   username: alex
   database: postgres
   host: localhost
