@@ -5,7 +5,6 @@ use foundation_args::Args;
 use foundation_configuration::ConfigurationReader;
 use foundation_telemetry::TelemetryConfig;
 use serde::Deserialize;
-use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 #[cfg(feature = "database")]
@@ -42,22 +41,19 @@ where
         .ok_or_else(|| eyre!("failed to get current exe file stem"))?
         .to_owned();
 
+    let (telemetry_layer, telemetry_reload_handle) = foundation_telemetry::get_reloadable_layer();
+    foundation_logging::get_registry_with_telemetry(telemetry_layer).init();
+
     let args = Args::from_env()?;
     let config = Configuration::from_yaml(&args.config)?;
 
-    let registry = foundation_logging::get_default_registry();
+    if let Some(telemetry) = &config.telemetry
+        && telemetry.enabled
+    {
+        let layer =
+            foundation_telemetry::get_trace_layer(application_name.clone(), &telemetry.endpoint)?;
 
-    match &config.telemetry {
-        Some(telemetry) if telemetry.enabled => {
-            let layer = foundation_telemetry::get_trace_layer(
-                application_name.clone(),
-                &telemetry.endpoint,
-            )?;
-            registry.with(layer).init();
-        }
-        _ => {
-            registry.init();
-        }
+        telemetry_reload_handle.reload(Some(layer))?;
     }
 
     tracing::info!(name = %application_name, "initialised application");

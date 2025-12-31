@@ -9,12 +9,47 @@ use opentelemetry_sdk::trace::{SdkTracer, SdkTracerProvider};
 use serde::Deserialize;
 use tracing_core::Subscriber;
 use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::Registry;
 use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::reload::{Handle, Layer};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct TelemetryConfig {
     pub enabled: bool,
     pub endpoint: String,
+}
+
+/// Handle for reloading the telemetry layer at runtime
+pub type ReloadHandle = Handle<Option<OpenTelemetryLayer<Registry, SdkTracer>>, Registry>;
+
+/// Creates a reloadable telemetry layer (initialised as `None`) and returns both the layer and a
+/// handle to reload it later. This allows tracing to be initialized early before configuration is
+/// loaded, then telemetry can be enabled conditionally.
+///
+/// # Example
+/// ```
+/// use std::error::Error;
+///
+/// use foundation_telemetry::get_trace_layer;
+/// use tracing_subscriber::Registry;
+/// use tracing_subscriber::layer::SubscriberExt;
+///
+/// fn main() -> Result<(), Box<dyn Error>> {
+///     let (telemetry_layer, reload_handle) = foundation_telemetry::get_reloadable_layer();
+///     let subscriber = Registry::default().with(telemetry_layer);
+///
+///     // Later, after deciding whether to enable telemetry
+///     let layer = foundation_telemetry::get_trace_layer("my-app", "localhost:4318")?;
+///     reload_handle.reload(Some(layer))?;
+///
+///     Ok(())
+/// }
+/// ```
+pub fn get_reloadable_layer() -> (
+    Layer<Option<OpenTelemetryLayer<Registry, SdkTracer>>, Registry>,
+    ReloadHandle,
+) {
+    Layer::new(None::<OpenTelemetryLayer<Registry, SdkTracer>>)
 }
 
 /// Initialises an [`OpenTelemetryLayer`] and sets up exporting for the service to the given
