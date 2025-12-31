@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
+use chrono::Duration;
 use color_eyre::eyre::Result;
 use sqlx::PgPool;
 use tokio::sync::RwLock;
@@ -80,6 +80,12 @@ fn create_poller(pool: &PgPool) -> Poller<MockSnsClient> {
     );
 
     Poller::new(pool.clone(), http_client, sns_client.clone(), configuration)
+}
+
+async fn sleep(duration: Duration) -> Result<()> {
+    tokio::time::sleep(duration.to_std()?).await;
+
+    Ok(())
 }
 
 #[sqlx::test]
@@ -217,7 +223,7 @@ async fn alerts_can_cooldown_after_firing(pool: PgPool) -> Result<()> {
     let uri = "https://mozilla.rust";
 
     let mut poller = create_poller(&pool);
-    poller.configuration.alert_threshold.cooldown = chrono::Duration::milliseconds(100);
+    poller.configuration.alert_threshold.cooldown = Duration::milliseconds(100);
 
     let origin_uid = Uuid::new_v4();
     crate::persistence::insert_origin(&pool, origin_uid, uri).await?;
@@ -228,7 +234,7 @@ async fn alerts_can_cooldown_after_firing(pool: PgPool) -> Result<()> {
     }
 
     // Wait for the cooldown to expire, with a small buffer
-    tokio::time::sleep(Duration::from_millis(150)).await;
+    sleep(Duration::milliseconds(150)).await?;
 
     // Trigger another query which fails
     poller.query_all_origins().await?;
@@ -252,7 +258,7 @@ async fn certificate_expiry_triggers_notification(pool: PgPool) -> Result<()> {
     crate::persistence::insert_origin(&pool, origin_uid, &uri).await?;
 
     // Insert a certificate check that expires in 20 days (< 30 day threshold)
-    let expires_at = chrono::Utc::now() + chrono::Duration::days(20);
+    let expires_at = chrono::Utc::now() + Duration::days(20);
     let checked_at = chrono::Utc::now();
     crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
 
@@ -289,7 +295,7 @@ async fn certificate_expiry_does_not_trigger_when_far_away(pool: PgPool) -> Resu
     crate::persistence::insert_origin(&pool, origin_uid, &uri).await?;
 
     // Insert a certificate check that expires in 60 days (> 30 day threshold)
-    let expires_at = chrono::Utc::now() + chrono::Duration::days(60);
+    let expires_at = chrono::Utc::now() + Duration::days(60);
     let checked_at = chrono::Utc::now();
     crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
 
@@ -317,14 +323,14 @@ async fn notification_types_have_independent_cooldowns(pool: PgPool) -> Result<(
     let uri = "https://mozilla.rust"; // Invalid TLD will cause request failures
 
     let mut poller = create_poller(&pool);
-    poller.configuration.alert_threshold.cooldown = chrono::Duration::hours(1);
-    poller.configuration.certificate_alert_threshold.cooldown = chrono::Duration::hours(1);
+    poller.configuration.alert_threshold.cooldown = Duration::hours(1);
+    poller.configuration.certificate_alert_threshold.cooldown = Duration::hours(1);
 
     let origin_uid = Uuid::new_v4();
     crate::persistence::insert_origin(&pool, origin_uid, uri).await?;
 
     // Insert a certificate check that expires soon
-    let expires_at = chrono::Utc::now() + chrono::Duration::days(20);
+    let expires_at = chrono::Utc::now() + Duration::days(20);
     let checked_at = chrono::Utc::now();
     crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
 
@@ -355,13 +361,13 @@ async fn certificate_notifications_respect_cooldown(pool: PgPool) -> Result<()> 
     let uri = server.url();
 
     let mut poller = create_poller(&pool);
-    poller.configuration.certificate_alert_threshold.cooldown = chrono::Duration::milliseconds(100);
+    poller.configuration.certificate_alert_threshold.cooldown = Duration::milliseconds(100);
 
     let origin_uid = Uuid::new_v4();
     crate::persistence::insert_origin(&pool, origin_uid, &uri).await?;
 
     // Insert a certificate check that expires soon
-    let expires_at = chrono::Utc::now() + chrono::Duration::days(20);
+    let expires_at = chrono::Utc::now() + Duration::days(20);
     let checked_at = chrono::Utc::now();
     crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
 
@@ -385,7 +391,7 @@ async fn certificate_notifications_respect_cooldown(pool: PgPool) -> Result<()> 
     }
 
     // Wait for the cooldown to expire, with a small buffer
-    tokio::time::sleep(Duration::from_millis(150)).await;
+    sleep(Duration::milliseconds(150)).await?;
 
     // Should send another notification after cooldown
     poller.query_all_origins().await?;
