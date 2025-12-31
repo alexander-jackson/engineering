@@ -61,7 +61,11 @@ async fn main() -> Result<()> {
 
     let repository = get_repository_or_clone(repository_path, repository_url, &ssh_private_key)?;
 
-    tracing::info!("successfully opened a repository for processing");
+    tracing::info!(
+        path = ?repository_path,
+        url = %repository_url,
+        "successfully opened a repository for processing"
+    );
 
     let shared_state = SharedState {
         passphrase: Arc::from(config.passphrase.clone()),
