@@ -1,0 +1,29 @@
+name: Deploy configuration to S3
+
+on:
+  push:
+    branches: ["master"]
+    paths:
+    - ".github/workflows/deploy-config.yaml"
+    - "infrastructure/configuration/**"
+
+jobs:
+  deploy-config:
+    name: Deploy configuration to S3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: eu-west-1
+          aws-access-key-id: ${{ secrets.CONFIG_DEPLOYER_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.CONFIG_DEPLOYER_AWS_SECRET_ACCESS_KEY }}
+
+      - name: Deploy configuration
+        run: aws s3 sync ./infrastructure/configuration s3://configuration-68f6c7
+
+      - name: Force reconciliation
+        run: curl -X PUT https://opentracker.app/reconcile

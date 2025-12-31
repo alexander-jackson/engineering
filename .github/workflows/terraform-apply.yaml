@@ -1,0 +1,33 @@
+name: "Terraform Apply"
+
+on:
+  push:
+    branches: ["master"]
+    paths:
+    - ".github/workflows/terraform-apply.yaml"
+    - "infrastructure/terraform/**"
+
+env:
+  AWS_REGION: "eu-west-1"
+  AWS_ACCESS_KEY_ID: ${{ secrets.DEPLOYER_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.DEPLOYER_SECRET_ACCESS_KEY }}
+
+jobs:
+  terraform:
+    name: "Terraform Apply"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infrastructure/terraform
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+
+      - name: Terraform Initialisation
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
