@@ -47,7 +47,7 @@ where
                 }
                 _ = interval.tick() => {
                     if let Err(e) = (self.job)(&self.state).await {
-                        tracing::warn!(job = %self.name, error = %e, "job execution failed");
+                        tracing::warn!(job = %self.name, error = ?e, "job execution failed");
                     }
                 }
             }
