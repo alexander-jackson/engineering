@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: ["master"]
     paths:
-    - "terraform/**"
+    - "infrastructure/terraform/**"
     - ".github/workflows/terraform-plan.yaml"
 
 env:
@@ -16,6 +16,8 @@ jobs:
   terraform:
     name: "Terraform Plan"
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     defaults:
       run:
         working-directory: ./infrastructure/terraform
