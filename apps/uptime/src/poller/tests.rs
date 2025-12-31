@@ -1,4 +1,6 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 
 use color_eyre::eyre::Result;
 use sqlx::PgPool;
@@ -225,8 +227,8 @@ async fn alerts_can_cooldown_after_firing(pool: PgPool) -> Result<()> {
         poller.query_all_origins().await?;
     }
 
-    // Wait a bit for the cooldown
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Wait for the cooldown to expire, with a small buffer
+    tokio::time::sleep(Duration::from_millis(150)).await;
 
     // Trigger another query which fails
     poller.query_all_origins().await?;
@@ -315,8 +317,8 @@ async fn notification_types_have_independent_cooldowns(pool: PgPool) -> Result<(
     let uri = "https://mozilla.rust"; // Invalid TLD will cause request failures
 
     let mut poller = create_poller(&pool);
-    poller.configuration.alert_threshold.cooldown = chrono::Duration::milliseconds(100);
-    poller.configuration.certificate_alert_threshold.cooldown = chrono::Duration::milliseconds(100);
+    poller.configuration.alert_threshold.cooldown = chrono::Duration::hours(1);
+    poller.configuration.certificate_alert_threshold.cooldown = chrono::Duration::hours(1);
 
     let origin_uid = Uuid::new_v4();
     crate::persistence::insert_origin(&pool, origin_uid, uri).await?;
@@ -382,8 +384,8 @@ async fn certificate_notifications_respect_cooldown(pool: PgPool) -> Result<()> 
         assert_eq!(map[SNS_TOPIC].len(), 1);
     }
 
-    // Wait for cooldown to expire
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Wait for the cooldown to expire, with a small buffer
+    tokio::time::sleep(Duration::from_millis(150)).await;
 
     // Should send another notification after cooldown
     poller.query_all_origins().await?;
