@@ -7,10 +7,10 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --package tag-updater --recipe-path recipe.json
 
 COPY . .
-RUN cargo build --release --bin tag-updater
+RUN cargo build --release --package tag-updater
 
 # We do not need the Rust toolchain to run the binary!
 FROM debian:bookworm AS runtime
