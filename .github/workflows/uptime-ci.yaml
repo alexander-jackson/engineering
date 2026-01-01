@@ -4,6 +4,7 @@ on:
     paths:
     - 'apps/foundation/**'
     - 'apps/uptime/**'
+    - '.github/workflows/uptime-ci.yaml'
 
 name: `uptime` CI
 

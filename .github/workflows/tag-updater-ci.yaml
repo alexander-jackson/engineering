@@ -4,6 +4,7 @@ on:
     paths:
     - 'apps/foundation/**'
     - 'apps/tag-updater/**'
+    - '.github/workflows/tag-updater-ci.yaml'
 
 name: `tag-updater` CI
 

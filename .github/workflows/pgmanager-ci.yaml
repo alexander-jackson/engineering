@@ -4,6 +4,7 @@ on:
     paths:
     - 'apps/foundation/**'
     - 'apps/pgmanager/**'
+    - '.github/workflows/pgmanager-ci.yaml'
 
 name: `pgmanager` CI
 

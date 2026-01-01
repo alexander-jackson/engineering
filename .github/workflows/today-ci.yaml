@@ -4,6 +4,7 @@ on:
     paths:
     - 'apps/foundation/**'
     - 'apps/today/**'
+    - '.github/workflows/today-ci.yaml'
 
 name: `today` CI
 
