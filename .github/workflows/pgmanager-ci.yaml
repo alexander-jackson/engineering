@@ -5,7 +5,7 @@ on:
     - 'apps/foundation/**'
     - 'apps/pgmanager/**'
 
-name: CI
+name: `pgmanager` CI
 
 jobs:
   unit-tests:

@@ -6,7 +6,7 @@ on:
     - 'apps/today/**'
     - '.github/workflows/today-release.yaml'
 
-name: Release
+name: `today` Release
 
 env:
   APPLICATION_NAME: today

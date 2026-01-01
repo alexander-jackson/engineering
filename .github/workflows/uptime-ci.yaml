@@ -5,7 +5,7 @@ on:
     - 'apps/foundation/**'
     - 'apps/uptime/**'
 
-name: CI
+name: `uptime` CI
 
 defaults:
   run:

@@ -5,7 +5,7 @@ on:
     - 'apps/foundation/**'
     - 'apps/tag-updater/**'
 
-name: CI
+name: `tag-updater` CI
 
 jobs:
   unit-tests:

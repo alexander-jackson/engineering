@@ -6,7 +6,7 @@ on:
     - 'apps/uptime/**'
     - '.github/workflows/uptime-release.yaml'
 
-name: Release
+name: `uptime` Release
 
 env:
   APPLICATION_NAME: uptime

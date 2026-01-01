@@ -5,7 +5,7 @@ on:
     - 'apps/foundation/**'
     - 'apps/today/**'
 
-name: CI
+name: `today` CI
 
 defaults:
   run:

@@ -5,7 +5,7 @@ on:
     - 'apps/foundation/**'
     - 'apps/dns-server/**'
 
-name: CI
+name: `dns-server` CI
 
 jobs:
   unit-tests:
