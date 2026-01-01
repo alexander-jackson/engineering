@@ -4,8 +4,9 @@ on:
     paths:
     - 'apps/foundation/**'
     - 'apps/dns-server/**'
+    - '.github/workflows/dns-server-ci.yaml'
 
-name: CI
+name: `dns-server` CI
 
 jobs:
   unit-tests:

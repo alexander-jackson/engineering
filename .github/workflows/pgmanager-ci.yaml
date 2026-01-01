@@ -4,8 +4,9 @@ on:
     paths:
     - 'apps/foundation/**'
     - 'apps/pgmanager/**'
+    - '.github/workflows/pgmanager-ci.yaml'
 
-name: CI
+name: `pgmanager` CI
 
 jobs:
   unit-tests:

@@ -4,8 +4,9 @@ on:
     paths:
     - 'apps/foundation/**'
     - 'apps/today/**'
+    - '.github/workflows/today-ci.yaml'
 
-name: CI
+name: `today` CI
 
 defaults:
   run:
