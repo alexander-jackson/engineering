@@ -6,7 +6,7 @@ on:
     - 'apps/pgmanager/**'
     - '.github/workflows/pgmanager-release.yaml'
 
-name: `pgmanager` Release
+name: pgmanager Release
 
 env:
   APPLICATION_NAME: pgmanager

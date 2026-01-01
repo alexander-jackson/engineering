@@ -6,7 +6,7 @@ on:
     - 'apps/tag-updater/**'
     - '.github/workflows/tag-updater-ci.yaml'
 
-name: `tag-updater` CI
+name: tag-updater CI
 
 jobs:
   unit-tests:

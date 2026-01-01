@@ -5,7 +5,7 @@ on:
     - 'apps/foundation/**'
     - 'apps/<application>/**'
 
-name: `<application>` CI
+name: <application> CI
 
 jobs:
   unit-tests:

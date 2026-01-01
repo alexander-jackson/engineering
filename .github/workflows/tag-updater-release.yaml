@@ -6,7 +6,7 @@ on:
     - 'apps/tag-updater/**'
     - '.github/workflows/tag-updater-release.yaml'
 
-name: `tag-updater` Release
+name: tag-updater Release
 
 env:
   APPLICATION_NAME: tag-updater

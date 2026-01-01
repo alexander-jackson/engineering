@@ -6,7 +6,7 @@ on:
     - 'apps/pgmanager/**'
     - '.github/workflows/pgmanager-ci.yaml'
 
-name: `pgmanager` CI
+name: pgmanager CI
 
 jobs:
   unit-tests:

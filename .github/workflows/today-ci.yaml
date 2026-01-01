@@ -6,7 +6,7 @@ on:
     - 'apps/today/**'
     - '.github/workflows/today-ci.yaml'
 
-name: `today` CI
+name: today CI
 
 defaults:
   run:

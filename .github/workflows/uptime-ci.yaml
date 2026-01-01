@@ -6,7 +6,7 @@ on:
     - 'apps/uptime/**'
     - '.github/workflows/uptime-ci.yaml'
 
-name: `uptime` CI
+name: uptime CI
 
 defaults:
   run:
