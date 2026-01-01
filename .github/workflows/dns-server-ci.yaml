@@ -6,7 +6,7 @@ on:
     - 'apps/dns-server/**'
     - '.github/workflows/dns-server-ci.yaml'
 
-name: `dns-server` CI
+name: dns-server CI
 
 jobs:
   unit-tests:

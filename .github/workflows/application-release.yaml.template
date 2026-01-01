@@ -6,7 +6,7 @@ on:
     - 'apps/<application>/**'
     - '.github/workflows/<application>-release.yaml'
 
-name: `<application>` Release
+name: <application> Release
 
 env:
   APPLICATION_NAME: <application>
