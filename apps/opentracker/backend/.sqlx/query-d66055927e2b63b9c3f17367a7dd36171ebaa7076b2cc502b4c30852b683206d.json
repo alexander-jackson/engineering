@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH rep_pbs AS (\n            SELECT MAX(weight) AS weight, reps\n            FROM freeform_exercise fe\n            JOIN workout w ON fe.workout_id = w.id\n            JOIN account a ON w.account_id = a.id\n            WHERE a.account_uid = $1\n            AND fe.description = $2\n            GROUP BY reps\n        )\n        SELECT DISTINCT ON (rp.weight, rp.reps)\n            rp.weight AS \"weight!\",\n            rp.reps,\n            w.recorded AS \"recorded: forms::RecordedDate\"\n        FROM rep_pbs rp\n        JOIN freeform_exercise fe ON (rp.weight = fe.weight AND rp.reps = fe.reps)\n        JOIN workout w ON fe.workout_id = w.id\n        JOIN account a ON w.account_id = a.id\n        WHERE a.account_uid = $1\n        AND fe.description = $2\n        ORDER BY reps\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "weight!",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 1,
+        "name": "reps",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "recorded: forms::RecordedDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "d66055927e2b63b9c3f17367a7dd36171ebaa7076b2cc502b4c30852b683206d"
+}

@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO freeform_exercise (workout_id, variant, description, weight, reps, sets, rpe)\n        VALUES ((SELECT id FROM workout WHERE workout_uid = $1), $2, $3, $4, $5, $6, $7)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "exercise_variant",
+            "kind": {
+              "Enum": [
+                "Squat",
+                "Bench",
+                "Deadlift",
+                "Other"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Float4",
+        "Int4",
+        "Int4",
+        "Float4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2f79e30b0148581362ef450c8c284a971906e5e814fe37166167e2b418e09242"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM structured_exercise\n        WHERE workout_id = (\n            SELECT id\n            FROM workout\n            WHERE account_id = (SELECT id FROM account WHERE account_uid = $1)\n            AND recorded = $2\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "52c05283c0917c0bd8ad71848e5dcbcddd00de9c07e0bbf5fb121f3f433a160a"
+}

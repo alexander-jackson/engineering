@@ -1,0 +1,51 @@
+on:
+  pull_request:
+    branches: ["master"]
+    paths:
+    - ".github/workflows/opentracker-frontend-ci.yaml"
+    - "apps/opentracker/frontend/**"
+
+name: opentracker-frontend CI
+
+jobs:
+  fmt:
+    name: Prettier
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/opentracker/frontend
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "22"
+      - run: yarn install
+      - run: yarn prettier --check .
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/opentracker/frontend
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "22"
+      - run: yarn install
+      - run: yarn run test
+
+  typecheck:
+    name: Type check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/opentracker/frontend
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "22"
+      - run: yarn install
+      - run: yarn tsc

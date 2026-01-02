@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ea.email_address_uid, ea.email_address, ea.verified_at\n        FROM email_address ea\n        JOIN account a ON ea.id = a.email_address_id\n        WHERE ea.active IS TRUE\n        AND a.account_uid = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_address_uid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "verified_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "a1f9db386590facc0e5984dcab293ea68c782ab3c57ba5d98de549077963fc1b"
+}

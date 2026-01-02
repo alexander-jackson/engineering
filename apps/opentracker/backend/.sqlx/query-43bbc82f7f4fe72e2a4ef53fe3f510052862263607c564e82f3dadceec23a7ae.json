@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT max((100 * weight) / (48.8 + 53.8 * exp(-0.075 * (reps + (10 - rpe))))) AS \"estimate!\", recorded AS \"recorded: forms::RecordedDate\"\n        FROM freeform_exercise\n        INNER JOIN workout ON workout.id = freeform_exercise.workout_id\n        WHERE workout.account_id = (SELECT id FROM account WHERE account_uid = $1)\n        AND rpe IS NOT NULL\n        AND description = $2\n        GROUP BY recorded\n        ORDER BY recorded\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "estimate!",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 1,
+        "name": "recorded: forms::RecordedDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "43bbc82f7f4fe72e2a4ef53fe3f510052862263607c564e82f3dadceec23a7ae"
+}

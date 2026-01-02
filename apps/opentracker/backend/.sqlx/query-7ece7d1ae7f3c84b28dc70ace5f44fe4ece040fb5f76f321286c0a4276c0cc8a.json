@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE structured_exercise\n        SET description = $4\n        WHERE description = $3\n        AND variant = $2\n        AND workout_id IN (\n            SELECT id\n            FROM workout\n            WHERE account_id = (SELECT id FROM account WHERE account_uid = $1)\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "exercise_variant",
+            "kind": {
+              "Enum": [
+                "Squat",
+                "Bench",
+                "Deadlift",
+                "Other"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7ece7d1ae7f3c84b28dc70ace5f44fe4ece040fb5f76f321286c0a4276c0cc8a"
+}

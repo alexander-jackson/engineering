@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            b.recorded AS \"recorded: forms::RecordedDate\",\n            bodyweight\n        FROM bodyweight b\n        JOIN account a ON a.id = b.account_id\n        WHERE a.account_uid = $1\n        ORDER BY b.recorded\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recorded: forms::RecordedDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "bodyweight",
+        "type_info": "Float4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "e2550a49598d68888aef491213285e68d4a06b1017f6c31d8f46645a9b767a88"
+}

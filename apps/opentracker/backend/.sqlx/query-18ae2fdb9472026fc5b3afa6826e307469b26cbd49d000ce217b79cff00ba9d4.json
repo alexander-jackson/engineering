@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT rep_set_notation AS \"rep_set_notation: RepSetNotation\"\n        FROM user_preference up\n        WHERE account_id = (SELECT id FROM account WHERE account_uid = $1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "rep_set_notation: RepSetNotation",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "18ae2fdb9472026fc5b3afa6826e307469b26cbd49d000ce217b79cff00ba9d4"
+}

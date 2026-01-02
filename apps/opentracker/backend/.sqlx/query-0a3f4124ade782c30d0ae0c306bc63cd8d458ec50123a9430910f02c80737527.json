@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE freeform_exercise\n        SET description = $3\n        WHERE description = $2\n        AND workout_id IN (\n            SELECT id\n            FROM workout\n            WHERE account_id = (SELECT id FROM account WHERE account_uid = $1)\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a3f4124ade782c30d0ae0c306bc63cd8d458ec50123a9430910f02c80737527"
+}

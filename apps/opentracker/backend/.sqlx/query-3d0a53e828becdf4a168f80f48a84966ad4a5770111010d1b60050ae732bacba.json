@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT description\n        FROM structured_exercise\n        WHERE variant = $2\n        AND workout_id IN (\n            SELECT id\n            FROM workout\n            WHERE account_id = (SELECT id FROM account WHERE account_uid = $1)\n        )\n        ORDER BY description\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "description",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "exercise_variant",
+            "kind": {
+              "Enum": [
+                "Squat",
+                "Bench",
+                "Deadlift",
+                "Other"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3d0a53e828becdf4a168f80f48a84966ad4a5770111010d1b60050ae732bacba"
+}

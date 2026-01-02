@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM bodyweight\n        WHERE account_id = (\n            SELECT id\n            FROM account\n            WHERE account_uid = $1\n        )\n        AND recorded = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3a322f82fcf435ec89cc57a4a2d83b1c7b2f0cd0b7546fd0dd68184585738ae2"
+}

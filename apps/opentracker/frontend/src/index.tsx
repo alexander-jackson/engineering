@@ -1,0 +1,68 @@
+import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
+import React from "react";
+import ReactDOM from "react-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter } from "react-router-dom";
+import { Provider } from "react-redux";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  TimeScale,
+  LineController,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  ArcElement,
+} from "chart.js";
+import App from "~/App";
+import store from "~/store";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  TimeScale,
+  LineController,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  ArcElement,
+);
+
+const applyAxiosSettings = (axios: AxiosInstance) => {
+  axios.defaults.baseURL =
+    process.env.REACT_APP_AXIOS_BASE || "http://localhost:3025/api";
+
+  axios.interceptors.request.use((request: AxiosRequestConfig) => {
+    const token = store.getState().user.token;
+
+    if (request.headers) {
+      request.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return request;
+  });
+};
+
+applyAxiosSettings(axios);
+
+const queryClient = new QueryClient();
+
+ReactDOM.render(
+  <React.StrictMode>
+    <Provider store={store}>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </Provider>
+  </React.StrictMode>,
+  document.getElementById("root"),
+);

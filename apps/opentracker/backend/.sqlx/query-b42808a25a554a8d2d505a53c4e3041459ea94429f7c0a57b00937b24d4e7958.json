@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH account_id AS (\n            SELECT id\n            FROM account\n            WHERE account_uid = $1\n        )\n        SELECT\n            bodyweight - (\n                SELECT bodyweight\n                FROM bodyweight\n                WHERE bodyweight.account_id = account_id\n                AND recorded > now() - INTERVAL '1 week'\n                ORDER BY recorded ASC\n                LIMIT 1\n            )\n            AS increase_last_week,\n            bodyweight - (\n                SELECT bodyweight\n                FROM bodyweight\n                WHERE bodyweight.account_id = account_id\n                AND recorded > now() - INTERVAL '1 month'\n                ORDER BY recorded ASC\n                LIMIT 1\n            )\n            AS increase_last_month,\n            (\n                SELECT AVG(bodyweight)\n                FROM bodyweight\n                WHERE bodyweight.account_id = account_id\n                AND recorded > now() - INTERVAL '1 week'\n            ) AS average_last_week,\n            (\n                SELECT AVG(bodyweight)\n                FROM bodyweight\n                WHERE bodyweight.account_id = account_id\n                AND recorded > now() - INTERVAL '1 month'\n            ) AS average_last_month\n        FROM bodyweight\n        WHERE bodyweight.account_id = account_id\n        ORDER BY recorded DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "increase_last_week",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 1,
+        "name": "increase_last_month",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 2,
+        "name": "average_last_week",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "average_last_month",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "b42808a25a554a8d2d505a53c4e3041459ea94429f7c0a57b00937b24d4e7958"
+}

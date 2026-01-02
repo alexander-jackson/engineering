@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO bodyweight (account_id, bodyweight, recorded)\n        VALUES ((SELECT id FROM account WHERE account_uid = $1), $2, $3)\n        ON CONFLICT (account_id, recorded) DO UPDATE\n            SET bodyweight = EXCLUDED.bodyweight",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float4",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7ae0f0c526d6611093d69c9e2e28b0a2eb87e6a2cdd16353f064bc0befdf97b9"
+}
