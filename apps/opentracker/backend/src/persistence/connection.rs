@@ -1,7 +1,7 @@
+use axum::Extension;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use axum::Extension;
-use sqlx::{pool::PoolConnection, PgPool, Postgres};
+use sqlx::{PgPool, Postgres, pool::PoolConnection};
 
 use crate::error::ServerError;
 

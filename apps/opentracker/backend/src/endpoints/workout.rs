@@ -1,5 +1,5 @@
 use axum::extract::{Json, Path, Query};
-use axum::routing::{get, Router};
+use axum::routing::{Router, get};
 
 use crate::auth::Claims;
 use crate::error::ServerResponse;

@@ -1,4 +1,4 @@
-use sqlx::{pool::PoolConnection, Postgres};
+use sqlx::{Postgres, pool::PoolConnection};
 
 use opentracker::{forms, persistence};
 

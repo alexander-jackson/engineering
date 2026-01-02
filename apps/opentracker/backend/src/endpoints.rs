@@ -1,9 +1,9 @@
+use axum::Extension;
 use axum::http::{
-    header::{AUTHORIZATION, CONTENT_TYPE},
     Method,
+    header::{AUTHORIZATION, CONTENT_TYPE},
 };
 use axum::routing::Router;
-use axum::Extension;
 use sqlx::{Pool, Postgres};
 use tower_http::cors::{Any, CorsLayer};
 

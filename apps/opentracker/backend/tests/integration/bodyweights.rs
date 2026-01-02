@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 use float_cmp::approx_eq;
-use sqlx::{pool::PoolConnection, Postgres};
+use sqlx::{Postgres, pool::PoolConnection};
 
 use opentracker::persistence::{self, Connection};
 use uuid::Uuid;

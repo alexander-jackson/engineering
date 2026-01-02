@@ -1,8 +1,8 @@
 use std::env;
 use std::net::{Ipv4Addr, SocketAddrV4};
 
-use axum::routing::get;
 use axum::Router;
+use axum::routing::get;
 use sqlx::migrate::Migrator;
 use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPool;
