@@ -1,14 +1,13 @@
+use axum::Extension;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use axum::Extension;
-use sqlx::{pool::PoolConnection, PgPool, Postgres};
+use sqlx::{PgPool, Postgres, pool::PoolConnection};
 
 use crate::error::ServerError;
 
 pub type Connection = PoolConnection<Postgres>;
 pub struct ConnectionExtractor(pub Connection);
 
-#[axum::async_trait]
 impl<State> FromRequestParts<State> for ConnectionExtractor
 where
     State: Send + Sync,

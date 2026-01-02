@@ -1,6 +1,6 @@
 use chrono::{Duration, Utc};
 use float_cmp::approx_eq;
-use sqlx::{pool::PoolConnection, Postgres};
+use sqlx::{Postgres, pool::PoolConnection};
 
 use opentracker::forms::{ExerciseVariant, RecordedDate};
 use opentracker::persistence::statistics::RepPersonalBest;

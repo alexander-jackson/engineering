@@ -1,5 +1,5 @@
 use axum::extract::{Json, Path};
-use axum::routing::{get, Router};
+use axum::routing::{Router, get};
 
 use crate::auth::Claims;
 use crate::error::{ServerError, ServerResponse};
@@ -9,7 +9,7 @@ use crate::persistence::{self, ConnectionExtractor};
 pub fn router() -> Router {
     Router::new()
         .route(
-            "/bodyweights/:recorded",
+            "/bodyweights/{recorded}",
             get(get_specific_bodyweight)
                 .put(upload_bodyweight)
                 .delete(delete_specific_bodyweight),

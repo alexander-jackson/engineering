@@ -15,7 +15,7 @@ pub fn router() -> Router {
         .route("/register", put(register))
         .route("/email/status", get(get_email_verification_status))
         .route("/email/verify/resend", post(send_verification_email))
-        .route("/email/verify/:email_address_uid", put(verify_email))
+        .route("/email/verify/{email_address_uid}", put(verify_email))
         .route("/profile/update-password", post(update_password))
 }
 

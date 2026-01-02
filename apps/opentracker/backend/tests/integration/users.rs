@@ -1,6 +1,6 @@
 use opentracker::persistence;
-use sqlx::pool::PoolConnection;
 use sqlx::Postgres;
+use sqlx::pool::PoolConnection;
 
 use crate::utils::*;
 

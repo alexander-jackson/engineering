@@ -4,7 +4,7 @@ use axum::{Json, Router};
 use crate::{
     auth::Claims,
     error::ServerResponse,
-    persistence::{self, preferences::Preferences, ConnectionExtractor},
+    persistence::{self, ConnectionExtractor, preferences::Preferences},
 };
 
 pub fn router() -> Router {

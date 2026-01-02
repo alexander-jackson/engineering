@@ -1,5 +1,5 @@
 use axum::extract::{Json, Path, Query};
-use axum::routing::{get, Router};
+use axum::routing::{Router, get};
 
 use crate::auth::Claims;
 use crate::error::ServerResponse;
@@ -17,7 +17,7 @@ pub fn router() -> Router {
     Router::new()
         .route("/workouts", get(get_workouts))
         .route(
-            "/workouts/:recorded",
+            "/workouts/{recorded}",
             get(get_workout).put(upload_workout).delete(delete_workout),
         )
         .route("/workouts/statistics", get(get_workout_statistics))
