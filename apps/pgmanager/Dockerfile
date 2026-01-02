@@ -13,7 +13,7 @@ COPY . .
 RUN cargo build --release --package pgmanager
 
 # We do not need the Rust toolchain to run the binary!
-FROM debian:bookworm-slim AS runtime
+FROM debian:bookworm AS runtime
 
 RUN apt-get update && apt-get install -y postgresql-client-15
 
