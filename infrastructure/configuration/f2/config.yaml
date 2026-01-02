@@ -76,7 +76,7 @@ services:
 
   backend:
     image: alexanderjackson/opentracker-backend
-    tag: 20260102-1455
+    tag: 20260102-1521
     routes:
       - host: opentracker.app
         prefix: /api
