@@ -9,7 +9,7 @@ use crate::persistence::{self, ConnectionExtractor};
 pub fn router() -> Router {
     Router::new()
         .route(
-            "/bodyweights/:recorded",
+            "/bodyweights/{recorded}",
             get(get_specific_bodyweight)
                 .put(upload_bodyweight)
                 .delete(delete_specific_bodyweight),

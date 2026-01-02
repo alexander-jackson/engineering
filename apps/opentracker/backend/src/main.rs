@@ -18,14 +18,7 @@ fn setup() {
     // Populate the environment variables
     dotenvy::dotenv().ok();
 
-    if std::env::var("RUST_LOG").is_err() {
-        // Set a reasonable default for logging in production
-        std::env::set_var("RUST_LOG", "info,opentracker=debug");
-    }
-
-    tracing_subscriber::fmt::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+    foundation_logging::install_default_registry();
 }
 
 async fn setup_database_pool() -> sqlx::Result<PgPool> {

@@ -1,9 +1,8 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use axum::{
-    extract::FromRequestParts,
-    http::{header::AUTHORIZATION, request::Parts},
-};
+use axum::extract::FromRequestParts;
+use axum::http::header::AUTHORIZATION;
+use axum::http::request::Parts;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
 use once_cell::sync::Lazy;
 use uuid::Uuid;
@@ -71,8 +70,7 @@ impl Claims {
     }
 }
 
-#[axum::async_trait]
-impl<State> FromRequestParts<State> for Claims {
+impl<State: Sync> FromRequestParts<State> for Claims {
     type Rejection = ServerError;
 
     async fn from_request_parts(

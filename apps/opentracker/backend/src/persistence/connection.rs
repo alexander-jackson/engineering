@@ -8,7 +8,6 @@ use crate::error::ServerError;
 pub type Connection = PoolConnection<Postgres>;
 pub struct ConnectionExtractor(pub Connection);
 
-#[axum::async_trait]
 impl<State> FromRequestParts<State> for ConnectionExtractor
 where
     State: Send + Sync,
