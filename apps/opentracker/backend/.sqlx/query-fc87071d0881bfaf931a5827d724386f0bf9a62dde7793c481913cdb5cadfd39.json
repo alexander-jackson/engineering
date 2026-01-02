@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH workout_id AS (\n            SELECT id\n            FROM workout\n            WHERE workout_uid = $1\n        )\n        SELECT\n            variant AS \"variant!: ExerciseVariant\",\n            description AS \"description!\",\n            weight AS \"weight!\",\n            reps AS \"reps!\",\n            sets AS \"sets!\",\n            rpe\n        FROM structured_exercise se\n        WHERE se.workout_id = workout_id\n\n        UNION ALL\n\n        SELECT\n            variant AS \"variant!: ExerciseVariant\",\n            description AS \"description!\",\n            weight AS \"weight!\",\n            reps AS \"reps!\",\n            sets AS \"sets!\",\n            rpe\n        FROM freeform_exercise fe\n        WHERE fe.workout_id = workout_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "variant!: ExerciseVariant",
+        "type_info": {
+          "Custom": {
+            "name": "exercise_variant",
+            "kind": {
+              "Enum": [
+                "Squat",
+                "Bench",
+                "Deadlift",
+                "Other"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "description!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "weight!",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 3,
+        "name": "reps!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "sets!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "rpe",
+        "type_info": "Float4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "fc87071d0881bfaf931a5827d724386f0bf9a62dde7793c481913cdb5cadfd39"
+}

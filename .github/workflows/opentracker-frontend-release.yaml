@@ -1,0 +1,34 @@
+on:
+  push:
+    branches: ["master"]
+    paths:
+    - "apps/opentracker/frontend/**"
+    - ".github/workflows/opentracker-frontend-release.yaml"
+
+name: opentracker-frontend Release
+
+jobs:
+  docker:
+    name: Docker Build and Push
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./apps/opentracker/frontend
+    steps:
+      - uses: actions/checkout@v2
+      - name: Generate tag
+        id: tag
+        run: echo "::set-output name=value::$(date '+%Y%m%d-%H%M')"
+      - uses: docker/setup-buildx-action@v1
+      - uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/opentracker-frontend:${{ steps.tag.outputs.value }}
+          context: ./apps/opentracker/frontend
+      - name: Inform `tag-updater`
+        run: |
+          curl https://tags.opentracker.app/update -X PUT -H "Content-Type: application/json" -H "Authorization: Bearer ${{ secrets.TAG_UPDATER_PASSPHRASE }}" --data '{"service": "frontend", "tag": "${{ steps.tag.outputs.value }}"}'

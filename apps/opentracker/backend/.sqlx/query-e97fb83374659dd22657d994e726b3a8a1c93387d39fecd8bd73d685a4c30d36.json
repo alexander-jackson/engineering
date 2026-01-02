@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH email_address_record AS (\n            INSERT INTO email_address (email_address_uid, email_address, created_at, active)\n            VALUES ($1, $2, $3, true)\n            RETURNING id\n        )\n        INSERT INTO account (account_uid, email_address_id, password, created_at)\n        VALUES ($4, (SELECT id FROM email_address_record), $5, $3)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e97fb83374659dd22657d994e726b3a8a1c93387d39fecd8bd73d685a4c30d36"
+}

@@ -1,0 +1,38 @@
+use axum::http::{
+    header::{AUTHORIZATION, CONTENT_TYPE},
+    Method,
+};
+use axum::routing::Router;
+use axum::Extension;
+use sqlx::{Pool, Postgres};
+use tower_http::cors::{Any, CorsLayer};
+
+use crate::error::ServerResponse;
+
+pub mod bodyweight;
+pub mod exercise;
+pub mod preference;
+pub mod user;
+pub mod workout;
+
+pub async fn health() -> ServerResponse<&'static str> {
+    tracing::info!("Responding as healthy to an incoming request");
+
+    Ok("Server is healthy 👋")
+}
+
+pub fn router(pool: Pool<Postgres>) -> Router {
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE])
+        .allow_origin(Any);
+
+    Router::new()
+        .merge(bodyweight::router())
+        .merge(exercise::router())
+        .merge(preference::router())
+        .merge(user::router())
+        .merge(workout::router())
+        .layer(cors)
+        .layer(Extension(pool))
+}

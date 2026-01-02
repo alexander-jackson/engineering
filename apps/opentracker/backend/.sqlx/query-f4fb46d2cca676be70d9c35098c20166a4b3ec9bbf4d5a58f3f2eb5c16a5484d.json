@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_address\n        SET verified_at = now()::timestamp\n        WHERE email_address_uid = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f4fb46d2cca676be70d9c35098c20166a4b3ec9bbf4d5a58f3f2eb5c16a5484d"
+}

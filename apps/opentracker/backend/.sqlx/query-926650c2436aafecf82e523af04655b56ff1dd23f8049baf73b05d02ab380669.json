@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SElECT\n            recorded,\n            variant,\n            description,\n            weight,\n            reps,\n            sets,\n            rpe\n        FROM workout w\n        INNER JOIN structured_exercise se ON se.workout_id = w.id\n        WHERE account_id = (SELECT id FROM account WHERE account_uid = $1)\n        AND recorded BETWEEN $2 AND $3\n\n        UNION ALL\n\n        SElECT\n            recorded,\n            variant,\n            description,\n            weight,\n            reps,\n            sets,\n            rpe\n        FROM workout w\n        INNER JOIN freeform_exercise fe ON fe.workout_id = w.id\n        WHERE account_id = (SELECT id FROM account WHERE account_uid = $1)\n        AND recorded BETWEEN $2 AND $3\n\n        ORDER BY recorded DESC, variant, description, weight DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recorded",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "variant",
+        "type_info": {
+          "Custom": {
+            "name": "exercise_variant",
+            "kind": {
+              "Enum": [
+                "Squat",
+                "Bench",
+                "Deadlift",
+                "Other"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "weight",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 4,
+        "name": "reps",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "sets",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "rpe",
+        "type_info": "Float4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "926650c2436aafecf82e523af04655b56ff1dd23f8049baf73b05d02ab380669"
+}

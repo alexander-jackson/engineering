@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO user_preference (account_id, rep_set_notation)\n        VALUES ((SELECT id FROM account WHERE account_uid = $1), $2)\n        ON CONFLICT ON CONSTRAINT uk_user_preference_account_id DO UPDATE SET\n            rep_set_notation = EXCLUDED.rep_set_notation\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a776156e03c142f7e4fa14a5bf06d4122b39c89f221a0dd0b591917569fd15c1"
+}

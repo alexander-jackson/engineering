@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n        (\n            SELECT sum(se.weight * se.reps * se.sets)\n            FROM structured_exercise se\n            JOIN workout w ON w.id = se.workout_id\n            JOIN account a ON a.id = w.account_id\n            WHERE a.account_uid = $1\n            AND w.recorded BETWEEN $2 AND $3\n            AND se.variant = 'Squat'\n        )\n        AS squat_volume_past_week,\n        (\n            SELECT sum(se.weight * se.reps * se.sets)\n            FROM structured_exercise se\n            JOIN workout w ON w.id = se.workout_id\n            JOIN account a ON a.id = w.account_id\n            WHERE a.account_uid = $1\n            AND w.recorded BETWEEN $2 AND $3\n            AND se.variant = 'Bench'\n        )\n        AS bench_volume_past_week,\n        (\n            SELECT sum(se.weight * se.reps * se.sets)\n            FROM structured_exercise se\n            JOIN workout w ON w.id = se.workout_id\n            JOIN account a ON a.id = w.account_id\n            WHERE a.account_uid = $1\n            AND w.recorded BETWEEN $2 AND $3\n            AND se.variant = 'Deadlift'\n        )\n        AS deadlift_volume_past_week,\n        (\n            SELECT sum(fe.weight * fe.reps * fe.sets)\n            FROM freeform_exercise fe\n            JOIN workout w ON w.id = fe.workout_id\n            JOIN account a ON a.id = w.account_id\n            WHERE a.account_uid = $1\n            AND w.recorded BETWEEN $2 AND $3\n        )\n        AS other_volume_past_week\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "squat_volume_past_week",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 1,
+        "name": "bench_volume_past_week",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 2,
+        "name": "deadlift_volume_past_week",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "other_volume_past_week",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "dc4b0df588b73d33f6e7845b2b1cf537d6ed9713454735a6d4dbe0afdd7a8ca2"
+}

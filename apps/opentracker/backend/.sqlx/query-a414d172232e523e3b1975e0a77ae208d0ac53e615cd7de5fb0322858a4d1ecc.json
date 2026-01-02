@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH row (workout_uid, account_id, recorded)\n        AS (VALUES ($1 :: UUID, (SELECT id FROM account WHERE account_uid = $2), $3 :: DATE)),\n        insert AS (\n            INSERT INTO workout (workout_uid, account_id, recorded)\n            SELECT * FROM row\n            ON CONFLICT ON CONSTRAINT uk_workout_account_id_recorded DO NOTHING\n            RETURNING workout_uid\n        )\n        SELECT workout_uid FROM insert\n        UNION ALL\n        SELECT w.workout_uid FROM row\n        JOIN workout w USING (account_id, recorded)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "workout_uid",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a414d172232e523e3b1975e0a77ae208d0ac53e615cd7de5fb0322858a4d1ecc"
+}
