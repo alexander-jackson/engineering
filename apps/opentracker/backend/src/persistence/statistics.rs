@@ -1,10 +1,8 @@
-use std::ops::DerefMut;
-
 use chrono::Duration;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::forms;
-use crate::persistence::Connection;
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize)]
 pub struct RepPersonalBest {
@@ -24,13 +22,13 @@ pub async fn get_estimated_maxes(
     user_id: Uuid,
     variant: forms::ExerciseVariant,
     description: &str,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Vec<EstimatedMaxRecord>> {
     match variant {
         forms::ExerciseVariant::Other => {
-            get_estimated_maxes_freeform(user_id, description, conn).await
+            get_estimated_maxes_freeform(user_id, description, pool).await
         }
-        _ => get_estimated_maxes_structured(user_id, variant, description, conn).await,
+        _ => get_estimated_maxes_structured(user_id, variant, description, pool).await,
     }
 }
 
@@ -38,7 +36,7 @@ pub async fn get_estimated_maxes_structured(
     user_id: Uuid,
     variant: forms::ExerciseVariant,
     description: &str,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Vec<EstimatedMaxRecord>> {
     sqlx::query_as!(
         EstimatedMaxRecord,
@@ -57,14 +55,14 @@ pub async fn get_estimated_maxes_structured(
         variant as forms::ExerciseVariant,
         description,
     )
-    .fetch_all(conn.deref_mut())
+    .fetch_all(pool)
     .await
 }
 
 pub async fn get_estimated_maxes_freeform(
     user_id: Uuid,
     description: &str,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Vec<EstimatedMaxRecord>> {
     sqlx::query_as!(
         EstimatedMaxRecord,
@@ -81,7 +79,7 @@ pub async fn get_estimated_maxes_freeform(
         user_id,
         description,
     )
-    .fetch_all(conn.deref_mut())
+    .fetch_all(pool)
     .await
 }
 
@@ -89,13 +87,13 @@ pub async fn get_rep_personal_bests(
     user_id: Uuid,
     variant: forms::ExerciseVariant,
     description: &str,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Vec<RepPersonalBest>> {
     match variant {
         forms::ExerciseVariant::Other => {
-            get_freeform_rep_personal_bests(user_id, description, conn).await
+            get_freeform_rep_personal_bests(user_id, description, pool).await
         }
-        _ => get_structured_rep_personal_bests(user_id, variant, description, conn).await,
+        _ => get_structured_rep_personal_bests(user_id, variant, description, pool).await,
     }
 }
 
@@ -103,7 +101,7 @@ pub async fn get_structured_rep_personal_bests(
     user_id: Uuid,
     variant: forms::ExerciseVariant,
     description: &str,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Vec<RepPersonalBest>> {
     sqlx::query_as!(
         RepPersonalBest,
@@ -135,14 +133,14 @@ pub async fn get_structured_rep_personal_bests(
         variant as forms::ExerciseVariant,
         description,
     )
-    .fetch_all(conn.deref_mut())
+    .fetch_all(pool)
     .await
 }
 
 pub async fn get_freeform_rep_personal_bests(
     user_id: Uuid,
     description: &str,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Vec<RepPersonalBest>> {
     sqlx::query_as!(
         RepPersonalBest,
@@ -171,7 +169,7 @@ pub async fn get_freeform_rep_personal_bests(
         user_id,
         description
     )
-    .fetch_all(conn.deref_mut())
+    .fetch_all(pool)
     .await
 }
 
@@ -185,7 +183,7 @@ pub struct BodyweightStatistics {
 
 pub async fn get_bodyweight_statistics(
     user_id: Uuid,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<BodyweightStatistics> {
     sqlx::query_as!(
         BodyweightStatistics,
@@ -233,7 +231,7 @@ pub async fn get_bodyweight_statistics(
         "#,
         user_id
     )
-    .fetch_one(conn.deref_mut())
+    .fetch_one(pool)
     .await
 }
 
@@ -249,7 +247,7 @@ pub struct WorkoutStatistics {
 pub async fn get_workout_statistics(
     user_id: Uuid,
     end: chrono::NaiveDate,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<WorkoutStatistics> {
     let one_week_prior = end - Duration::weeks(1);
 
@@ -301,6 +299,6 @@ pub async fn get_workout_statistics(
         one_week_prior,
         end,
     )
-    .fetch_one(conn.deref_mut())
+    .fetch_one(pool)
     .await
 }

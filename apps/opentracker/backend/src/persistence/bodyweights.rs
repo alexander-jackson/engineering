@@ -1,9 +1,7 @@
-use std::ops::DerefMut;
-
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::forms;
-use crate::persistence::Connection;
 
 #[derive(Debug, Serialize)]
 pub struct BodyweightRecord {
@@ -20,7 +18,7 @@ pub async fn insert(
     user_id: Uuid,
     bodyweight: f32,
     recorded: chrono::NaiveDate,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<()> {
     sqlx::query!(
         r#"
@@ -32,7 +30,7 @@ pub async fn insert(
         bodyweight,
         recorded,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await?;
 
     Ok(())
@@ -41,7 +39,7 @@ pub async fn insert(
 pub async fn fetch_by_date(
     user_id: Uuid,
     recorded: chrono::NaiveDate,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Option<SpecificBodyweightRecord>> {
     let contents = sqlx::query_as!(
         SpecificBodyweightRecord,
@@ -54,16 +52,13 @@ pub async fn fetch_by_date(
         user_id,
         recorded,
     )
-    .fetch_optional(conn.deref_mut())
+    .fetch_optional(pool)
     .await?;
 
     Ok(contents)
 }
 
-pub async fn fetch_all(
-    user_id: Uuid,
-    conn: &mut Connection,
-) -> sqlx::Result<Vec<BodyweightRecord>> {
+pub async fn fetch_all(user_id: Uuid, pool: &PgPool) -> sqlx::Result<Vec<BodyweightRecord>> {
     sqlx::query_as!(
         BodyweightRecord,
         r#"
@@ -77,14 +72,14 @@ pub async fn fetch_all(
         "#,
         user_id
     )
-    .fetch_all(conn.deref_mut())
+    .fetch_all(pool)
     .await
 }
 
 pub async fn delete_by_date(
     user_id: Uuid,
     recorded: chrono::NaiveDate,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<()> {
     sqlx::query!(
         r#"
@@ -99,7 +94,7 @@ pub async fn delete_by_date(
         user_id,
         recorded,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await?;
 
     Ok(())
@@ -107,7 +102,7 @@ pub async fn delete_by_date(
 
 pub async fn fetch_most_recent(
     user_id: Uuid,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Option<BodyweightRecord>> {
     sqlx::query_as!(
         BodyweightRecord,
@@ -123,6 +118,6 @@ pub async fn fetch_most_recent(
         "#,
         user_id
     )
-    .fetch_optional(conn.deref_mut())
+    .fetch_optional(pool)
     .await
 }

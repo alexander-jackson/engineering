@@ -2,11 +2,12 @@ use axum::extract::{Json, Path};
 use axum::routing::{Router, get};
 
 use crate::auth::Claims;
+use crate::endpoints::State;
 use crate::error::{ServerError, ServerResponse};
 use crate::forms;
-use crate::persistence::{self, ConnectionExtractor};
+use crate::persistence::{self};
 
-pub fn router() -> Router {
+pub fn router(state: State) -> Router {
     Router::new()
         .route(
             "/bodyweights/{recorded}",
@@ -17,15 +18,15 @@ pub fn router() -> Router {
         .route("/bodyweights", get(get_all_bodyweights))
         .route("/bodyweights/most-recent", get(get_most_recent_bodyweight))
         .route("/bodyweights/statistics", get(get_bodyweight_statistics))
+        .with_state(state)
 }
 
 pub async fn get_specific_bodyweight(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
 ) -> ServerResponse<Json<persistence::bodyweights::SpecificBodyweightRecord>> {
-    let contents =
-        persistence::bodyweights::fetch_by_date(claims.id, recorded.0, &mut conn).await?;
+    let contents = persistence::bodyweights::fetch_by_date(claims.id, recorded.0, &pool).await?;
 
     tracing::info!(?recorded, ?contents, "Queried a specific bodyweight");
 
@@ -34,11 +35,11 @@ pub async fn get_specific_bodyweight(
 }
 
 pub async fn delete_specific_bodyweight(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
 ) -> ServerResponse<()> {
-    persistence::bodyweights::delete_by_date(claims.id, recorded.0, &mut conn).await?;
+    persistence::bodyweights::delete_by_date(claims.id, recorded.0, &pool).await?;
 
     tracing::info!(?recorded, "Deleted a specific bodyweight");
 
@@ -52,10 +53,10 @@ pub struct BodyweightRecords {
 }
 
 pub async fn get_all_bodyweights(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
 ) -> ServerResponse<Json<BodyweightRecords>> {
-    let bodyweights = persistence::bodyweights::fetch_all(claims.id, &mut conn).await?;
+    let bodyweights = persistence::bodyweights::fetch_all(claims.id, &pool).await?;
 
     tracing::info!(count = %bodyweights.len(), "Queried all bodyweights");
 
@@ -75,12 +76,12 @@ pub async fn get_all_bodyweights(
 }
 
 pub async fn upload_bodyweight(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
     Json(data): Json<forms::Bodyweight>,
 ) -> ServerResponse<()> {
-    persistence::bodyweights::insert(claims.id, data.bodyweight, recorded.0, &mut conn).await?;
+    persistence::bodyweights::insert(claims.id, data.bodyweight, recorded.0, &pool).await?;
 
     tracing::info!(?data, "Inserted/updated a bodyweight record");
 
@@ -88,11 +89,11 @@ pub async fn upload_bodyweight(
 }
 
 pub async fn get_most_recent_bodyweight(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
 ) -> ServerResponse<Json<Option<persistence::bodyweights::BodyweightRecord>>> {
     let most_recent_bodyweight =
-        persistence::bodyweights::fetch_most_recent(claims.id, &mut conn).await?;
+        persistence::bodyweights::fetch_most_recent(claims.id, &pool).await?;
 
     tracing::info!("Fetched most recent bodyweight");
 
@@ -100,10 +101,10 @@ pub async fn get_most_recent_bodyweight(
 }
 
 pub async fn get_bodyweight_statistics(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
 ) -> ServerResponse<Json<persistence::statistics::BodyweightStatistics>> {
-    let stats = persistence::statistics::get_bodyweight_statistics(claims.id, &mut conn).await?;
+    let stats = persistence::statistics::get_bodyweight_statistics(claims.id, &pool).await?;
 
     tracing::info!("Fetched bodyweight statistics");
 

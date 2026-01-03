@@ -2,9 +2,10 @@ use axum::extract::{Json, Path, Query};
 use axum::routing::{Router, get};
 
 use crate::auth::Claims;
+use crate::endpoints::State;
 use crate::error::ServerResponse;
 use crate::forms;
-use crate::persistence::{self, ConnectionExtractor};
+use crate::persistence;
 use crate::utils;
 
 #[derive(Debug, Deserialize)]
@@ -13,7 +14,7 @@ pub struct DateRange {
     end: chrono::DateTime<chrono::Utc>,
 }
 
-pub fn router() -> Router {
+pub fn router(state: State) -> Router {
     Router::new()
         .route("/workouts", get(get_workouts))
         .route(
@@ -21,10 +22,11 @@ pub fn router() -> Router {
             get(get_workout).put(upload_workout).delete(delete_workout),
         )
         .route("/workouts/statistics", get(get_workout_statistics))
+        .with_state(state)
 }
 
 pub async fn get_workouts(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
     Query(range): Query<DateRange>,
 ) -> ServerResponse<Json<Vec<persistence::workouts::DatedWorkout>>> {
@@ -32,7 +34,7 @@ pub async fn get_workouts(
         claims.id,
         range.start,
         range.end,
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -44,14 +46,13 @@ pub async fn get_workouts(
 }
 
 pub async fn get_workout(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
 ) -> ServerResponse<Json<Vec<forms::Exercise>>> {
     // Fetch all the exercises for the workout
     let exercises =
-        persistence::workouts::fetch_exercises_for_workout(claims.id, recorded.0, &mut conn)
-            .await?;
+        persistence::workouts::fetch_exercises_for_workout(claims.id, recorded.0, &pool).await?;
 
     tracing::info!(?recorded, ?exercises, "Queried a specific workout");
 
@@ -59,12 +60,12 @@ pub async fn get_workout(
 }
 
 pub async fn delete_workout(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
 ) -> ServerResponse<()> {
     // Delete the workout entry itself
-    persistence::workouts::delete_by_date(claims.id, recorded.0, &mut conn).await?;
+    persistence::workouts::delete_by_date(claims.id, recorded.0, &pool).await?;
 
     tracing::info!(?recorded, "Deleted a specific workout");
 
@@ -72,21 +73,20 @@ pub async fn delete_workout(
 }
 
 pub async fn upload_workout(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
     Json(data): Json<forms::Workout>,
 ) -> ServerResponse<()> {
     // Delete the exercises for this date
-    persistence::exercises::delete_by_date(claims.id, recorded.0, &mut conn).await?;
+    persistence::exercises::delete_by_date(claims.id, recorded.0, &pool).await?;
 
     // Get the ID of the workout, either by creating a new one or getting the existing one
-    let workout_id =
-        persistence::workouts::create_or_fetch(claims.id, recorded.0, &mut conn).await?;
+    let workout_id = persistence::workouts::create_or_fetch(claims.id, recorded.0, &pool).await?;
 
     // Insert each of the exercises based on the returned identifier
     for exercise in &data.exercises {
-        persistence::exercises::insert(workout_id, exercise, &mut conn).await?;
+        persistence::exercises::insert(workout_id, exercise, &pool).await?;
     }
 
     tracing::info!(?workout_id, "Inserted/updated a workout in the new format");
@@ -99,13 +99,14 @@ pub struct WorkoutStatisticsQuery {
     end: chrono::DateTime<chrono::Utc>,
 }
 
+#[axum_macros::debug_handler]
 pub async fn get_workout_statistics(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
     Query(query): Query<WorkoutStatisticsQuery>,
 ) -> ServerResponse<Json<persistence::statistics::WorkoutStatistics>> {
     let date = query.end.date_naive();
-    let stats = persistence::statistics::get_workout_statistics(claims.id, date, &mut conn).await?;
+    let stats = persistence::statistics::get_workout_statistics(claims.id, date, &pool).await?;
 
     tracing::info!("Fetched workout statistics");
 

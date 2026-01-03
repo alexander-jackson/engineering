@@ -1,5 +1,5 @@
 use chrono::Duration;
-use sqlx::{Postgres, pool::PoolConnection};
+use sqlx::PgPool;
 
 use opentracker::forms::RecordedDate;
 use opentracker::{forms, persistence};
@@ -8,17 +8,17 @@ use crate::utils::*;
 
 #[sqlx::test]
 async fn existing_workout_uids_are_used_if_they_exist(
-    mut conn: PoolConnection<Postgres>,
+    pool: PgPool,
 ) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
 
     // Create a workout
     let recorded = date(15, 1, 2022);
-    let first_uid = persistence::workouts::create_or_fetch(user_id, recorded, &mut conn).await?;
+    let first_uid = persistence::workouts::create_or_fetch(user_id, recorded, &pool).await?;
 
     // Create it again
-    let second_uid = persistence::workouts::create_or_fetch(user_id, recorded, &mut conn).await?;
+    let second_uid = persistence::workouts::create_or_fetch(user_id, recorded, &pool).await?;
 
     assert_eq!(first_uid, second_uid);
 
@@ -27,14 +27,14 @@ async fn existing_workout_uids_are_used_if_they_exist(
 
 #[sqlx::test]
 async fn workouts_can_have_exercises_and_be_queried(
-    mut conn: PoolConnection<Postgres>,
+    pool: PgPool,
 ) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
 
     // Create a workout
     let recorded = date(15, 1, 2022);
-    let id = persistence::workouts::create_or_fetch(user_id, recorded, &mut conn).await?;
+    let id = persistence::workouts::create_or_fetch(user_id, recorded, &pool).await?;
 
     // Add some exercises to it
     let exercise = forms::Exercise {
@@ -45,11 +45,11 @@ async fn workouts_can_have_exercises_and_be_queried(
         sets: 1,
         rpe: Some(7.5),
     };
-    persistence::exercises::insert(id, &exercise, &mut conn).await?;
+    persistence::exercises::insert(id, &exercise, &pool).await?;
 
     // Fetch the workout itself
     let exercises =
-        persistence::workouts::fetch_exercises_for_workout(user_id, recorded, &mut conn).await?;
+        persistence::workouts::fetch_exercises_for_workout(user_id, recorded, &pool).await?;
 
     assert_eq!(exercises, vec![exercise]);
 
@@ -57,13 +57,13 @@ async fn workouts_can_have_exercises_and_be_queried(
 }
 
 #[sqlx::test]
-async fn workout_exercises_can_be_queried(mut conn: PoolConnection<Postgres>) -> sqlx::Result<()> {
+async fn workout_exercises_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
 
     // Create a workout
     let recorded = date(15, 1, 2022);
-    let id = persistence::workouts::create_or_fetch(user_id, recorded, &mut conn).await?;
+    let id = persistence::workouts::create_or_fetch(user_id, recorded, &pool).await?;
 
     // Add some exercises to it
     let exercises = vec![
@@ -86,11 +86,11 @@ async fn workout_exercises_can_be_queried(mut conn: PoolConnection<Postgres>) ->
     ];
 
     for exercise in &exercises {
-        persistence::exercises::insert(id, exercise, &mut conn).await?;
+        persistence::exercises::insert(id, exercise, &pool).await?;
     }
 
     // Fetch the workout itself
-    let exercises = persistence::exercises::fetch_for_workout(id, &mut conn).await?;
+    let exercises = persistence::exercises::fetch_for_workout(id, &pool).await?;
 
     let expected_exercises = vec![
         forms::Exercise {
@@ -125,14 +125,14 @@ async fn workout_exercises_can_be_queried(mut conn: PoolConnection<Postgres>) ->
 
 #[sqlx::test]
 async fn all_workouts_can_be_fetched_for_a_user(
-    mut conn: PoolConnection<Postgres>,
+    pool: PgPool,
 ) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
 
     // Create 2 workouts
     let first_date = date(15, 1, 2022);
-    let first_id = persistence::workouts::create_or_fetch(user_id, first_date, &mut conn).await?;
+    let first_id = persistence::workouts::create_or_fetch(user_id, first_date, &pool).await?;
 
     // Add some exercises to it
     let exercises = vec![
@@ -155,11 +155,11 @@ async fn all_workouts_can_be_fetched_for_a_user(
     ];
 
     for exercise in &exercises {
-        persistence::exercises::insert(first_id, exercise, &mut conn).await?;
+        persistence::exercises::insert(first_id, exercise, &pool).await?;
     }
 
     let second_date = date(17, 1, 2022);
-    let second_id = persistence::workouts::create_or_fetch(user_id, second_date, &mut conn).await?;
+    let second_id = persistence::workouts::create_or_fetch(user_id, second_date, &pool).await?;
 
     // Add some exercises to it
     let exercises = vec![
@@ -182,7 +182,7 @@ async fn all_workouts_can_be_fetched_for_a_user(
     ];
 
     for exercise in &exercises {
-        persistence::exercises::insert(second_id, exercise, &mut conn).await?;
+        persistence::exercises::insert(second_id, exercise, &pool).await?;
     }
 
     let start = (first_date - Duration::days(1))
@@ -195,7 +195,7 @@ async fn all_workouts_can_be_fetched_for_a_user(
 
     // Fetch the workout itself
     let dated_exercises =
-        persistence::workouts::fetch_with_exercises_between(user_id, start, end, &mut conn).await?;
+        persistence::workouts::fetch_with_exercises_between(user_id, start, end, &pool).await?;
 
     let expected_values = vec![
         persistence::workouts::DatedExercise {
@@ -250,13 +250,13 @@ async fn all_workouts_can_be_fetched_for_a_user(
 }
 
 #[sqlx::test]
-async fn workouts_can_be_deleted(mut conn: PoolConnection<Postgres>) -> sqlx::Result<()> {
+async fn workouts_can_be_deleted(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
 
     // Create a workout
     let recorded = date(15, 1, 2022);
-    let workout_uid = persistence::workouts::create_or_fetch(user_id, recorded, &mut conn).await?;
+    let workout_uid = persistence::workouts::create_or_fetch(user_id, recorded, &pool).await?;
 
     // Add some exercises to it
     let exercise = forms::Exercise {
@@ -267,20 +267,20 @@ async fn workouts_can_be_deleted(mut conn: PoolConnection<Postgres>) -> sqlx::Re
         sets: 1,
         rpe: Some(7.5),
     };
-    persistence::exercises::insert(workout_uid, &exercise, &mut conn).await?;
+    persistence::exercises::insert(workout_uid, &exercise, &pool).await?;
 
     // Fetch the workout itself
     let exercises =
-        persistence::workouts::fetch_exercises_for_workout(user_id, recorded, &mut conn).await?;
+        persistence::workouts::fetch_exercises_for_workout(user_id, recorded, &pool).await?;
 
     // Ensure it exists
     assert!(!exercises.is_empty());
 
     // Delete it and make sure it doesn't exist anymore
-    persistence::workouts::delete_by_date(user_id, recorded, &mut conn).await?;
+    persistence::workouts::delete_by_date(user_id, recorded, &pool).await?;
 
     let exercises =
-        persistence::workouts::fetch_exercises_for_workout(user_id, recorded, &mut conn).await?;
+        persistence::workouts::fetch_exercises_for_workout(user_id, recorded, &pool).await?;
 
     assert!(exercises.is_empty());
 

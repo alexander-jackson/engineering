@@ -1,9 +1,6 @@
-use std::ops::DerefMut;
-
 use chrono::{DateTime, Utc};
+use sqlx::PgPool;
 use uuid::Uuid;
-
-use crate::persistence::Connection;
 
 pub struct Account {
     pub account_uid: Uuid,
@@ -20,7 +17,7 @@ pub struct EmailVerificationStatus {
     pub verified_at: Option<DateTime<Utc>>,
 }
 
-pub async fn insert(email: &str, hashed: &str, conn: &mut Connection) -> sqlx::Result<Uuid> {
+pub async fn insert(email: &str, hashed: &str, pool: &PgPool) -> sqlx::Result<Uuid> {
     let account_uid = Uuid::new_v4();
     let email_address_uid = Uuid::new_v4();
     let now = Utc::now();
@@ -41,13 +38,13 @@ pub async fn insert(email: &str, hashed: &str, conn: &mut Connection) -> sqlx::R
         account_uid,
         hashed,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await?;
 
     Ok(account_uid)
 }
 
-pub async fn find_by_id(id: Uuid, conn: &mut Connection) -> sqlx::Result<Option<Account>> {
+pub async fn find_by_id(id: Uuid, pool: &PgPool) -> sqlx::Result<Option<Account>> {
     sqlx::query_as!(
         Account,
         r#"
@@ -59,11 +56,11 @@ pub async fn find_by_id(id: Uuid, conn: &mut Connection) -> sqlx::Result<Option<
         "#,
         id
     )
-    .fetch_optional(conn.deref_mut())
+    .fetch_optional(pool)
     .await
 }
 
-pub async fn find_by_email(email: &str, conn: &mut Connection) -> sqlx::Result<Option<Account>> {
+pub async fn find_by_email(email: &str, pool: &PgPool) -> sqlx::Result<Option<Account>> {
     sqlx::query_as!(
         Account,
         r#"
@@ -75,11 +72,11 @@ pub async fn find_by_email(email: &str, conn: &mut Connection) -> sqlx::Result<O
         "#,
         email
     )
-    .fetch_optional(conn.deref_mut())
+    .fetch_optional(pool)
     .await
 }
 
-pub async fn update_password(id: Uuid, hashed: &str, conn: &mut Connection) -> sqlx::Result<()> {
+pub async fn update_password(id: Uuid, hashed: &str, pool: &PgPool) -> sqlx::Result<()> {
     sqlx::query!(
         r#"
         UPDATE account
@@ -89,7 +86,7 @@ pub async fn update_password(id: Uuid, hashed: &str, conn: &mut Connection) -> s
         hashed,
         id,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await?;
 
     Ok(())
@@ -97,7 +94,7 @@ pub async fn update_password(id: Uuid, hashed: &str, conn: &mut Connection) -> s
 
 pub async fn fetch_email_verification_status(
     id: Uuid,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<EmailVerificationStatus> {
     sqlx::query_as!(
         EmailVerificationStatus,
@@ -110,11 +107,11 @@ pub async fn fetch_email_verification_status(
         "#,
         id,
     )
-    .fetch_one(conn.deref_mut())
+    .fetch_one(pool)
     .await
 }
 
-pub async fn verify_email(email_address_uid: Uuid, conn: &mut Connection) -> sqlx::Result<()> {
+pub async fn verify_email(email_address_uid: Uuid, pool: &PgPool) -> sqlx::Result<()> {
     sqlx::query!(
         r#"
         UPDATE email_address
@@ -123,7 +120,7 @@ pub async fn verify_email(email_address_uid: Uuid, conn: &mut Connection) -> sql
         "#,
         email_address_uid,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await?;
 
     Ok(())

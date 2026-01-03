@@ -1,14 +1,15 @@
 use chrono::{NaiveDate, NaiveTime};
+use sqlx::PgPool;
 use uuid::Uuid;
 
-use opentracker::persistence::{self, Connection};
+use opentracker::persistence;
 
 pub const SOME_EMAIL: &str = "example@email.com";
 pub const SOME_EQUIVALENT_EMAIL: &str = "eXaMplE@EmaIl.com";
 pub const SOME_HASHED_PASSWORD: &str = "<hashed>";
 
-pub async fn some_user(conn: &mut Connection) -> sqlx::Result<Uuid> {
-    persistence::account::insert(SOME_EMAIL, SOME_HASHED_PASSWORD, conn).await
+pub async fn some_user(pool: &PgPool) -> sqlx::Result<Uuid> {
+    persistence::account::insert(SOME_EMAIL, SOME_HASHED_PASSWORD, pool).await
 }
 
 pub fn date(day: u32, month: u32, year: i32) -> NaiveDate {
