@@ -1,0 +1,24 @@
+server:
+  host: 0.0.0.0
+  port: 3025
+
+database:
+  host: database.mesh.internal
+  port: 5432
+
+  root:
+    username: "postgres"
+    password: {{ fqVc33oytS3bXv3if9VnWEH1kkYmP042nCPnlS3ZbMiJ1DpY3wNQZ3VlarS3Sk+IJmGJOcZ47N62S0JgBZXjCvI586I/LyVFCHTjaeVIApczj/LtdFA5jbU73kYdWm15cEu73WWOnt4Y65/1h9YAP/pQDmhQxyDDBK9DNBHGJmh9tp1BX3AQ978kUKLdrodjxqZDLDVw6xzNhrrhmvJGypyTfKuqnTCB7JV7s9mgNeratZ+7Cb5wjaHFRkt8T/nsEq7vm14zgKPAQSH5ln2vc19Vmai+iYuEwdKDTbgIwPWP6ATP1QTS2t+Cd452vgGHVR3Kvd6geG/D1hWCw1tYtw== }}
+    database: "postgres"
+
+  application:
+    username: "opentrackerblue"
+    password: {{ Po3z/V+XI/qRFAdgUm7dcSjSBGv7nubTJ0VIZ9VZobsocNNkG88HJA7iLWShBVocpuhQXNEHBkC6U+nKDEyIukYguvckdpCjqgXkKkh3GaOBiZ1VJHT7j0JAAyrp0VL3G/Tpz/qKREQdUlQ9SbSmD6p9xWP+F29pu9Bl7dTXJgUIUNGrO7nAEzjUjkCROzUVe0n8AFLQo1yLJ5PnoX98wGKvrY2V8RMLhGoyR32otIBiDigQqrOLyJSuWgB5uM9EJC1SP1VG5ar7CUL5L3gKU7J4cKpD0Mb0uJighg4zWdGTYWuWgsOGkryiA2B2cV0rms7a+AJYoGoBZN/YGZRvuw== }}
+    database: "opentracker"
+
+authorisation:
+  jwt_key: {{ aj2H/HfbWsg9/8LZcmFIkMZEmDJqsBzS5Rz+t22dY4AnEKwm3hhBRwGrFtX6VBVmVHiuRKJgTrctEsF90eXc7keJ/ozfHqe5WReLmM/lRyr/YGnPZ4uy6g34o0EufP+w9hJSivtxNto/n14NkmLVj1GOkt9CdhxaJAXiHtzXnaDq0VUVP/Iv1c2R8i93vjHx3prYdoPRUuyIg5CvQJe715OqVvqFDzdFZXGkx+wV2pE4/voiDTcCRnzORWzQIe1zy3vntp+0ZKwbinDUCISaOqgxZo3KairWz/a9A5WZMYCnh5ltR0cj75FouvETEKpwt72KreJnuOdjBV/s9ZtFjw== }}
+
+telemetry:
+  enabled: false
+  endpoint: http://telemetry.mesh.internal:80/v1/traces
