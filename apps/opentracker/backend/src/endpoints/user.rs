@@ -5,11 +5,12 @@ use uuid::Uuid;
 
 use crate::auth::Claims;
 use crate::email;
+use crate::endpoints::State;
 use crate::error::{ServerError, ServerResponse};
 use crate::forms;
-use crate::persistence::{self, ConnectionExtractor};
+use crate::persistence::{self};
 
-pub fn router() -> Router {
+pub fn router(state: State) -> Router {
     Router::new()
         .route("/login", put(login))
         .route("/register", put(register))
@@ -17,14 +18,15 @@ pub fn router() -> Router {
         .route("/email/verify/resend", post(send_verification_email))
         .route("/email/verify/{email_address_uid}", put(verify_email))
         .route("/profile/update-password", post(update_password))
+        .with_state(state)
 }
 
 pub async fn register(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     Json(registration): Json<forms::Registration>,
 ) -> ServerResponse<Json<Option<String>>> {
     // Check whether they are unique
-    let contents = persistence::account::find_by_email(&registration.email, &mut conn).await?;
+    let contents = persistence::account::find_by_email(&registration.email, &pool).await?;
 
     if contents.is_some() {
         tracing::warn!("User tried to register with an existing email address");
@@ -36,7 +38,7 @@ pub async fn register(
     let hashed = bcrypt::hash(registration.password, bcrypt::DEFAULT_COST)?;
 
     // Create a unique identifier for the user
-    let user_id = persistence::account::insert(&registration.email, &hashed, &mut conn).await?;
+    let user_id = persistence::account::insert(&registration.email, &hashed, &pool).await?;
 
     let claims = Claims::create_token(user_id)?;
 
@@ -44,11 +46,11 @@ pub async fn register(
 }
 
 pub async fn login(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     Json(login): Json<forms::Login>,
 ) -> ServerResponse<Json<Option<String>>> {
     // Get users with the same email
-    let account = persistence::account::find_by_email(&login.email, &mut conn)
+    let account = persistence::account::find_by_email(&login.email, &pool)
         .await?
         .ok_or_else(|| {
             tracing::warn!("Failed to find user in database");
@@ -66,7 +68,7 @@ pub async fn login(
 }
 
 pub async fn update_password(
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     claims: Claims,
     Json(payload): Json<forms::UpdatePassword>,
 ) -> ServerResponse<()> {
@@ -79,7 +81,7 @@ pub async fn update_password(
     }
 
     // Fetch the current user information
-    let user = persistence::account::find_by_id(claims.id, &mut conn)
+    let user = persistence::account::find_by_id(claims.id, &pool)
         .await?
         .ok_or(ServerError::UNAUTHORIZED)?;
 
@@ -94,17 +96,16 @@ pub async fn update_password(
 
     tracing::info!("Updating the user's password");
 
-    persistence::account::update_password(claims.id, &hashed, &mut conn).await?;
+    persistence::account::update_password(claims.id, &hashed, &pool).await?;
 
     Ok(())
 }
 
 pub async fn get_email_verification_status(
     claims: Claims,
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
 ) -> ServerResponse<Json<persistence::account::EmailVerificationStatus>> {
-    let status =
-        persistence::account::fetch_email_verification_status(claims.id, &mut conn).await?;
+    let status = persistence::account::fetch_email_verification_status(claims.id, &pool).await?;
 
     tracing::debug!(?status.verified_at, "Checking if email address is verified");
 
@@ -113,11 +114,10 @@ pub async fn get_email_verification_status(
 
 pub async fn send_verification_email(
     claims: Claims,
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
 ) -> ServerResponse<()> {
     // Fetch the currently pending email address if it exists
-    let status =
-        persistence::account::fetch_email_verification_status(claims.id, &mut conn).await?;
+    let status = persistence::account::fetch_email_verification_status(claims.id, &pool).await?;
 
     email::send_verification_email(&status.email_address, status.email_address_uid).await?;
 
@@ -126,11 +126,11 @@ pub async fn send_verification_email(
 
 pub async fn verify_email(
     Path(email_address_uid): Path<Uuid>,
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
 ) -> ServerResponse<()> {
     tracing::info!(%email_address_uid, "Verifying email address for user");
 
-    persistence::account::verify_email(email_address_uid, &mut conn).await?;
+    persistence::account::verify_email(email_address_uid, &pool).await?;
 
     Ok(())
 }

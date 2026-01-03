@@ -1,6 +1,6 @@
 use chrono::{Duration, Utc};
 use float_cmp::approx_eq;
-use sqlx::{Postgres, pool::PoolConnection};
+use sqlx::PgPool;
 
 use opentracker::forms::{ExerciseVariant, RecordedDate};
 use opentracker::persistence::statistics::RepPersonalBest;
@@ -9,9 +9,9 @@ use opentracker::{forms, persistence};
 use crate::utils::*;
 
 #[sqlx::test]
-async fn rep_personal_bests_can_be_queried(mut conn: PoolConnection<Postgres>) -> sqlx::Result<()> {
+async fn rep_personal_bests_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
 
     let first_workout_date = date(15, 1, 2022);
     let second_workout_date = date(17, 1, 2022);
@@ -64,11 +64,10 @@ async fn rep_personal_bests_can_be_queried(mut conn: PoolConnection<Postgres>) -
 
     for (recorded, exercises) in workouts {
         // Create the workout
-        let workout_id =
-            persistence::workouts::create_or_fetch(user_id, recorded, &mut conn).await?;
+        let workout_id = persistence::workouts::create_or_fetch(user_id, recorded, &pool).await?;
 
         for exercise in exercises {
-            persistence::exercises::insert(workout_id, &exercise, &mut conn).await?;
+            persistence::exercises::insert(workout_id, &exercise, &pool).await?;
         }
     }
 
@@ -77,7 +76,7 @@ async fn rep_personal_bests_can_be_queried(mut conn: PoolConnection<Postgres>) -
         user_id,
         ExerciseVariant::Deadlift,
         "Competition",
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -108,11 +107,9 @@ async fn rep_personal_bests_can_be_queried(mut conn: PoolConnection<Postgres>) -
 }
 
 #[sqlx::test]
-async fn rep_personal_bests_appear_once_per_rep_count(
-    mut conn: PoolConnection<Postgres>,
-) -> sqlx::Result<()> {
+async fn rep_personal_bests_appear_once_per_rep_count(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
     let workout_date = date(15, 1, 2022);
 
     // Create some workouts
@@ -143,11 +140,10 @@ async fn rep_personal_bests_appear_once_per_rep_count(
 
     for (recorded, exercises) in workouts {
         // Create the workout
-        let workout_id =
-            persistence::workouts::create_or_fetch(user_id, recorded, &mut conn).await?;
+        let workout_id = persistence::workouts::create_or_fetch(user_id, recorded, &pool).await?;
 
         for exercise in exercises {
-            persistence::exercises::insert(workout_id, &exercise, &mut conn).await?;
+            persistence::exercises::insert(workout_id, &exercise, &pool).await?;
         }
     }
 
@@ -156,7 +152,7 @@ async fn rep_personal_bests_appear_once_per_rep_count(
         user_id,
         ExerciseVariant::Deadlift,
         "Competition",
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -179,10 +175,10 @@ async fn rep_personal_bests_appear_once_per_rep_count(
 
 #[sqlx::test]
 async fn rep_personal_bests_appear_once_per_weight_and_rep_combination(
-    mut conn: PoolConnection<Postgres>,
+    pool: PgPool,
 ) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
     let workout_date = date(15, 1, 2022);
 
     // Create some workouts
@@ -213,11 +209,10 @@ async fn rep_personal_bests_appear_once_per_weight_and_rep_combination(
 
     for (recorded, exercises) in workouts {
         // Create the workout
-        let workout_id =
-            persistence::workouts::create_or_fetch(user_id, recorded, &mut conn).await?;
+        let workout_id = persistence::workouts::create_or_fetch(user_id, recorded, &pool).await?;
 
         for exercise in exercises {
-            persistence::exercises::insert(workout_id, &exercise, &mut conn).await?;
+            persistence::exercises::insert(workout_id, &exercise, &pool).await?;
         }
     }
 
@@ -226,7 +221,7 @@ async fn rep_personal_bests_appear_once_per_weight_and_rep_combination(
         user_id,
         ExerciseVariant::Deadlift,
         "Competition",
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -248,9 +243,9 @@ async fn rep_personal_bests_appear_once_per_weight_and_rep_combination(
 }
 
 #[sqlx::test]
-async fn bodyweight_deltas_can_be_queried(mut conn: PoolConnection<Postgres>) -> sqlx::Result<()> {
+async fn bodyweight_deltas_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
 
     let current_bodyweight = 82.5;
     let one_week_delta = 1.2;
@@ -260,13 +255,13 @@ async fn bodyweight_deltas_can_be_queried(mut conn: PoolConnection<Postgres>) ->
     let four_weeks_ago = current_date - chrono::Duration::weeks(4);
 
     // Enter some bodyweight values
-    persistence::bodyweights::insert(user_id, current_bodyweight, current_date, &mut conn).await?;
+    persistence::bodyweights::insert(user_id, current_bodyweight, current_date, &pool).await?;
 
     persistence::bodyweights::insert(
         user_id,
         current_bodyweight - one_week_delta,
         one_week_ago,
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -274,12 +269,12 @@ async fn bodyweight_deltas_can_be_queried(mut conn: PoolConnection<Postgres>) ->
         user_id,
         current_bodyweight - four_week_delta,
         four_weeks_ago,
-        &mut conn,
+        &pool,
     )
     .await?;
 
     // Query the statistics
-    let stats = persistence::statistics::get_bodyweight_statistics(user_id, &mut conn).await?;
+    let stats = persistence::statistics::get_bodyweight_statistics(user_id, &pool).await?;
 
     // Check the values are approximately what we want
     assert!(approx_eq!(
@@ -300,24 +295,22 @@ async fn bodyweight_deltas_can_be_queried(mut conn: PoolConnection<Postgres>) ->
 }
 
 #[sqlx::test]
-async fn bodyweight_averages_can_be_queried(
-    mut conn: PoolConnection<Postgres>,
-) -> sqlx::Result<()> {
+async fn bodyweight_averages_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
 
     let current_bodyweight = 82.5;
     let current_date = Utc::now().date_naive();
 
     // Enter their current bodyweight
-    persistence::bodyweights::insert(user_id, current_bodyweight, current_date, &mut conn).await?;
+    persistence::bodyweights::insert(user_id, current_bodyweight, current_date, &pool).await?;
 
     // Make some entries for the last week
     persistence::bodyweights::insert(
         user_id,
         current_bodyweight - 0.3,
         current_date - chrono::Duration::days(2),
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -325,7 +318,7 @@ async fn bodyweight_averages_can_be_queried(
         user_id,
         current_bodyweight - 0.6,
         current_date - chrono::Duration::days(4),
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -334,7 +327,7 @@ async fn bodyweight_averages_can_be_queried(
         user_id,
         current_bodyweight + 0.1,
         current_date - chrono::Duration::weeks(2),
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -342,7 +335,7 @@ async fn bodyweight_averages_can_be_queried(
         user_id,
         current_bodyweight + 0.4,
         current_date - chrono::Duration::weeks(3),
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -350,12 +343,12 @@ async fn bodyweight_averages_can_be_queried(
         user_id,
         current_bodyweight + 0.1,
         current_date - chrono::Duration::weeks(3) - chrono::Duration::days(2),
-        &mut conn,
+        &pool,
     )
     .await?;
 
     // Query the statistics
-    let stats = persistence::statistics::get_bodyweight_statistics(user_id, &mut conn).await?;
+    let stats = persistence::statistics::get_bodyweight_statistics(user_id, &pool).await?;
 
     // Check the values are approximately what we want
     assert!(approx_eq!(
@@ -376,17 +369,14 @@ async fn bodyweight_averages_can_be_queried(
 }
 
 #[sqlx::test]
-async fn weekly_workout_volumes_can_be_queried(
-    mut conn: PoolConnection<Postgres>,
-) -> sqlx::Result<()> {
+async fn weekly_workout_volumes_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
 
     let current_date = Utc::now().date_naive();
 
     // Record a workout for them
-    let workout_id =
-        persistence::workouts::create_or_fetch(user_id, current_date, &mut conn).await?;
+    let workout_id = persistence::workouts::create_or_fetch(user_id, current_date, &pool).await?;
 
     // Add some exercises to it
     let exercises = vec![
@@ -417,12 +407,12 @@ async fn weekly_workout_volumes_can_be_queried(
     ];
 
     for exercise in &exercises {
-        persistence::exercises::insert(workout_id, exercise, &mut conn).await?;
+        persistence::exercises::insert(workout_id, exercise, &pool).await?;
     }
 
     // Get the statistics
     let stats =
-        persistence::statistics::get_workout_statistics(user_id, current_date, &mut conn).await?;
+        persistence::statistics::get_workout_statistics(user_id, current_date, &pool).await?;
 
     assert!(approx_eq!(
         f64,
@@ -451,7 +441,7 @@ async fn weekly_workout_volumes_can_be_queried(
     let stats = persistence::statistics::get_workout_statistics(
         user_id,
         current_date - Duration::weeks(4),
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -463,17 +453,14 @@ async fn weekly_workout_volumes_can_be_queried(
 }
 
 #[sqlx::test]
-async fn users_cannot_see_each_others_stats(
-    mut conn: PoolConnection<Postgres>,
-) -> sqlx::Result<()> {
+async fn users_cannot_see_each_others_stats(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
-    let user_id = some_user(&mut conn).await?;
+    let user_id = some_user(&pool).await?;
 
     let current_date = Utc::now().date_naive();
 
     // Record a workout for them
-    let workout_id =
-        persistence::workouts::create_or_fetch(user_id, current_date, &mut conn).await?;
+    let workout_id = persistence::workouts::create_or_fetch(user_id, current_date, &pool).await?;
 
     // Add some exercises to it
     let exercises = vec![
@@ -496,16 +483,15 @@ async fn users_cannot_see_each_others_stats(
     ];
 
     for exercise in &exercises {
-        persistence::exercises::insert(workout_id, exercise, &mut conn).await?;
+        persistence::exercises::insert(workout_id, exercise, &pool).await?;
     }
 
     // Create another user
-    let second_user = persistence::account::insert("alex@foobar.com", "foobar", &mut conn).await?;
+    let second_user = persistence::account::insert("alex@foobar.com", "foobar", &pool).await?;
 
     // Get the statistics
     let stats =
-        persistence::statistics::get_workout_statistics(second_user, current_date, &mut conn)
-            .await?;
+        persistence::statistics::get_workout_statistics(second_user, current_date, &pool).await?;
 
     assert!(stats.squat_volume_past_week.is_none());
     assert!(stats.bench_volume_past_week.is_none());

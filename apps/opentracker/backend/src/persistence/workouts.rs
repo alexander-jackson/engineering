@@ -1,10 +1,9 @@
-use std::ops::DerefMut;
-
 use chrono::{DateTime, Utc};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::forms::{self, ExerciseVariant};
-use crate::persistence::{self, Connection};
+use crate::persistence;
 
 #[derive(Clone)]
 pub struct DatedExercise {
@@ -26,7 +25,7 @@ pub struct DatedWorkout {
 pub async fn create_or_fetch(
     user_id: Uuid,
     recorded: chrono::NaiveDate,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Uuid> {
     let uuid = Uuid::new_v4();
 
@@ -49,7 +48,7 @@ pub async fn create_or_fetch(
         user_id,
         recorded,
     )
-    .fetch_one(conn.deref_mut())
+    .fetch_one(pool)
     .await?
     .workout_uid
     .expect("Expression should always return a value");
@@ -60,7 +59,7 @@ pub async fn create_or_fetch(
 pub async fn fetch_exercises_for_workout(
     account_uid: Uuid,
     recorded: chrono::NaiveDate,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Vec<forms::Exercise>> {
     sqlx::query_as!(
         forms::Exercise,
@@ -96,7 +95,7 @@ pub async fn fetch_exercises_for_workout(
         account_uid,
         recorded,
     )
-    .fetch_all(conn.deref_mut())
+    .fetch_all(pool)
     .await
 }
 
@@ -104,7 +103,7 @@ pub async fn fetch_with_exercises_between(
     user_id: Uuid,
     start: DateTime<Utc>,
     end: DateTime<Utc>,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Vec<DatedExercise>> {
     // Unfortunately, `sqlx` doesn't seem to like this query (or Postgres can't interpret the types
     // correctly). Thus, we must use `unchecked` here. In the future, I'll add a whole load of
@@ -146,17 +145,17 @@ pub async fn fetch_with_exercises_between(
         start,
         end,
     )
-    .fetch_all(conn.deref_mut())
+    .fetch_all(pool)
     .await
 }
 
 pub async fn delete_by_date(
     user_id: Uuid,
     recorded: chrono::NaiveDate,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<()> {
     // Delete the exercises contained
-    persistence::exercises::delete_by_date(user_id, recorded, conn).await?;
+    persistence::exercises::delete_by_date(user_id, recorded, pool).await?;
 
     sqlx::query!(
         r#"
@@ -167,7 +166,7 @@ pub async fn delete_by_date(
         user_id,
         recorded,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await?;
 
     Ok(())

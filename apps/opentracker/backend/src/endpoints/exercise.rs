@@ -2,15 +2,17 @@ use axum::extract::Json;
 use axum::{Router, routing::post};
 
 use crate::auth::Claims;
+use crate::endpoints::State;
 use crate::error::ServerResponse;
 use crate::forms;
-use crate::persistence::{self, ConnectionExtractor};
+use crate::persistence;
 
-pub fn router() -> Router {
+pub fn router(state: State) -> Router {
     Router::new()
         .route("/exercises/unique", post(get_unique_exercises))
         .route("/exercises/statistics", post(get_exercise_statistics))
         .route("/exercises/rename", post(rename))
+        .with_state(state)
 }
 
 #[derive(Copy, Clone, Debug, Deserialize)]
@@ -20,12 +22,12 @@ pub struct Payload {
 
 pub async fn get_unique_exercises(
     claims: Claims,
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     Json(data): Json<Payload>,
 ) -> ServerResponse<Json<Vec<String>>> {
     tracing::info!("Requesting unique structured exercises");
 
-    let names = persistence::exercises::fetch_unique(claims.id, data.variant, &mut conn).await?;
+    let names = persistence::exercises::fetch_unique(claims.id, data.variant, &pool).await?;
 
     tracing::debug!(count = %names.len(), "Queried some unique exericses");
 
@@ -47,7 +49,7 @@ pub struct ExerciseStatisticsPayload {
 
 pub async fn get_exercise_statistics(
     claims: Claims,
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     Json(data): Json<ExerciseStatisticsPayload>,
 ) -> ServerResponse<Json<ExerciseStatistics>> {
     // Overriding the nullability here is fine as we constrain `rpe` to be non-null
@@ -55,7 +57,7 @@ pub async fn get_exercise_statistics(
         claims.id,
         data.variant,
         &data.description,
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -63,7 +65,7 @@ pub async fn get_exercise_statistics(
         claims.id,
         data.variant,
         &data.description,
-        &mut conn,
+        &pool,
     )
     .await?;
 
@@ -89,7 +91,7 @@ struct ExerciseRenameResponse {
 
 async fn rename(
     claims: Claims,
-    ConnectionExtractor(mut conn): ConnectionExtractor,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
     Json(data): Json<ExerciseRenamePayload>,
 ) -> ServerResponse<Json<ExerciseRenameResponse>> {
     tracing::info!(?data, "Renaming an exercise");
@@ -99,7 +101,7 @@ async fn rename(
         data.variant,
         &data.description,
         &data.updated,
-        &mut conn,
+        &pool,
     )
     .await?;
 

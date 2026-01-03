@@ -1,25 +1,19 @@
-use std::ops::DerefMut;
-
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::forms::{Exercise, ExerciseVariant};
-use crate::persistence::Connection;
 
-pub async fn insert(
-    workout_id: Uuid,
-    exercise: &Exercise,
-    conn: &mut Connection,
-) -> sqlx::Result<()> {
+pub async fn insert(workout_id: Uuid, exercise: &Exercise, pool: &PgPool) -> sqlx::Result<()> {
     match exercise.variant {
-        ExerciseVariant::Other => insert_other_exercise(workout_id, exercise, conn).await,
-        _ => insert_structured_exercise(workout_id, exercise, conn).await,
+        ExerciseVariant::Other => insert_other_exercise(workout_id, exercise, pool).await,
+        _ => insert_structured_exercise(workout_id, exercise, pool).await,
     }
 }
 
 async fn insert_structured_exercise(
     workout_id: Uuid,
     exercise: &Exercise,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<()> {
     tracing::debug!(?exercise, "Inserting a structured exercise");
 
@@ -36,7 +30,7 @@ async fn insert_structured_exercise(
         exercise.sets,
         exercise.rpe,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await?;
 
     Ok(())
@@ -45,7 +39,7 @@ async fn insert_structured_exercise(
 async fn insert_other_exercise(
     workout_id: Uuid,
     exercise: &Exercise,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<()> {
     tracing::debug!(?exercise, "Inserting a freeform exercise");
 
@@ -62,7 +56,7 @@ async fn insert_other_exercise(
         exercise.sets,
         exercise.rpe,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await?;
 
     Ok(())
@@ -71,18 +65,18 @@ async fn insert_other_exercise(
 pub async fn fetch_unique(
     user_id: Uuid,
     variant: ExerciseVariant,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Vec<String>> {
     match variant {
-        ExerciseVariant::Other => fetch_freeform_unique(user_id, conn).await,
-        _ => fetch_structured_unique(user_id, variant, conn).await,
+        ExerciseVariant::Other => fetch_freeform_unique(user_id, pool).await,
+        _ => fetch_structured_unique(user_id, variant, pool).await,
     }
 }
 
 pub async fn fetch_structured_unique(
     user_id: Uuid,
     variant: ExerciseVariant,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<Vec<String>> {
     sqlx::query!(
         r#"
@@ -100,14 +94,11 @@ pub async fn fetch_structured_unique(
         variant as ExerciseVariant,
     )
     .map(|e| e.description)
-    .fetch_all(conn.deref_mut())
+    .fetch_all(pool)
     .await
 }
 
-pub async fn fetch_freeform_unique(
-    user_id: Uuid,
-    conn: &mut Connection,
-) -> sqlx::Result<Vec<String>> {
+pub async fn fetch_freeform_unique(user_id: Uuid, pool: &PgPool) -> sqlx::Result<Vec<String>> {
     sqlx::query!(
         r#"
         SELECT DISTINCT description
@@ -122,14 +113,11 @@ pub async fn fetch_freeform_unique(
         user_id
     )
     .map(|e| e.description)
-    .fetch_all(conn.deref_mut())
+    .fetch_all(pool)
     .await
 }
 
-pub async fn fetch_for_workout(
-    workout_id: Uuid,
-    conn: &mut Connection,
-) -> sqlx::Result<Vec<Exercise>> {
+pub async fn fetch_for_workout(workout_id: Uuid, pool: &PgPool) -> sqlx::Result<Vec<Exercise>> {
     sqlx::query_as!(
         Exercise,
         r#"
@@ -162,14 +150,14 @@ pub async fn fetch_for_workout(
         "#,
         workout_id,
     )
-    .fetch_all(conn.deref_mut())
+    .fetch_all(pool)
     .await
 }
 
 pub async fn delete_by_date(
     user_id: Uuid,
     recorded: chrono::NaiveDate,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<()> {
     sqlx::query!(
         r#"
@@ -184,7 +172,7 @@ pub async fn delete_by_date(
         user_id,
         recorded,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await?;
 
     sqlx::query!(
@@ -200,7 +188,7 @@ pub async fn delete_by_date(
         user_id,
         recorded,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await?;
 
     Ok(())
@@ -211,11 +199,11 @@ pub async fn rename(
     variant: ExerciseVariant,
     description: &str,
     updated: &str,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<u64> {
     match variant {
-        ExerciseVariant::Other => rename_freeform(user_id, description, updated, conn).await,
-        _ => rename_structured(user_id, variant, description, updated, conn).await,
+        ExerciseVariant::Other => rename_freeform(user_id, description, updated, pool).await,
+        _ => rename_structured(user_id, variant, description, updated, pool).await,
     }
 }
 
@@ -223,7 +211,7 @@ pub async fn rename_freeform(
     user_id: Uuid,
     description: &str,
     updated: &str,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<u64> {
     sqlx::query!(
         r#"
@@ -240,7 +228,7 @@ pub async fn rename_freeform(
         description,
         updated,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await
     .map(|r| r.rows_affected())
 }
@@ -250,7 +238,7 @@ pub async fn rename_structured(
     variant: ExerciseVariant,
     description: &str,
     updated: &str,
-    conn: &mut Connection,
+    pool: &PgPool,
 ) -> sqlx::Result<u64> {
     sqlx::query!(
         r#"
@@ -269,7 +257,7 @@ pub async fn rename_structured(
         description,
         updated,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await
     .map(|r| r.rows_affected())
 }

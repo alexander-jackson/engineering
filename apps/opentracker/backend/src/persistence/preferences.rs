@@ -1,8 +1,5 @@
-use std::ops::DerefMut;
-
+use sqlx::PgPool;
 use uuid::Uuid;
-
-use crate::persistence::Connection;
 
 #[derive(sqlx::Type)]
 #[sqlx(type_name = "rep_set_notation")]
@@ -24,7 +21,7 @@ impl Preferences {
     }
 }
 
-pub async fn fetch(user_id: Uuid, conn: &mut Connection) -> sqlx::Result<Option<Preferences>> {
+pub async fn fetch(user_id: Uuid, pool: &PgPool) -> sqlx::Result<Option<Preferences>> {
     let preferences = sqlx::query_as!(
         Preferences,
         r#"
@@ -34,17 +31,13 @@ pub async fn fetch(user_id: Uuid, conn: &mut Connection) -> sqlx::Result<Option<
         "#,
         user_id,
     )
-    .fetch_optional(conn.deref_mut())
+    .fetch_optional(pool)
     .await?;
 
     Ok(preferences)
 }
 
-pub async fn update(
-    user_id: Uuid,
-    preferences: Preferences,
-    conn: &mut Connection,
-) -> sqlx::Result<()> {
+pub async fn update(user_id: Uuid, preferences: Preferences, pool: &PgPool) -> sqlx::Result<()> {
     sqlx::query!(
         r#"
         INSERT INTO user_preference (account_id, rep_set_notation)
@@ -55,7 +48,7 @@ pub async fn update(
         user_id,
         preferences.rep_set_notation as RepSetNotation,
     )
-    .execute(conn.deref_mut())
+    .execute(pool)
     .await?;
 
     Ok(())
