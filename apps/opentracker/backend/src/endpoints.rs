@@ -15,7 +15,7 @@ pub mod user;
 pub mod workout;
 
 #[derive(Clone)]
-pub struct State {
+pub struct AppState {
     pub pool: PgPool,
 }
 
@@ -25,7 +25,7 @@ pub async fn health() -> ServerResponse<&'static str> {
     Ok("Server is healthy 👋")
 }
 
-pub fn router(state: State) -> Router {
+pub fn router(state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers([AUTHORIZATION, CONTENT_TYPE])

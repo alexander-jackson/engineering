@@ -1,16 +1,16 @@
-use axum::extract::Path;
+use axum::extract::{Path, State};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use uuid::Uuid;
 
 use crate::auth::Claims;
 use crate::email;
-use crate::endpoints::State;
+use crate::endpoints::AppState;
 use crate::error::{ServerError, ServerResponse};
 use crate::forms;
-use crate::persistence::{self};
+use crate::persistence;
 
-pub fn router() -> Router<State> {
+pub fn router() -> Router<AppState> {
     Router::new()
         .route("/login", put(login))
         .route("/register", put(register))
@@ -21,7 +21,7 @@ pub fn router() -> Router<State> {
 }
 
 pub async fn register(
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     Json(registration): Json<forms::Registration>,
 ) -> ServerResponse<Json<Option<String>>> {
     // Check whether they are unique
@@ -45,7 +45,7 @@ pub async fn register(
 }
 
 pub async fn login(
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     Json(login): Json<forms::Login>,
 ) -> ServerResponse<Json<Option<String>>> {
     // Get users with the same email
@@ -67,7 +67,7 @@ pub async fn login(
 }
 
 pub async fn update_password(
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     claims: Claims,
     Json(payload): Json<forms::UpdatePassword>,
 ) -> ServerResponse<()> {
@@ -102,7 +102,7 @@ pub async fn update_password(
 
 pub async fn get_email_verification_status(
     claims: Claims,
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
 ) -> ServerResponse<Json<persistence::account::EmailVerificationStatus>> {
     let status = persistence::account::fetch_email_verification_status(claims.id, &pool).await?;
 
@@ -113,7 +113,7 @@ pub async fn get_email_verification_status(
 
 pub async fn send_verification_email(
     claims: Claims,
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
 ) -> ServerResponse<()> {
     // Fetch the currently pending email address if it exists
     let status = persistence::account::fetch_email_verification_status(claims.id, &pool).await?;
@@ -125,7 +125,7 @@ pub async fn send_verification_email(
 
 pub async fn verify_email(
     Path(email_address_uid): Path<Uuid>,
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
 ) -> ServerResponse<()> {
     tracing::info!(%email_address_uid, "Verifying email address for user");
 
