@@ -7,7 +7,7 @@ use crate::error::{ServerError, ServerResponse};
 use crate::forms;
 use crate::persistence::{self};
 
-pub fn router(state: State) -> Router {
+pub fn router() -> Router<State> {
     Router::new()
         .route(
             "/bodyweights/{recorded}",
@@ -18,7 +18,6 @@ pub fn router(state: State) -> Router {
         .route("/bodyweights", get(get_all_bodyweights))
         .route("/bodyweights/most-recent", get(get_most_recent_bodyweight))
         .route("/bodyweights/statistics", get(get_bodyweight_statistics))
-        .with_state(state)
 }
 
 pub async fn get_specific_bodyweight(

@@ -32,10 +32,11 @@ pub fn router(state: State) -> Router {
         .allow_origin(Any);
 
     Router::new()
-        .merge(bodyweight::router(state.clone()))
-        .merge(exercise::router(state.clone()))
-        .merge(preference::router(state.clone()))
-        .merge(user::router(state.clone()))
-        .merge(workout::router(state.clone()))
+        .merge(bodyweight::router())
+        .merge(exercise::router())
+        .merge(preference::router())
+        .merge(user::router())
+        .merge(workout::router())
         .layer(cors)
+        .with_state(state)
 }

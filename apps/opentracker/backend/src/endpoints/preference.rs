@@ -8,10 +8,8 @@ use crate::{
     persistence::{self, preferences::Preferences},
 };
 
-pub fn router(state: State) -> Router {
-    Router::new()
-        .route("/preferences", get(fetch).put(update))
-        .with_state(state)
+pub fn router() -> Router<State> {
+    Router::new().route("/preferences", get(fetch).put(update))
 }
 
 pub async fn fetch(
