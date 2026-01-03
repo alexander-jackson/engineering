@@ -7,9 +7,7 @@ use opentracker::{forms, persistence};
 use crate::utils::*;
 
 #[sqlx::test]
-async fn existing_workout_uids_are_used_if_they_exist(
-    pool: PgPool,
-) -> sqlx::Result<()> {
+async fn existing_workout_uids_are_used_if_they_exist(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
     let user_id = some_user(&pool).await?;
 
@@ -26,9 +24,7 @@ async fn existing_workout_uids_are_used_if_they_exist(
 }
 
 #[sqlx::test]
-async fn workouts_can_have_exercises_and_be_queried(
-    pool: PgPool,
-) -> sqlx::Result<()> {
+async fn workouts_can_have_exercises_and_be_queried(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
     let user_id = some_user(&pool).await?;
 
@@ -124,9 +120,7 @@ async fn workout_exercises_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
 }
 
 #[sqlx::test]
-async fn all_workouts_can_be_fetched_for_a_user(
-    pool: PgPool,
-) -> sqlx::Result<()> {
+async fn all_workouts_can_be_fetched_for_a_user(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
     let user_id = some_user(&pool).await?;
 

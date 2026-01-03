@@ -112,7 +112,10 @@ pub async fn get_email_verification_status(
     Ok(Json(status))
 }
 
-pub async fn send_verification_email(claims: Claims, axum::extract::State(State { pool }): axum::extract::State<State>) -> ServerResponse<()> {
+pub async fn send_verification_email(
+    claims: Claims,
+    axum::extract::State(State { pool }): axum::extract::State<State>,
+) -> ServerResponse<()> {
     // Fetch the currently pending email address if it exists
     let status = persistence::account::fetch_email_verification_status(claims.id, &pool).await?;
 

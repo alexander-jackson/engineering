@@ -28,9 +28,7 @@ async fn non_existant_users_are_not_found(pool: PgPool) -> sqlx::Result<()> {
 }
 
 #[sqlx::test]
-async fn new_users_have_a_valid_created_at_timestamp(
-    pool: PgPool,
-) -> sqlx::Result<()> {
+async fn new_users_have_a_valid_created_at_timestamp(pool: PgPool) -> sqlx::Result<()> {
     some_user(&pool).await?;
 
     let found = persistence::account::find_by_email(SOME_EMAIL, &pool)
@@ -56,9 +54,7 @@ async fn email_search_is_case_insensitive(pool: PgPool) -> sqlx::Result<()> {
 }
 
 #[sqlx::test]
-async fn users_cannot_be_created_with_the_same_email(
-    pool: PgPool,
-) -> sqlx::Result<()> {
+async fn users_cannot_be_created_with_the_same_email(pool: PgPool) -> sqlx::Result<()> {
     some_user(&pool).await?;
 
     let found = persistence::account::find_by_email(SOME_EMAIL, &pool).await?;
@@ -78,9 +74,7 @@ async fn users_cannot_be_created_with_the_same_email(
 async fn users_can_be_found_by_id(pool: PgPool) -> sqlx::Result<()> {
     let id = some_user(&pool).await?;
 
-    let found = persistence::account::find_by_id(id, &pool)
-        .await?
-        .unwrap();
+    let found = persistence::account::find_by_id(id, &pool).await?.unwrap();
 
     assert_eq!(id, found.account_uid);
     assert_eq!(SOME_EMAIL, found.email_address);
@@ -96,9 +90,7 @@ async fn passwords_can_be_updated(pool: PgPool) -> sqlx::Result<()> {
     // Update their password
     persistence::account::update_password(id, "<other>", &pool).await?;
 
-    let user = persistence::account::find_by_id(id, &pool)
-        .await?
-        .unwrap();
+    let user = persistence::account::find_by_id(id, &pool).await?.unwrap();
 
     assert_eq!(user.password, "<other>");
 

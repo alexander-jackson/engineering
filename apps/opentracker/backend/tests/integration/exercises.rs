@@ -46,8 +46,7 @@ async fn unique_exercises_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
 
     for (recorded, exercises) in workouts {
         // Create the workout
-        let workout_id =
-            persistence::workouts::create_or_fetch(user_id, recorded, &pool).await?;
+        let workout_id = persistence::workouts::create_or_fetch(user_id, recorded, &pool).await?;
 
         for exercise in exercises {
             persistence::exercises::insert(workout_id, &exercise, &pool).await?;
@@ -56,8 +55,7 @@ async fn unique_exercises_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
 
     // Query the unique exercises
     let bench_variations =
-        persistence::exercises::fetch_unique(user_id, forms::ExerciseVariant::Bench, &pool)
-            .await?;
+        persistence::exercises::fetch_unique(user_id, forms::ExerciseVariant::Bench, &pool).await?;
 
     assert_eq!(bench_variations, &["Competition", "Spoto"]);
 

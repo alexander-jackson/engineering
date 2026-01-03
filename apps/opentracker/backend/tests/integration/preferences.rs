@@ -7,9 +7,7 @@ use opentracker::persistence::{
 };
 
 #[sqlx::test]
-async fn no_preferences_are_found_for_non_existant_users(
-    pool: PgPool,
-) -> sqlx::Result<()> {
+async fn no_preferences_are_found_for_non_existant_users(pool: PgPool) -> sqlx::Result<()> {
     let user_id = Uuid::new_v4();
     let preferences = persistence::preferences::fetch(user_id, &pool).await?;
 
@@ -19,9 +17,7 @@ async fn no_preferences_are_found_for_non_existant_users(
 }
 
 #[sqlx::test]
-async fn preferences_can_be_inserted_and_fetched_for_users(
-    pool: PgPool,
-) -> sqlx::Result<()> {
+async fn preferences_can_be_inserted_and_fetched_for_users(pool: PgPool) -> sqlx::Result<()> {
     let preferences = Preferences::new(RepSetNotation::SetsThenReps);
 
     // Create a new user

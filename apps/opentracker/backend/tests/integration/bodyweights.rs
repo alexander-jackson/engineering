@@ -8,9 +8,7 @@ use uuid::Uuid;
 use crate::utils::*;
 
 #[sqlx::test]
-async fn bodyweights_can_be_inserted_and_queried(
-    pool: PgPool,
-) -> sqlx::Result<()> {
+async fn bodyweights_can_be_inserted_and_queried(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
     let id = some_user(&pool).await?;
 
@@ -31,9 +29,7 @@ async fn bodyweights_can_be_inserted_and_queried(
 }
 
 #[sqlx::test]
-async fn non_existant_records_are_not_found(
-    pool: PgPool,
-) -> sqlx::Result<()> {
+async fn non_existant_records_are_not_found(pool: PgPool) -> sqlx::Result<()> {
     // Create a user
     let id = some_user(&pool).await?;
 
@@ -48,9 +44,7 @@ async fn non_existant_records_are_not_found(
 }
 
 #[sqlx::test]
-async fn users_cannot_see_other_user_bodyweights(
-    pool: PgPool,
-) -> sqlx::Result<()> {
+async fn users_cannot_see_other_user_bodyweights(pool: PgPool) -> sqlx::Result<()> {
     // Create 2 users
     let first_id = persistence::account::insert("f@one.com", "", &pool).await?;
     let second_id = persistence::account::insert("f@two.com", "", &pool).await?;
@@ -136,9 +130,7 @@ async fn test_most_recent(
 }
 
 #[sqlx::test]
-async fn most_recent_bodyweight_can_be_fetched(
-    pool: PgPool,
-) -> sqlx::Result<()> {
+async fn most_recent_bodyweight_can_be_fetched(pool: PgPool) -> sqlx::Result<()> {
     let first_user = some_user(&pool).await?;
     let second_user = persistence::account::insert("user@foo.com", "something", &pool).await?;
     let third_user = persistence::account::insert("user@bar.com", "something", &pool).await?;
