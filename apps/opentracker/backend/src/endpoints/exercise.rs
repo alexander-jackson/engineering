@@ -21,7 +21,7 @@ pub struct Payload {
 
 pub async fn get_unique_exercises(
     claims: Claims,
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     Json(data): Json<Payload>,
 ) -> ServerResponse<Json<Vec<String>>> {
     tracing::info!("Requesting unique structured exercises");
@@ -48,7 +48,7 @@ pub struct ExerciseStatisticsPayload {
 
 pub async fn get_exercise_statistics(
     claims: Claims,
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     Json(data): Json<ExerciseStatisticsPayload>,
 ) -> ServerResponse<Json<ExerciseStatistics>> {
     // Overriding the nullability here is fine as we constrain `rpe` to be non-null
@@ -90,7 +90,7 @@ struct ExerciseRenameResponse {
 
 async fn rename(
     claims: Claims,
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     Json(data): Json<ExerciseRenamePayload>,
 ) -> ServerResponse<Json<ExerciseRenameResponse>> {
     tracing::info!(?data, "Renaming an exercise");

@@ -9,8 +9,9 @@ axum.workspace = true
 axum-macros = "0.5.0"
 bcrypt = "0.15.1"
 chrono = { version = "0.4.42", features = ["serde"] }
-dotenvy = "0.15.7"
-foundation-logging = { version = "0.1.0", path = "../../foundation/logging" }
+color-eyre = "0.6.5"
+foundation-http-server = { version = "0.1.0", path = "../../foundation/http-server" }
+foundation-init = { version = "0.1.0", path = "../../foundation/init", features = ["database"] }
 futures = "0.3.31"
 itertools = "0.14.0"
 jsonwebtoken = { version = "10.2.0", features = ["aws_lc_rs"] }

@@ -1,6 +1,6 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use axum::extract::FromRequestParts;
+use axum::extract::{FromRef, FromRequestParts};
 use axum::http::header::AUTHORIZATION;
 use axum::http::request::Parts;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
@@ -70,7 +70,10 @@ impl Claims {
     }
 }
 
-impl<State: Sync> FromRequestParts<State> for Claims {
+impl<State: Sync> FromRequestParts<State> for Claims
+where
+    DecodingKey: FromRef<State>,
+{
     type Rejection = ServerError;
 
     async fn from_request_parts(
