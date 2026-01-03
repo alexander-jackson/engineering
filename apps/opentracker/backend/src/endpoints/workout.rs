@@ -14,7 +14,7 @@ pub struct DateRange {
     end: chrono::DateTime<chrono::Utc>,
 }
 
-pub fn router(state: State) -> Router {
+pub fn router() -> Router<State> {
     Router::new()
         .route("/workouts", get(get_workouts))
         .route(
@@ -22,7 +22,6 @@ pub fn router(state: State) -> Router {
             get(get_workout).put(upload_workout).delete(delete_workout),
         )
         .route("/workouts/statistics", get(get_workout_statistics))
-        .with_state(state)
 }
 
 pub async fn get_workouts(

@@ -10,7 +10,7 @@ use crate::error::{ServerError, ServerResponse};
 use crate::forms;
 use crate::persistence::{self};
 
-pub fn router(state: State) -> Router {
+pub fn router() -> Router<State> {
     Router::new()
         .route("/login", put(login))
         .route("/register", put(register))
@@ -18,7 +18,6 @@ pub fn router(state: State) -> Router {
         .route("/email/verify/resend", post(send_verification_email))
         .route("/email/verify/{email_address_uid}", put(verify_email))
         .route("/profile/update-password", post(update_password))
-        .with_state(state)
 }
 
 pub async fn register(

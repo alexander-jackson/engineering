@@ -7,12 +7,11 @@ use crate::error::ServerResponse;
 use crate::forms;
 use crate::persistence;
 
-pub fn router(state: State) -> Router {
+pub fn router() -> Router<State> {
     Router::new()
         .route("/exercises/unique", post(get_unique_exercises))
         .route("/exercises/statistics", post(get_exercise_statistics))
         .route("/exercises/rename", post(rename))
-        .with_state(state)
 }
 
 #[derive(Copy, Clone, Debug, Deserialize)]
