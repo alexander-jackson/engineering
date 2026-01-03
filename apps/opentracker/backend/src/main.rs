@@ -8,7 +8,7 @@ use sqlx::postgres::PgConnectOptions;
 use sqlx::postgres::PgPool;
 use tokio::net::TcpListener;
 
-use opentracker::endpoints::{self, State};
+use opentracker::endpoints::{self, AppState};
 use opentracker::trace_layer::TraceLayer;
 
 /// Runs the setup for the server.
@@ -70,7 +70,7 @@ async fn main() {
         .await
         .expect("Failed to run migrations");
 
-    let state = State { pool };
+    let state = AppState { pool };
 
     let app = Router::new()
         .route("/health", get(endpoints::health))

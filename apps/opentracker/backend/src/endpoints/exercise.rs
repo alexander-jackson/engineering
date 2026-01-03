@@ -1,13 +1,13 @@
-use axum::extract::Json;
+use axum::extract::{Json, State};
 use axum::{Router, routing::post};
 
 use crate::auth::Claims;
-use crate::endpoints::State;
+use crate::endpoints::AppState;
 use crate::error::ServerResponse;
 use crate::forms;
 use crate::persistence;
 
-pub fn router() -> Router<State> {
+pub fn router() -> Router<AppState> {
     Router::new()
         .route("/exercises/unique", post(get_unique_exercises))
         .route("/exercises/statistics", post(get_exercise_statistics))
@@ -21,7 +21,7 @@ pub struct Payload {
 
 pub async fn get_unique_exercises(
     claims: Claims,
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     Json(data): Json<Payload>,
 ) -> ServerResponse<Json<Vec<String>>> {
     tracing::info!("Requesting unique structured exercises");
@@ -48,7 +48,7 @@ pub struct ExerciseStatisticsPayload {
 
 pub async fn get_exercise_statistics(
     claims: Claims,
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     Json(data): Json<ExerciseStatisticsPayload>,
 ) -> ServerResponse<Json<ExerciseStatistics>> {
     // Overriding the nullability here is fine as we constrain `rpe` to be non-null
@@ -90,7 +90,7 @@ struct ExerciseRenameResponse {
 
 async fn rename(
     claims: Claims,
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     Json(data): Json<ExerciseRenamePayload>,
 ) -> ServerResponse<Json<ExerciseRenameResponse>> {
     tracing::info!(?data, "Renaming an exercise");

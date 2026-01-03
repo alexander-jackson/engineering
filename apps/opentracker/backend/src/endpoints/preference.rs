@@ -1,20 +1,21 @@
+use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
 
-use crate::endpoints::State;
+use crate::endpoints::AppState;
 use crate::{
     auth::Claims,
     error::ServerResponse,
     persistence::{self, preferences::Preferences},
 };
 
-pub fn router() -> Router<State> {
+pub fn router() -> Router<AppState> {
     Router::new().route("/preferences", get(fetch).put(update))
 }
 
 pub async fn fetch(
     claims: Claims,
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
 ) -> ServerResponse<Json<Option<Preferences>>> {
     let preferences = persistence::preferences::fetch(claims.id, &pool).await?;
 
@@ -25,7 +26,7 @@ pub async fn fetch(
 
 pub async fn update(
     claims: Claims,
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     Json(preferences): Json<Preferences>,
 ) -> ServerResponse<()> {
     persistence::preferences::update(claims.id, preferences, &pool).await?;

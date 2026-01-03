@@ -1,8 +1,8 @@
-use axum::extract::{Json, Path, Query};
+use axum::extract::{Json, Path, Query, State};
 use axum::routing::{Router, get};
 
 use crate::auth::Claims;
-use crate::endpoints::State;
+use crate::endpoints::AppState;
 use crate::error::ServerResponse;
 use crate::forms;
 use crate::persistence;
@@ -14,7 +14,7 @@ pub struct DateRange {
     end: chrono::DateTime<chrono::Utc>,
 }
 
-pub fn router() -> Router<State> {
+pub fn router() -> Router<AppState> {
     Router::new()
         .route("/workouts", get(get_workouts))
         .route(
@@ -25,7 +25,7 @@ pub fn router() -> Router<State> {
 }
 
 pub async fn get_workouts(
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     claims: Claims,
     Query(range): Query<DateRange>,
 ) -> ServerResponse<Json<Vec<persistence::workouts::DatedWorkout>>> {
@@ -45,7 +45,7 @@ pub async fn get_workouts(
 }
 
 pub async fn get_workout(
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
 ) -> ServerResponse<Json<Vec<forms::Exercise>>> {
@@ -59,7 +59,7 @@ pub async fn get_workout(
 }
 
 pub async fn delete_workout(
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
 ) -> ServerResponse<()> {
@@ -72,7 +72,7 @@ pub async fn delete_workout(
 }
 
 pub async fn upload_workout(
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
     Json(data): Json<forms::Workout>,
@@ -100,7 +100,7 @@ pub struct WorkoutStatisticsQuery {
 
 #[axum_macros::debug_handler]
 pub async fn get_workout_statistics(
-    axum::extract::State(State { pool }): axum::extract::State<State>,
+    State(AppState { pool }): State<AppState>,
     claims: Claims,
     Query(query): Query<WorkoutStatisticsQuery>,
 ) -> ServerResponse<Json<persistence::statistics::WorkoutStatistics>> {
