@@ -91,3 +91,9 @@ impl From<crate::persistence::workouts::DatedExercise> for Exercise {
         }
     }
 }
+
+#[derive(Debug, PartialEq, Serialize)]
+pub struct LastExerciseSession {
+    pub recorded: String,
+    pub exercise: Exercise,
+}

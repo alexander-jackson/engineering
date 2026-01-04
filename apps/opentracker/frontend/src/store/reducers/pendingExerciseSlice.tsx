@@ -1,6 +1,7 @@
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import axios from "axios";
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 
-import { Exercise, ExerciseVariant } from "~/shared/types";
+import { Exercise, ExerciseVariant, LastExerciseSession } from "~/shared/types";
 
 export interface PendingExercise {
   variant?: ExerciseVariant;
@@ -19,9 +20,32 @@ export interface PendingExerciseState {
   sets?: number;
   rpe?: number;
   index?: number;
+  lastSession?: LastExerciseSession | null;
+  lastSessionLoading?: boolean;
 }
 
-const initialState: PendingExerciseState = {};
+const initialState: PendingExerciseState = {
+  lastSessionLoading: false,
+};
+
+export const fetchLastSession = createAsyncThunk(
+  "pendingExercise/fetchLastSession",
+  async ({
+    variant,
+    description,
+    currentDate,
+  }: {
+    variant: ExerciseVariant;
+    description: string;
+    currentDate: string;
+  }) => {
+    const response = await axios.post<LastExerciseSession | null>(
+      `/exercises/last-session`,
+      { variant, description, currentDate },
+    );
+    return response.data;
+  },
+);
 
 export const pendingExerciseSlice = createSlice({
   name: "pendingExercise",
@@ -69,7 +93,26 @@ export const pendingExerciseSlice = createSlice({
       state.sets = undefined;
       state.rpe = undefined;
       state.index = undefined;
+      state.lastSession = null;
+      state.lastSessionLoading = false;
     },
+    clearLastSession: (state) => {
+      state.lastSession = null;
+      state.lastSessionLoading = false;
+    },
+  },
+  extraReducers(builder) {
+    builder.addCase(fetchLastSession.pending, (state) => {
+      state.lastSessionLoading = true;
+    });
+    builder.addCase(fetchLastSession.fulfilled, (state, action) => {
+      state.lastSession = action.payload;
+      state.lastSessionLoading = false;
+    });
+    builder.addCase(fetchLastSession.rejected, (state) => {
+      state.lastSession = null;
+      state.lastSessionLoading = false;
+    });
   },
 });
 
@@ -82,6 +125,7 @@ export const {
   setSets,
   setRpe,
   reset,
+  clearLastSession,
 } = pendingExerciseSlice.actions;
 
 export default pendingExerciseSlice.reducer;

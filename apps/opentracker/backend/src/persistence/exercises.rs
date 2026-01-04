@@ -2,6 +2,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::forms::{Exercise, ExerciseVariant};
+use crate::persistence::workouts::DatedExercise;
 
 pub async fn insert(workout_id: Uuid, exercise: &Exercise, pool: &PgPool) -> sqlx::Result<()> {
     match exercise.variant {
@@ -260,4 +261,118 @@ pub async fn rename_structured(
     .execute(pool)
     .await
     .map(|r| r.rows_affected())
+}
+
+pub async fn fetch_last_session(
+    user_id: Uuid,
+    variant: ExerciseVariant,
+    description: &str,
+    exclude_date: chrono::NaiveDate,
+    pool: &PgPool,
+) -> sqlx::Result<Option<(Exercise, chrono::NaiveDate)>> {
+    match variant {
+        ExerciseVariant::Other => {
+            fetch_last_session_freeform(user_id, description, exclude_date, pool).await
+        }
+        _ => fetch_last_session_structured(user_id, variant, description, exclude_date, pool).await,
+    }
+}
+
+async fn fetch_last_session_structured(
+    user_id: Uuid,
+    variant: ExerciseVariant,
+    description: &str,
+    exclude_date: chrono::NaiveDate,
+    pool: &PgPool,
+) -> sqlx::Result<Option<(Exercise, chrono::NaiveDate)>> {
+    let result = sqlx::query_as!(
+        DatedExercise,
+        r#"
+        SELECT
+            w.recorded AS "recorded!: _",
+            se.variant AS "variant!: ExerciseVariant",
+            se.description AS "description!",
+            se.weight AS "weight!",
+            se.reps AS "reps!",
+            se.sets AS "sets!",
+            se.rpe
+        FROM structured_exercise se
+        JOIN workout w ON w.id = se.workout_id
+        JOIN account a ON a.id = w.account_id
+        WHERE a.account_uid = $1
+        AND se.variant = $2
+        AND se.description = $3
+        AND w.recorded < $4
+        ORDER BY w.recorded DESC
+        LIMIT 1
+        "#,
+        user_id,
+        variant as ExerciseVariant,
+        description,
+        exclude_date,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.map(|r| {
+        (
+            Exercise {
+                variant: r.variant,
+                description: r.description,
+                weight: r.weight,
+                reps: r.reps,
+                sets: r.sets,
+                rpe: r.rpe,
+            },
+            r.recorded.0,
+        )
+    }))
+}
+
+async fn fetch_last_session_freeform(
+    user_id: Uuid,
+    description: &str,
+    exclude_date: chrono::NaiveDate,
+    pool: &PgPool,
+) -> sqlx::Result<Option<(Exercise, chrono::NaiveDate)>> {
+    let result = sqlx::query_as!(
+        DatedExercise,
+        r#"
+        SELECT
+            w.recorded AS "recorded!: _",
+            fe.variant AS "variant!: ExerciseVariant",
+            fe.description AS "description!",
+            fe.weight AS "weight!",
+            fe.reps AS "reps!",
+            fe.sets AS "sets!",
+            fe.rpe
+        FROM freeform_exercise fe
+        JOIN workout w ON w.id = fe.workout_id
+        JOIN account a ON a.id = w.account_id
+        WHERE a.account_uid = $1
+        AND fe.description = $2
+        AND w.recorded < $3
+        ORDER BY w.recorded DESC
+        LIMIT 1
+        "#,
+        user_id,
+        description,
+        exclude_date,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.map(|r| {
+        (
+            Exercise {
+                variant: r.variant,
+                description: r.description,
+                weight: r.weight,
+                reps: r.reps,
+                sets: r.sets,
+                rpe: r.rpe,
+            },
+            r.recorded.0,
+        )
+    }))
 }
