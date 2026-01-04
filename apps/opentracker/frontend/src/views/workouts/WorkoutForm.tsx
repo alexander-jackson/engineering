@@ -47,7 +47,7 @@ const WorkoutForm = (props: Props) => {
 
   return (
     <Form onSubmit={handleSubmit}>
-      <AddExerciseModal />
+      <AddExerciseModal currentDate={resolvedValue} />
       <ConfirmationModal
         show={showDeleteConfirmation}
         heading="Delete Workout"

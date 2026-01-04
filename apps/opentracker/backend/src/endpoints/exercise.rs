@@ -12,6 +12,7 @@ pub fn router() -> Router<AppState> {
         .route("/exercises/unique", post(get_unique_exercises))
         .route("/exercises/statistics", post(get_exercise_statistics))
         .route("/exercises/rename", post(rename))
+        .route("/exercises/last-session", post(get_last_session))
 }
 
 #[derive(Copy, Clone, Debug, Deserialize)]
@@ -105,4 +106,45 @@ async fn rename(
     .await?;
 
     Ok(Json(ExerciseRenameResponse { rows_modified }))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastSessionPayload {
+    variant: forms::ExerciseVariant,
+    description: String,
+    current_date: String,
+}
+
+pub async fn get_last_session(
+    claims: Claims,
+    State(AppState { pool }): State<AppState>,
+    Json(data): Json<LastSessionPayload>,
+) -> ServerResponse<Json<Option<forms::LastExerciseSession>>> {
+    tracing::info!(
+        ?data.variant,
+        ?data.description,
+        "Fetching last session for exercise"
+    );
+
+    let current_date =
+        chrono::NaiveDate::parse_from_str(&data.current_date, "%Y-%m-%d").map_err(|_| {
+            crate::error::ServerError::UNPROCESSABLE_ENTITY.with_message("Invalid date format")
+        })?;
+
+    let last_session = persistence::exercises::fetch_last_session(
+        claims.id,
+        data.variant,
+        &data.description,
+        current_date,
+        &pool,
+    )
+    .await?;
+
+    let response = last_session.map(|(exercise, recorded)| forms::LastExerciseSession {
+        recorded: recorded.format("%Y-%m-%d").to_string(),
+        exercise,
+    });
+
+    Ok(Json(response))
 }

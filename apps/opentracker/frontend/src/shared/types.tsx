@@ -32,3 +32,8 @@ export interface GroupedExercise {
   description: string;
   groups: Array<ExerciseDetails>;
 }
+
+export interface LastExerciseSession {
+  recorded: string;
+  exercise: Exercise;
+}

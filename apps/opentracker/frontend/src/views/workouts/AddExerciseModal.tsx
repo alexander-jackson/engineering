@@ -5,6 +5,7 @@ import Col from "react-bootstrap/Col";
 import Form from "react-bootstrap/Form";
 import Modal from "react-bootstrap/Modal";
 import Row from "react-bootstrap/Row";
+import { DateTime } from "luxon";
 
 import connect from "~/store/connect";
 import {
@@ -15,7 +16,9 @@ import {
   setSets,
   setRpe,
   reset,
+  clearLastSession,
   PendingExercise,
+  fetchLastSession,
 } from "~/store/reducers/pendingExerciseSlice";
 import {
   hideAddExerciseModal,
@@ -23,7 +26,7 @@ import {
   editExercise,
 } from "~/store/reducers/workoutSlice";
 import { fetchUniqueExercises } from "~/store/reducers/analysisSlice";
-import { Exercise, ExerciseVariant } from "~/shared/types";
+import { Exercise, ExerciseVariant, LastExerciseSession } from "~/shared/types";
 import Search from "~/components/Search";
 import VariantSelector from "~/components/VariantSelector";
 
@@ -33,7 +36,9 @@ const connector = connect((state) => ({
   uniqueExercises: state.analysis.uniqueExercises,
 }));
 
-type Props = ConnectedProps<typeof connector>;
+type Props = ConnectedProps<typeof connector> & {
+  currentDate: string;
+};
 
 const resolveVariant = (
   specified?: ExerciseVariant,
@@ -65,8 +70,76 @@ const resolve = (
   };
 };
 
+export const formatDate = (dateString: string): string => {
+  const date = DateTime.fromISO(dateString);
+
+  // Format as "Sat 3rd January"
+  const dayOfWeek = date.toFormat("ccc");
+  const day = date.day;
+  const month = date.toFormat("MMMM");
+
+  // Add ordinal suffix (1st, 2nd, 3rd, 4th, etc.)
+  const getOrdinal = (n: number): string => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+
+  return `${dayOfWeek} ${getOrdinal(day)} ${month}`;
+};
+
+const PreviousSessionDisplay = ({
+  lastSession,
+  loading,
+}: {
+  lastSession?: LastExerciseSession | null;
+  loading?: boolean;
+}) => {
+  if (loading) {
+    return (
+      <div className="mb-3 p-3 bg-light rounded">
+        <div className="text-muted">Loading previous session...</div>
+      </div>
+    );
+  }
+
+  if (!lastSession) {
+    return null;
+  }
+
+  const { exercise } = lastSession;
+
+  return (
+    <div className="mb-3 p-3 bg-light rounded">
+      <h6 className="text-dark mb-2">
+        Previous Session ({formatDate(lastSession.recorded)})
+      </h6>
+      <Row className="text-dark">
+        <Col>
+          <small className="text-muted">Weight:</small>
+          <div>{exercise.weight} kg</div>
+        </Col>
+        <Col>
+          <small className="text-muted">Reps:</small>
+          <div>{exercise.reps}</div>
+        </Col>
+        <Col>
+          <small className="text-muted">Sets:</small>
+          <div>{exercise.sets}</div>
+        </Col>
+        {exercise.rpe && (
+          <Col>
+            <small className="text-muted">RPE:</small>
+            <div>{exercise.rpe}</div>
+          </Col>
+        )}
+      </Row>
+    </div>
+  );
+};
+
 const AddExerciseModal = (props: Props) => {
-  const { workout, pending, uniqueExercises, dispatch } = props;
+  const { workout, pending, uniqueExercises, currentDate, dispatch } = props;
 
   const placeholder = workout.exercises.at(-1);
   const resolved = resolve(pending, placeholder);
@@ -112,6 +185,44 @@ const AddExerciseModal = (props: Props) => {
     dispatch(fetchUniqueExercises(variant));
   }, [resolved.variant, dispatch]);
 
+  useEffect(() => {
+    const variant = resolved.variant;
+    const description = resolved.description;
+
+    // Clear last session if conditions aren't met
+    if (
+      !variant ||
+      variant === ExerciseVariant.Unknown ||
+      !description ||
+      description.trim() === "" ||
+      pending.index !== undefined
+    ) {
+      dispatch(clearLastSession());
+      return;
+    }
+
+    // Only fetch if the description matches an existing exercise from history
+    if (!uniqueExercises.includes(description)) {
+      dispatch(clearLastSession());
+      return;
+    }
+
+    dispatch(
+      fetchLastSession({
+        variant,
+        description,
+        currentDate,
+      }),
+    );
+  }, [
+    resolved.variant,
+    resolved.description,
+    currentDate,
+    pending.index,
+    uniqueExercises,
+    dispatch,
+  ]);
+
   return (
     <Modal show={workout.displayModal} onHide={onHide}>
       <Modal.Header closeButton>
@@ -145,6 +256,11 @@ const AddExerciseModal = (props: Props) => {
             haystack={uniqueExercises}
             needle={pending.description}
             onClick={(v) => dispatch(setDescription(v))}
+          />
+
+          <PreviousSessionDisplay
+            lastSession={pending.lastSession}
+            loading={pending.lastSessionLoading}
           />
 
           <Row>
