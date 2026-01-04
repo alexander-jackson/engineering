@@ -1,52 +1,52 @@
-import { defineConfig } from '@rsbuild/core';
-import { pluginReact } from '@rsbuild/plugin-react';
-import { pluginSvgr } from '@rsbuild/plugin-svgr';
+import { defineConfig } from "@rsbuild/core";
+import { pluginReact } from "@rsbuild/plugin-react";
+import { pluginSvgr } from "@rsbuild/plugin-svgr";
 
 export default defineConfig({
-  plugins: [
-    pluginReact(),
-    pluginSvgr(),
-  ],
+  plugins: [pluginReact(), pluginSvgr()],
 
   source: {
     entry: {
-      index: './src/index.tsx',
+      index: "./src/index.tsx",
     },
   },
 
   resolve: {
     // Critical: Preserve ~ → src/ alias
     alias: {
-      '~': './src',
+      "~": "./src",
     },
   },
 
   html: {
-    template: './public/index.html',
+    template: "./public/index.html",
     templateParameters: {
-      PUBLIC_URL: '',
+      PUBLIC_URL: "",
     },
   },
 
   output: {
     // Match current Webpack output structure
     distPath: {
-      root: 'build',
-      js: 'static/js',
-      css: 'static/css',
-      svg: 'static/media',
-      font: 'static/media',
-      image: 'static/media',
-      media: 'static/media',
+      root: "build",
+      js: "static/js",
+      css: "static/css",
+      svg: "static/media",
+      font: "static/media",
+      image: "static/media",
+      media: "static/media",
     },
     filename: {
-      js: '[name].[contenthash:8].js',
-      css: '[name].[contenthash:8].css',
+      js: "[name].[contenthash:8].js",
+      css: "[name].[contenthash:8].css",
     },
     sourceMap: {
-      js: process.env.NODE_ENV === 'production'
-        ? (process.env.GENERATE_SOURCEMAP !== 'false' ? 'source-map' : false)
-        : 'cheap-module-source-map',
+      js:
+        process.env.NODE_ENV === "production"
+          ? process.env.GENERATE_SOURCEMAP !== "false"
+            ? "source-map"
+            : false
+          : "cheap-module-source-map",
       css: true,
     },
   },
@@ -55,9 +55,9 @@ export default defineConfig({
     port: 3000,
     // Critical: CORS headers for backend API calls
     headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': '*',
-      'Access-Control-Allow-Headers': '*',
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "*",
+      "Access-Control-Allow-Headers": "*",
     },
     historyApiFallback: true,
   },
@@ -66,17 +66,17 @@ export default defineConfig({
     postcss: (config) => {
       config.postcssOptions = {
         plugins: [
-          'postcss-flexbugs-fixes',
+          "postcss-flexbugs-fixes",
           [
-            'postcss-preset-env',
+            "postcss-preset-env",
             {
               autoprefixer: {
-                flexbox: 'no-2009',
+                flexbox: "no-2009",
               },
               stage: 3,
             },
           ],
-          'postcss-normalize',
+          "postcss-normalize",
         ],
       };
       return config;
@@ -85,7 +85,7 @@ export default defineConfig({
 
   performance: {
     chunkSplit: {
-      strategy: 'split-by-experience',
+      strategy: "split-by-experience",
     },
   },
 });

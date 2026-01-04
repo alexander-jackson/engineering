@@ -141,7 +141,12 @@
   },
   "babel": {
     "presets": [
-      ["react-app", { "runtime": "automatic" }]
+      [
+        "react-app",
+        {
+          "runtime": "automatic"
+        }
+      ]
     ]
   }
 }
