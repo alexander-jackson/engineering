@@ -18,7 +18,8 @@
     "baseUrl": ".",
     "paths": {
       "~/*": ["src/*"]
-    }
+    },
+    "types": ["@rsbuild/core/types", "jest"]
   },
   "include": ["src"]
 }
