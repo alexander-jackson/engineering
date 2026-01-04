@@ -37,7 +37,7 @@ ChartJS.register(
 
 const applyAxiosSettings = (axios: AxiosInstance) => {
   axios.defaults.baseURL =
-    process.env.REACT_APP_AXIOS_BASE || "http://localhost:3025/api";
+    import.meta.env.PUBLIC_AXIOS_BASE || "http://localhost:3025/api";
 
   axios.interceptors.request.use((request: AxiosRequestConfig) => {
     const token = store.getState().user.token;
