@@ -301,11 +301,6 @@ resource "aws_key_pair" "main" {
   public_key = file("./keys/id_rsa.pub")
 }
 
-resource "aws_key_pair" "work" {
-  key_name   = "macbook-m1-max"
-  public_key = file("./keys/work.pub")
-}
-
 module "primary" {
   source = "./modules/f2-instance"
   name   = "primary"
@@ -341,47 +336,6 @@ module "primary" {
   }
 
   key_name = aws_key_pair.main.key_name
-  hosted_zones = [
-    aws_route53_zone.opentracker.id,
-    aws_route53_zone.forkup.id
-  ]
-}
-
-module "secondary" {
-  source = "./modules/f2-instance"
-  name   = "secondary"
-
-  instance = {
-    type      = "t2.micro"
-    ami       = "ami-0ab14756db2442499"
-    vpc_id    = aws_vpc.main.id
-    subnet_id = aws_subnet.main.id
-  }
-
-  configuration = {
-    bucket    = module.config_bucket.name
-    key       = "f2/config.yaml"
-    image_tag = "20250829-1918"
-  }
-
-  logging = {
-    bucket     = module.logging_bucket.name
-    vector_tag = "0.52.0-alpine"
-  }
-
-  backups = {
-    bucket = module.postgres_backups_bucket.name
-  }
-
-  hackathon = {
-    bucket = module.hackathon_bucket.name
-  }
-
-  alerting = {
-    topic_arn = aws_sns_topic.outages.arn
-  }
-
-  key_name = aws_key_pair.work.key_name
   hosted_zones = [
     aws_route53_zone.opentracker.id,
     aws_route53_zone.forkup.id
@@ -452,16 +406,6 @@ resource "aws_security_group_rule" "allow_inbound_connections_to_postgres_from_p
   to_port                  = 5432
   protocol                 = "tcp"
   source_security_group_id = module.primary.security_group_id
-  security_group_id        = module.postgres.security_group_id
-}
-
-resource "aws_security_group_rule" "allow_inbound_connections_to_postgres_from_secondary" {
-  description              = format("Allow inbound connections from %s", module.secondary.security_group_id)
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = module.secondary.security_group_id
   security_group_id        = module.postgres.security_group_id
 }
 
