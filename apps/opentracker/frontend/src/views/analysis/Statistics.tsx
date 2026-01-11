@@ -2,10 +2,7 @@ import { DateTime } from "luxon";
 import Table from "react-bootstrap/Table";
 
 import DatedLineGraph from "~/components/DatedLineGraph";
-import {
-  ExerciseStatistics,
-  RepPersonalBest,
-} from "~/store/reducers/analysisSlice";
+import { ExerciseStatistics, RepPersonalBest } from "~/api/analysis";
 
 interface Props {
   stats: ExerciseStatistics;

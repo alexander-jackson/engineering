@@ -52,7 +52,12 @@ export const useBodyweightByDate = (recorded: string) => {
 export const useUpdateBodyweight = () => {
   const queryClient = useQueryClient();
 
-  return useMutation(updateBodyweight, {
+  return useMutation<
+    void,
+    Error,
+    { recorded: string; bodyweight: number },
+    { previous: BodyweightResponse | undefined }
+  >(updateBodyweight, {
     onMutate: async (params) => {
       // Cancel in-flight queries
       await queryClient.cancelQueries(["bodyweights"]);
@@ -107,7 +112,12 @@ export const useUpdateBodyweight = () => {
 export const useDeleteBodyweight = () => {
   const queryClient = useQueryClient();
 
-  return useMutation(deleteBodyweight, {
+  return useMutation<
+    void,
+    Error,
+    string,
+    { previous: BodyweightResponse | undefined }
+  >(deleteBodyweight, {
     onMutate: async (recorded) => {
       // Cancel in-flight queries
       await queryClient.cancelQueries(["bodyweights"]);

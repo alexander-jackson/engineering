@@ -8,7 +8,7 @@ import { DateTime } from "luxon";
 
 import { useUniqueExercises } from "~/hooks/useAnalysis";
 import { useLastSession } from "~/hooks/useLastSession";
-import { Exercise, ExerciseVariant } from "~/shared/types";
+import { Exercise, ExerciseVariant, LastExerciseSession } from "~/shared/types";
 import Search from "~/components/Search";
 import VariantSelector from "~/components/VariantSelector";
 
@@ -46,7 +46,13 @@ const resolveVariant = (
 const resolve = (
   specified: PendingExercise,
   placeholder?: Exercise,
-): Required<Omit<PendingExercise, "editIndex">> => {
+): Omit<PendingExercise, "editIndex"> & {
+  variant: ExerciseVariant;
+  description: string;
+  weight: number;
+  reps: number;
+  sets: number;
+} => {
   const resolvedVariant = resolveVariant(
     specified.variant,
     placeholder?.variant,
@@ -272,7 +278,7 @@ const AddExerciseModal = (props: Props) => {
             loading={
               lastSessionLoading &&
               variant !== ExerciseVariant.Unknown &&
-              description &&
+              !!description &&
               description.trim() !== ""
             }
           />
