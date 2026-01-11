@@ -1,14 +1,9 @@
-import { ConnectedProps } from "react-redux";
 import { Link } from "react-router-dom";
 import Container from "react-bootstrap/Container";
 import Nav from "react-bootstrap/Nav";
 import Navbar from "react-bootstrap/Navbar";
 
-import connect from "~/store/connect";
-
-const connector = connect((state) => ({ token: state.user.token }));
-
-type Props = ConnectedProps<typeof connector>;
+import { useAppSelector } from "~/store/hooks";
 
 const getLoginOrLogout = (authorised: boolean) => {
   if (authorised) {
@@ -26,8 +21,8 @@ const getLoginOrLogout = (authorised: boolean) => {
   );
 };
 
-const Header = (props: Props) => {
-  const { token } = props;
+const Header = () => {
+  const token = useAppSelector((state) => state.user.token);
   const brandRoute = token ? "/dashboard" : "/";
 
   return (
@@ -51,4 +46,4 @@ const Header = (props: Props) => {
   );
 };
 
-export default connector(Header);
+export default Header;

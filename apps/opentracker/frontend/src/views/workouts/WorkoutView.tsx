@@ -4,21 +4,16 @@ import Col from "react-bootstrap/Col";
 import Row from "react-bootstrap/Row";
 import { PencilFill, TrashFill } from "react-bootstrap-icons";
 
-import { useAppDispatch, useAppSelector } from "~/store/hooks";
-import {
-  showAddExerciseModal,
-  deleteExercise,
-  deleteStructuredWorkout,
-  putStructuredWorkout,
-} from "~/store/reducers/workoutSlice";
-import { setFromExercise } from "~/store/reducers/pendingExerciseSlice";
 import { Exercise } from "~/shared/types";
 import ExertionIndicator from "~/components/ExertionIndicator";
 import VariantIcon from "~/components/VariantIcon";
 
 interface Props {
-  exercises: Array<Exercise>;
+  exercises: Exercise[];
+  setExercises: (exercises: Exercise[]) => void;
   recorded: string;
+  onEdit: (exercise: Exercise, index: number) => void;
+  onDelete: (index: number) => void;
 }
 
 const calculateOneRepMax = (exercise: Exercise): number => {
@@ -32,52 +27,8 @@ const calculateOneRepMax = (exercise: Exercise): number => {
   return numerator / denominator;
 };
 
-interface EditButtonProps {
-  index: number;
-}
-
-const EditButton = (props: EditButtonProps) => {
-  const dispatch = useAppDispatch();
-  const exercises = useAppSelector((state) => state.workout.exercises);
-
-  const onClick = () => {
-    // Set the selected index
-    const payload = { exercise: exercises[props.index], index: props.index };
-    dispatch(setFromExercise(payload));
-
-    // Display the modal
-    dispatch(showAddExerciseModal());
-  };
-
-  return (
-    <Button
-      variant="light"
-      size="sm"
-      className="mx-2 float-end"
-      onClick={onClick}
-    >
-      <PencilFill />
-    </Button>
-  );
-};
-
 const WorkoutView = (props: Props) => {
-  const { exercises, recorded } = props;
-  const dispatch = useAppDispatch();
-
-  const handleExerciseDeletion = (index: number) => {
-    // Delete the exercise from the view
-    dispatch(deleteExercise(index));
-
-    // If this is the only exercise, delete the whole workout on the backend
-    if (exercises.length === 1) {
-      dispatch(deleteStructuredWorkout(recorded));
-      return;
-    }
-
-    // Otherwise, persist the current state after deleting
-    dispatch(putStructuredWorkout(recorded));
-  };
+  const { exercises, onEdit, onDelete } = props;
 
   return (
     <>
@@ -100,11 +51,18 @@ const WorkoutView = (props: Props) => {
                     variant="outline-danger"
                     size="sm"
                     className="mx-2 float-end"
-                    onClick={() => handleExerciseDeletion(index)}
+                    onClick={() => onDelete(index)}
                   >
                     <TrashFill />
                   </Button>
-                  <EditButton index={index} />
+                  <Button
+                    variant="light"
+                    size="sm"
+                    className="mx-2 float-end"
+                    onClick={() => onEdit(exercise, index)}
+                  >
+                    <PencilFill />
+                  </Button>
                 </Col>
               </Row>
             </Card.Title>

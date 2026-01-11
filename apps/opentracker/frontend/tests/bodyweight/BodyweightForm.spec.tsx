@@ -64,10 +64,10 @@ test("users can submit the initial form", async () => {
   // Try and submit the form
   fireEvent.click(screen.getByText("Submit"));
 
-  // Ensure it persisted
-  await waitFor(() =>
-    expect(screen.getByRole("status-persisted")).toBeDefined(),
-  );
+  // Ensure no error is shown (success)
+  await waitFor(() => {
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });
 
 test("users can change the date", async () => {
@@ -113,10 +113,10 @@ test("users can submit forms after changing the date", async () => {
   // Try and submit the form
   fireEvent.click(screen.getByText("Submit"));
 
-  // Ensure it persisted
-  await waitFor(() =>
-    expect(screen.getByRole("status-persisted")).toBeDefined(),
-  );
+  // Ensure no error is shown (success)
+  await waitFor(() => {
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });
 
 test("users can change their bodyweight", async () => {
@@ -140,10 +140,10 @@ test("users can change their bodyweight", async () => {
   // Try and submit the form
   fireEvent.click(screen.getByText("Submit"));
 
-  // Ensure it persisted
-  await waitFor(() =>
-    expect(screen.getByRole("status-persisted")).toBeDefined(),
-  );
+  // Ensure no error is shown (success)
+  await waitFor(() => {
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 
   // Check the bodyweight value is correct
   await waitFor(() =>

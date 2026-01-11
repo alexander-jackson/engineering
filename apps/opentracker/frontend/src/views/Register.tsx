@@ -1,5 +1,4 @@
-import axios, { AxiosError } from "axios";
-import { ConnectedProps } from "react-redux";
+import { AxiosError } from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -8,37 +7,29 @@ import Container from "react-bootstrap/Container";
 import Form from "react-bootstrap/Form";
 import FloatingLabel from "react-bootstrap/FloatingLabel";
 
-import connect from "~/store/connect";
+import { useAppDispatch } from "~/store/hooks";
 import Title from "~/components/Title";
 import ReactQueryStatefulSubmit from "~/components/ReactQueryStatefulSubmit";
 import { setToken } from "~/store/reducers/userSlice";
-
-const connector = connect((state) => ({}));
-
-type Props = ConnectedProps<typeof connector>;
+import { register as registerApi } from "~/api/user";
 
 interface FormState {
   email: string;
   password: string;
 }
 
-const Register = (props: Props) => {
-  const { dispatch } = props;
+const Register = () => {
+  const dispatch = useAppDispatch();
   const { register, handleSubmit } = useForm<FormState>();
 
   const navigate = useNavigate();
 
-  const mutation = useMutation(
-    (payload: FormState) => {
-      return axios.put("/register", payload).then((res) => res.data);
+  const mutation = useMutation(registerApi, {
+    onSuccess: (token: string) => {
+      dispatch(setToken(token));
+      navigate("/email-verification");
     },
-    {
-      onSuccess: (token: string) => {
-        dispatch(setToken(token));
-        navigate("/email-verification");
-      },
-    },
-  );
+  });
 
   return (
     <Container>
@@ -91,4 +82,4 @@ const Register = (props: Props) => {
   );
 };
 
-export default connector(Register);
+export default Register;

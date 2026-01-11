@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from "react";
-import axios from "axios";
+import { AxiosError } from "axios";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
 import Button from "react-bootstrap/Button";
@@ -8,55 +8,45 @@ import FloatingLabel from "react-bootstrap/FloatingLabel";
 import { DateTime } from "luxon";
 import "chartjs-adapter-luxon";
 
-import { useAppDispatch, useAppSelector } from "~/store/hooks";
-import StatefulSubmit from "~/components/StatefulSubmit";
 import {
-  putBodyweightEntry,
-  deleteBodyweightEntry,
-  resetRequestState,
-} from "~/store/reducers/bodyweightSlice";
-
-interface SpecificBodyweightRecord {
-  bodyweight: number;
-}
+  useBodyweightByDate,
+  useUpdateBodyweight,
+  useDeleteBodyweight,
+} from "~/hooks/useBodyweight";
+import ReactQueryStatefulSubmit from "~/components/ReactQueryStatefulSubmit";
 
 const BodyweightForm = () => {
   const [recorded, setRecorded] = useState("");
   const [bodyweight, setBodyweight] = useState("");
-  const bodyweightSelector = useAppSelector((state) => state.bodyweight);
-  const dispatch = useAppDispatch();
 
   const defaultValue = DateTime.now().toISODate();
   const resolvedValue = recorded || defaultValue;
 
+  const { data: bodyweightData } = useBodyweightByDate(resolvedValue);
+  const updateBodyweight = useUpdateBodyweight();
+  const deleteBodyweight = useDeleteBodyweight();
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    dispatch(
-      putBodyweightEntry({
-        recorded: resolvedValue,
-        bodyweight: parseFloat(bodyweight),
-      }),
-    );
+    updateBodyweight.mutate({
+      recorded: resolvedValue,
+      bodyweight: parseFloat(bodyweight),
+    });
   };
 
   const handleDelete = () => {
-    dispatch(deleteBodyweightEntry(resolvedValue));
+    deleteBodyweight.mutate(resolvedValue);
     setBodyweight("");
   };
 
   useEffect(() => {
-    axios
-      .get<SpecificBodyweightRecord>(`/bodyweights/${resolvedValue}`)
-      .then((record) => setBodyweight(record.data.bodyweight.toString()))
-      .catch((error) => {
-        if (error.response?.status !== 404) {
-          console.error(error);
-        } else {
-          setBodyweight("");
-        }
-      });
-  }, [dispatch, resolvedValue]);
+    if (bodyweightData) {
+      setBodyweight(bodyweightData.bodyweight.toString());
+    } else {
+      setBodyweight("");
+    }
+  }, [bodyweightData]);
 
   return (
     <Form onSubmit={handleSubmit}>
@@ -83,9 +73,9 @@ const BodyweightForm = () => {
 
       <Row>
         <Col>
-          <StatefulSubmit
-            switch={bodyweightSelector.state}
-            reset={() => dispatch(resetRequestState())}
+          <ReactQueryStatefulSubmit
+            state={updateBodyweight.status}
+            error={updateBodyweight.error as AxiosError}
           />
         </Col>
         <Col>

@@ -1,42 +1,39 @@
-import { useEffect, ChangeEvent, FormEvent } from "react";
-import { ConnectedProps } from "react-redux";
+import { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import { AxiosError } from "axios";
 import Container from "react-bootstrap/Container";
 import Form from "react-bootstrap/Form";
 
-import connect from "~/store/connect";
+import { RepSetNotation } from "~/api/preferences";
 import {
-  RepSetNotation,
-  setRepSetNotation,
-  resetRequestState,
-  fetchUserPreferences,
-  persistUserPreferences,
-} from "~/store/reducers/userPreferencesSlice";
-import StatefulSubmit from "~/components/StatefulSubmit";
+  useUserPreferences,
+  useUpdatePreferences,
+} from "~/hooks/usePreferences";
+import ReactQueryStatefulSubmit from "~/components/ReactQueryStatefulSubmit";
 
-const connector = connect((state) => ({
-  userPreferences: state.userPreferences,
-}));
+const PreferencesForm = () => {
+  const [repSetNotation, setRepSetNotation] = useState<RepSetNotation>(
+    RepSetNotation.SetsThenReps,
+  );
 
-type Props = ConnectedProps<typeof connector>;
-
-const PreferencesForm = (props: Props) => {
-  const { dispatch, userPreferences } = props;
-  const { state, repSetNotation } = userPreferences;
+  const { data: preferences } = useUserPreferences();
+  const updatePreferences = useUpdatePreferences();
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    dispatch(persistUserPreferences());
+    updatePreferences.mutate({ repSetNotation });
   };
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const variant =
       RepSetNotation[event.target.value as keyof typeof RepSetNotation];
-    dispatch(setRepSetNotation(variant));
+    setRepSetNotation(variant);
   };
 
   useEffect(() => {
-    dispatch(fetchUserPreferences());
-  }, [dispatch]);
+    if (preferences) {
+      setRepSetNotation(preferences.repSetNotation);
+    }
+  }, [preferences]);
 
   return (
     <Container>
@@ -60,13 +57,13 @@ const PreferencesForm = (props: Props) => {
             checked={repSetNotation === RepSetNotation.RepsThenSets}
           />
         </Form.Group>
-        <StatefulSubmit
-          switch={state}
-          reset={() => dispatch(resetRequestState())}
+        <ReactQueryStatefulSubmit
+          state={updatePreferences.status}
+          error={updatePreferences.error as AxiosError}
         />
       </Form>
     </Container>
   );
 };
 
-export default connector(PreferencesForm);
+export default PreferencesForm;
