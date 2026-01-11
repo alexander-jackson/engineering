@@ -1,25 +1,15 @@
-import { ConnectedProps } from "react-redux";
+import { RepSetNotation } from "~/api/preferences";
+import { useUserPreferences } from "~/hooks/usePreferences";
 
-import connect from "~/store/connect";
-import { RepSetNotation } from "~/store/reducers/userPreferencesSlice";
-
-interface ComponentState {
-  repSetNotation: RepSetNotation;
-}
-
-interface ComponentProps {
+interface Props {
   reps: number;
   sets: number;
 }
 
-const connector = connect<ComponentState, ComponentProps>((state) => ({
-  repSetNotation: state.userPreferences.repSetNotation,
-}));
-
-type Props = ConnectedProps<typeof connector>;
-
 const RepSetView = (props: Props) => {
-  const { repSetNotation } = props;
+  const { data: preferences } = useUserPreferences();
+  const repSetNotation =
+    preferences?.repSetNotation || RepSetNotation.SetsThenReps;
 
   const lhs =
     repSetNotation === RepSetNotation.RepsThenSets ? props.reps : props.sets;
@@ -33,4 +23,4 @@ const RepSetView = (props: Props) => {
   );
 };
 
-export default connector(RepSetView);
+export default RepSetView;

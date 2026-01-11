@@ -1,5 +1,4 @@
-import { useEffect, FormEvent } from "react";
-import { ConnectedProps } from "react-redux";
+import { useState, useEffect, FormEvent } from "react";
 import Button from "react-bootstrap/Button";
 import Col from "react-bootstrap/Col";
 import Form from "react-bootstrap/Form";
@@ -7,38 +6,31 @@ import Modal from "react-bootstrap/Modal";
 import Row from "react-bootstrap/Row";
 import { DateTime } from "luxon";
 
-import connect from "~/store/connect";
-import {
-  setVariant,
-  setDescription,
-  setWeight,
-  setReps,
-  setSets,
-  setRpe,
-  reset,
-  clearLastSession,
-  PendingExercise,
-  fetchLastSession,
-} from "~/store/reducers/pendingExerciseSlice";
-import {
-  hideAddExerciseModal,
-  addExercise,
-  editExercise,
-} from "~/store/reducers/workoutSlice";
-import { fetchUniqueExercises } from "~/store/reducers/analysisSlice";
+import { useUniqueExercises } from "~/hooks/useAnalysis";
+import { useLastSession } from "~/hooks/useLastSession";
 import { Exercise, ExerciseVariant, LastExerciseSession } from "~/shared/types";
 import Search from "~/components/Search";
 import VariantSelector from "~/components/VariantSelector";
 
-const connector = connect((state) => ({
-  workout: state.workout,
-  pending: state.pendingExercise,
-  uniqueExercises: state.analysis.uniqueExercises,
-}));
-
-type Props = ConnectedProps<typeof connector> & {
+interface Props {
+  show: boolean;
+  onHide: () => void;
+  exercises: Exercise[];
+  setExercises: (exercises: Exercise[]) => void;
   currentDate: string;
-};
+  saveWorkout: (exercises: Exercise[]) => void;
+  editExercise?: { exercise: Exercise; index: number };
+}
+
+interface PendingExercise {
+  variant?: ExerciseVariant;
+  description?: string;
+  weight?: number;
+  reps?: number;
+  sets?: number;
+  rpe?: number;
+  editIndex?: number;
+}
 
 const resolveVariant = (
   specified?: ExerciseVariant,
@@ -54,18 +46,24 @@ const resolveVariant = (
 const resolve = (
   specified: PendingExercise,
   placeholder?: Exercise,
-): PendingExercise => {
+): Omit<PendingExercise, "editIndex"> & {
+  variant: ExerciseVariant;
+  description: string;
+  weight: number;
+  reps: number;
+  sets: number;
+} => {
   const resolvedVariant = resolveVariant(
     specified.variant,
     placeholder?.variant,
   );
 
   return {
-    variant: resolvedVariant,
-    description: specified.description || placeholder?.description,
-    weight: specified.weight || placeholder?.weight,
-    reps: specified.reps || placeholder?.reps,
-    sets: specified.sets || placeholder?.sets,
+    variant: resolvedVariant || ExerciseVariant.Unknown,
+    description: specified.description || placeholder?.description || "",
+    weight: specified.weight || placeholder?.weight || 0,
+    reps: specified.reps || placeholder?.reps || 0,
+    sets: specified.sets || placeholder?.sets || 0,
     rpe: specified.rpe,
   };
 };
@@ -139,102 +137,119 @@ const PreviousSessionDisplay = ({
 };
 
 const AddExerciseModal = (props: Props) => {
-  const { workout, pending, uniqueExercises, currentDate, dispatch } = props;
+  const {
+    show,
+    onHide,
+    exercises,
+    setExercises,
+    currentDate,
+    saveWorkout,
+    editExercise,
+  } = props;
 
-  const placeholder = workout.exercises.at(-1);
+  // Local form state
+  const [variant, setVariant] = useState<ExerciseVariant>(
+    ExerciseVariant.Unknown,
+  );
+  const [description, setDescription] = useState("");
+  const [weight, setWeight] = useState<number | undefined>();
+  const [reps, setReps] = useState<number | undefined>();
+  const [sets, setSets] = useState<number | undefined>();
+  const [rpe, setRpe] = useState<number | undefined>();
+  const [editIndex, setEditIndex] = useState<number | undefined>();
+
+  // Populate form when editing
+  useEffect(() => {
+    if (editExercise) {
+      const { exercise, index } = editExercise;
+      setVariant(exercise.variant);
+      setDescription(exercise.description);
+      setWeight(exercise.weight);
+      setReps(exercise.reps);
+      setSets(exercise.sets);
+      setRpe(exercise.rpe);
+      setEditIndex(index);
+    }
+  }, [editExercise]);
+
+  const placeholder = exercises.at(-1);
+  const pending: PendingExercise = {
+    variant,
+    description,
+    weight,
+    reps,
+    sets,
+    rpe,
+    editIndex,
+  };
   const resolved = resolve(pending, placeholder);
+
+  // Fetch unique exercises and last session
+  const { data: uniqueExercises = [] } = useUniqueExercises(variant);
+  const { data: lastSession, isLoading: lastSessionLoading } = useLastSession(
+    variant !== ExerciseVariant.Unknown ? variant : undefined,
+    description && description.trim() !== "" ? description : undefined,
+    editIndex === undefined ? currentDate : undefined,
+  );
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    const { variant, description, weight, reps, sets, rpe } = resolved;
+    event.stopPropagation();
 
     const exercise: Exercise = {
-      variant: variant!,
-      description: description!,
-      weight: weight!,
-      reps: reps!,
-      sets: sets!,
-      rpe,
+      variant: resolved.variant!,
+      description: resolved.description!,
+      weight: resolved.weight!,
+      reps: resolved.reps!,
+      sets: resolved.sets!,
+      rpe: resolved.rpe,
     };
 
+    // Create new exercises array
+    const newExercises = [...exercises];
+
     // Decide whether to edit or just add it
-    if (pending.index !== undefined) {
-      const payload = { index: pending.index, exercise };
-      dispatch(editExercise(payload));
+    if (editIndex !== undefined) {
+      newExercises[editIndex] = exercise;
     } else {
-      dispatch(addExercise(exercise));
+      newExercises.push(exercise);
     }
 
-    dispatch(hideAddExerciseModal());
-    dispatch(reset());
+    // Update exercises and save
+    setExercises(newExercises);
+
+    // Reset form and close modal
+    resetForm();
+    onHide();
+
+    // Save workout with the updated exercises
+    saveWorkout(newExercises);
   };
 
-  const onHide = () => {
-    dispatch(hideAddExerciseModal());
-    dispatch(reset());
+  const resetForm = () => {
+    setVariant(ExerciseVariant.Unknown);
+    setDescription("");
+    setWeight(undefined);
+    setReps(undefined);
+    setSets(undefined);
+    setRpe(undefined);
+    setEditIndex(undefined);
   };
 
-  useEffect(() => {
-    const variant = resolved.variant;
-
-    if (variant === undefined || variant === ExerciseVariant.Unknown) {
-      return;
-    }
-
-    dispatch(fetchUniqueExercises(variant));
-  }, [resolved.variant, dispatch]);
-
-  useEffect(() => {
-    const variant = resolved.variant;
-    const description = resolved.description;
-
-    // Clear last session if conditions aren't met
-    if (
-      !variant ||
-      variant === ExerciseVariant.Unknown ||
-      !description ||
-      description.trim() === "" ||
-      pending.index !== undefined
-    ) {
-      dispatch(clearLastSession());
-      return;
-    }
-
-    // Only fetch if the description matches an existing exercise from history
-    if (!uniqueExercises.includes(description)) {
-      dispatch(clearLastSession());
-      return;
-    }
-
-    dispatch(
-      fetchLastSession({
-        variant,
-        description,
-        currentDate,
-      }),
-    );
-  }, [
-    resolved.variant,
-    resolved.description,
-    currentDate,
-    pending.index,
-    uniqueExercises,
-    dispatch,
-  ]);
+  const handleHide = () => {
+    resetForm();
+    onHide();
+  };
 
   return (
-    <Modal show={workout.displayModal} onHide={onHide}>
+    <Modal show={show} onHide={handleHide}>
       <Modal.Header closeButton>
         <Modal.Title>Add Exercise</Modal.Title>
       </Modal.Header>
 
       <Modal.Body>
         <Form onSubmit={handleSubmit}>
-          <VariantSelector
-            selected={resolved.variant}
-            onClick={(variant) => dispatch(setVariant(variant))}
-          />
+          <VariantSelector selected={resolved.variant} onClick={setVariant} />
 
           <Form.Group className="mb-3" controlId="exercise-name-input">
             <Form.Label className="text-dark">
@@ -245,22 +260,27 @@ const AddExerciseModal = (props: Props) => {
             <Form.Control
               type="text"
               autoComplete="off"
-              value={pending.description}
-              onChange={(e) => dispatch(setDescription(e.target.value))}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               placeholder={placeholder?.description}
-              required={!(pending.description || placeholder?.description)}
+              required={!(description || placeholder?.description)}
             />
           </Form.Group>
 
           <Search
             haystack={uniqueExercises}
-            needle={pending.description}
-            onClick={(v) => dispatch(setDescription(v))}
+            needle={description}
+            onClick={setDescription}
           />
 
           <PreviousSessionDisplay
-            lastSession={pending.lastSession}
-            loading={pending.lastSessionLoading}
+            lastSession={lastSession}
+            loading={
+              lastSessionLoading &&
+              variant !== ExerciseVariant.Unknown &&
+              !!description &&
+              description.trim() !== ""
+            }
           />
 
           <Row>
@@ -270,12 +290,10 @@ const AddExerciseModal = (props: Props) => {
                 <Form.Control
                   type="number"
                   step={0.5}
-                  value={pending.weight}
-                  onChange={(e) =>
-                    dispatch(setWeight(parseFloat(e.target.value)))
-                  }
+                  value={weight ?? ""}
+                  onChange={(e) => setWeight(parseFloat(e.target.value))}
                   placeholder={placeholder?.weight?.toString()}
-                  required={!(pending.weight || placeholder?.weight)}
+                  required={!(weight || placeholder?.weight)}
                 />
               </Form.Group>
             </Col>
@@ -286,12 +304,10 @@ const AddExerciseModal = (props: Props) => {
                 <Form.Control
                   type="number"
                   step={1}
-                  value={pending.reps}
-                  onChange={(e) =>
-                    dispatch(setReps(parseFloat(e.target.value)))
-                  }
+                  value={reps ?? ""}
+                  onChange={(e) => setReps(parseFloat(e.target.value))}
                   placeholder={placeholder?.reps?.toString()}
-                  required={!(pending.reps || placeholder?.reps)}
+                  required={!(reps || placeholder?.reps)}
                 />
               </Form.Group>
             </Col>
@@ -304,12 +320,10 @@ const AddExerciseModal = (props: Props) => {
                 <Form.Control
                   type="number"
                   step={1}
-                  value={pending.sets}
-                  onChange={(e) =>
-                    dispatch(setSets(parseFloat(e.target.value)))
-                  }
+                  value={sets ?? ""}
+                  onChange={(e) => setSets(parseFloat(e.target.value))}
                   placeholder={placeholder?.sets?.toString()}
-                  required={!(pending.sets || placeholder?.sets)}
+                  required={!(sets || placeholder?.sets)}
                 />
               </Form.Group>
             </Col>
@@ -320,8 +334,8 @@ const AddExerciseModal = (props: Props) => {
                 <Form.Control
                   type="number"
                   step={0.25}
-                  value={pending.rpe}
-                  onChange={(e) => dispatch(setRpe(parseFloat(e.target.value)))}
+                  value={rpe ?? ""}
+                  onChange={(e) => setRpe(parseFloat(e.target.value))}
                 />
               </Form.Group>
             </Col>
@@ -341,4 +355,4 @@ const AddExerciseModal = (props: Props) => {
   );
 };
 
-export default connector(AddExerciseModal);
+export default AddExerciseModal;

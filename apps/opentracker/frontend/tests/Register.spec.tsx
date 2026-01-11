@@ -10,7 +10,7 @@ const EMAIL = "some@email.com";
 const PASSWORD = "some-password";
 
 const server = setupServer(
-  rest.put(endpoint("/register"), (req, res, ctx) => {
+  rest.post(endpoint("/register"), (req, res, ctx) => {
     return res(ctx.json("something"));
   }),
   rest.get(endpoint("/email/status"), (req, res, ctx) => {
@@ -40,7 +40,7 @@ test("users can register", async () => {
 
 test("failed registrations do not show the dashboard", async () => {
   server.use(
-    rest.put(endpoint("/register"), (req, res, ctx) => {
+    rest.post(endpoint("/register"), (req, res, ctx) => {
       return res(ctx.status(401));
     }),
   );

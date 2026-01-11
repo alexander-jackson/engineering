@@ -9,9 +9,8 @@ import Container from "react-bootstrap/Container";
 import Form from "react-bootstrap/Form";
 import FloatingLabel from "react-bootstrap/FloatingLabel";
 
-import connect from "~/store/connect";
+import { useAppDispatch, useAppSelector } from "~/store/hooks";
 import { setToken } from "~/store/reducers/userSlice";
-import { fetchUserPreferences } from "~/store/reducers/userPreferencesSlice";
 import Title from "~/components/Title";
 import ReactQueryStatefulSubmit from "~/components/ReactQueryStatefulSubmit";
 
@@ -19,20 +18,14 @@ interface LocationState {
   path: string;
 }
 
-const connector = connect((state) => ({
-  user: state.user,
-}));
-
-type Props = ConnectedProps<typeof connector>;
-
 interface LoginFormState {
   email: string;
   password: string;
 }
 
-const Login = (props: Props) => {
-  const { user, dispatch } = props;
-  const { token } = user;
+const Login = () => {
+  const dispatch = useAppDispatch();
+  const token = useAppSelector((state) => state.user.token);
   const { register, handleSubmit } = useForm<LoginFormState>();
 
   const navigate = useNavigate();
@@ -51,10 +44,9 @@ const Login = (props: Props) => {
 
   useEffect(() => {
     if (token) {
-      dispatch(fetchUserPreferences());
       navigate(locationState?.path || "/email-verification");
     }
-  }, [dispatch, navigate, locationState?.path, token]);
+  }, [navigate, locationState?.path, token]);
 
   return (
     <Container>
@@ -107,4 +99,4 @@ const Login = (props: Props) => {
   );
 };
 
-export default connector(Login);
+export default Login;

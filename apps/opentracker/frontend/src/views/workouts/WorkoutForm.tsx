@@ -1,53 +1,76 @@
 import { useState, useEffect, FormEvent } from "react";
-import { ConnectedProps } from "react-redux";
 import Button from "react-bootstrap/Button";
 import Form from "react-bootstrap/Form";
 import InputGroup from "react-bootstrap/InputGroup";
 import { PlusCircle, TrashFill } from "react-bootstrap-icons";
 import { DateTime } from "luxon";
 
-import connect from "~/store/connect";
 import AddExerciseModal from "~/views/workouts/AddExerciseModal";
 import WorkoutView from "~/views/workouts/WorkoutView";
 import {
-  showAddExerciseModal,
-  putStructuredWorkout,
-  deleteStructuredWorkout,
-  fetchStructuredWorkout,
-} from "~/store/reducers/workoutSlice";
+  useWorkout,
+  useUpdateWorkout,
+  useDeleteWorkout,
+} from "~/hooks/useWorkout";
+import { Exercise } from "~/shared/types";
 import ConfirmationModal from "~/components/ConfirmationModal";
 
-const connector = connect((state) => ({ exercises: state.workout.exercises }));
-
-type Props = ConnectedProps<typeof connector>;
-
-const WorkoutForm = (props: Props) => {
+const WorkoutForm = () => {
   const [recorded, setRecorded] = useState("");
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [showModal, setShowModal] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const { exercises, dispatch } = props;
+  const [editExercise, setEditExercise] = useState<
+    { exercise: Exercise; index: number } | undefined
+  >();
 
   const defaultValue = DateTime.now().toISODate();
   const resolvedValue = recorded || defaultValue;
 
+  const { data: workoutData } = useWorkout(resolvedValue);
+  const updateWorkout = useUpdateWorkout();
+  const deleteWorkout = useDeleteWorkout();
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    dispatch(putStructuredWorkout(resolvedValue));
+    updateWorkout.mutate({ recorded: resolvedValue, exercises });
   };
 
   const handleWorkoutDelete = () => {
-    dispatch(deleteStructuredWorkout(resolvedValue));
-
+    deleteWorkout.mutate(resolvedValue);
     setRecorded("");
+    setExercises([]);
   };
 
+  // Sync exercises from query data
   useEffect(() => {
-    dispatch(fetchStructuredWorkout(resolvedValue));
-  }, [dispatch, resolvedValue]);
+    if (workoutData) {
+      setExercises(workoutData);
+    } else {
+      setExercises([]);
+    }
+  }, [workoutData]);
 
   return (
     <Form onSubmit={handleSubmit}>
-      <AddExerciseModal currentDate={resolvedValue} />
+      <AddExerciseModal
+        show={showModal}
+        onHide={() => {
+          setShowModal(false);
+          setEditExercise(undefined);
+        }}
+        exercises={exercises}
+        setExercises={setExercises}
+        currentDate={resolvedValue}
+        saveWorkout={(updatedExercises) =>
+          updateWorkout.mutate({
+            recorded: resolvedValue,
+            exercises: updatedExercises,
+          })
+        }
+        editExercise={editExercise}
+      />
       <ConfirmationModal
         show={showDeleteConfirmation}
         heading="Delete Workout"
@@ -79,7 +102,7 @@ const WorkoutForm = (props: Props) => {
           {resolvedValue !== "" && (
             <Button
               variant="primary"
-              onClick={() => dispatch(showAddExerciseModal())}
+              onClick={() => setShowModal(true)}
               aria-label="add-exercise"
             >
               <PlusCircle />
@@ -88,9 +111,33 @@ const WorkoutForm = (props: Props) => {
         </InputGroup>
       </Form.Group>
 
-      <WorkoutView exercises={exercises} recorded={resolvedValue} />
+      <WorkoutView
+        exercises={exercises}
+        setExercises={setExercises}
+        recorded={resolvedValue}
+        onEdit={(exercise, index) => {
+          setEditExercise({ exercise, index });
+          setShowModal(true);
+        }}
+        onDelete={(index) => {
+          const newExercises = [...exercises];
+          newExercises.splice(index, 1);
+
+          // If this is the last exercise, delete the whole workout
+          if (newExercises.length === 0) {
+            handleWorkoutDelete();
+          } else {
+            // Otherwise, update exercises and save
+            setExercises(newExercises);
+            updateWorkout.mutate({
+              recorded: resolvedValue,
+              exercises: newExercises,
+            });
+          }
+        }}
+      />
     </Form>
   );
 };
 
-export default connector(WorkoutForm);
+export default WorkoutForm;

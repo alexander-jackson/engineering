@@ -6,13 +6,7 @@ import { createMemoryHistory } from "history";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { reducer } from "~/store";
-
 import Router from "~/Router";
-import loginReducer from "~/store/loginSlice";
-import userReducer from "~/store/userSlice";
-import userPreferencesReducer from "~/store/userPreferencesSlice";
-import workoutReducer from "~/store/workoutSlice";
-import pendingExerciseReducer from "~/store/pendingExerciseSlice";
 
 const render = (
   component,
