@@ -1,8 +1,8 @@
-use axum::http::{
-    Method,
-    header::{AUTHORIZATION, CONTENT_TYPE},
-};
+use axum::extract::FromRef;
+use axum::http::Method;
+use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::routing::Router;
+use jsonwebtoken::DecodingKey;
 use sqlx::PgPool;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -17,6 +17,13 @@ pub mod workout;
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
+    pub decoding_key: DecodingKey,
+}
+
+impl FromRef<AppState> for DecodingKey {
+    fn from_ref(state: &AppState) -> Self {
+        state.decoding_key.clone()
+    }
 }
 
 pub async fn health() -> ServerResponse<&'static str> {

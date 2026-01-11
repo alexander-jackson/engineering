@@ -1,0 +1,24 @@
+server:
+  host: 127.0.0.1
+  port: 3025
+
+telemetry:
+  enabled: false
+  endpoint: "http://localhost:4318/v1/traces"
+
+database:
+  host: localhost
+  port: 5432
+
+  root:
+    username: alex
+    password: ""
+    database: postgres
+
+  application:
+    username: opentrackerblue
+    password: test
+    database: opentracker
+
+authorisation:
+  jwt_key: 75083f2de34316c84dde14a9261f0803

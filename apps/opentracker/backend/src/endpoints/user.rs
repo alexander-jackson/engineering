@@ -21,7 +21,7 @@ pub fn router() -> Router<AppState> {
 }
 
 pub async fn register(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     Json(registration): Json<forms::Registration>,
 ) -> ServerResponse<Json<Option<String>>> {
     // Check whether they are unique
@@ -45,7 +45,7 @@ pub async fn register(
 }
 
 pub async fn login(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     Json(login): Json<forms::Login>,
 ) -> ServerResponse<Json<Option<String>>> {
     // Get users with the same email
@@ -67,7 +67,7 @@ pub async fn login(
 }
 
 pub async fn update_password(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
     Json(payload): Json<forms::UpdatePassword>,
 ) -> ServerResponse<()> {
@@ -102,7 +102,7 @@ pub async fn update_password(
 
 pub async fn get_email_verification_status(
     claims: Claims,
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
 ) -> ServerResponse<Json<persistence::account::EmailVerificationStatus>> {
     let status = persistence::account::fetch_email_verification_status(claims.id, &pool).await?;
 
@@ -113,7 +113,7 @@ pub async fn get_email_verification_status(
 
 pub async fn send_verification_email(
     claims: Claims,
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
 ) -> ServerResponse<()> {
     // Fetch the currently pending email address if it exists
     let status = persistence::account::fetch_email_verification_status(claims.id, &pool).await?;
@@ -125,7 +125,7 @@ pub async fn send_verification_email(
 
 pub async fn verify_email(
     Path(email_address_uid): Path<Uuid>,
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
 ) -> ServerResponse<()> {
     tracing::info!(%email_address_uid, "Verifying email address for user");
 

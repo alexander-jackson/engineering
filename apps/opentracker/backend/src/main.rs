@@ -1,93 +1,36 @@
-use std::env;
-use std::net::{Ipv4Addr, SocketAddrV4};
+use std::net::SocketAddrV4;
 
 use axum::Router;
 use axum::routing::get;
-use sqlx::migrate::Migrator;
-use sqlx::postgres::PgConnectOptions;
-use sqlx::postgres::PgPool;
+use color_eyre::eyre::Result;
+use foundation_http_server::Server;
+use jsonwebtoken::DecodingKey;
 use tokio::net::TcpListener;
 
 use opentracker::endpoints::{self, AppState};
-use opentracker::trace_layer::TraceLayer;
 
-/// Runs the setup for the server.
-///
-/// Sources the environment variables from `.env` and creates the logging instance.
-fn setup() {
-    // Populate the environment variables
-    dotenvy::dotenv().ok();
+mod config;
 
-    foundation_logging::install_default_registry();
-}
-
-async fn setup_database_pool() -> sqlx::Result<PgPool> {
-    let host = env::var("DATABASE_HOST").expect("Failed to get a database host");
-    let port = env::var("DATABASE_PORT")
-        .map(|v| v.parse().expect("Invalid port"))
-        .unwrap_or(5432);
-
-    let database = env::var("DATABASE_NAME").expect("Failed to get a database name");
-
-    let user = env::var("DATABASE_USER").ok();
-    let password = env::var("DATABASE_PASSWORD").ok();
-
-    let mut connect_options = PgConnectOptions::new()
-        .host(&host)
-        .port(port)
-        .database(&database);
-
-    if let Some(user) = user {
-        connect_options = connect_options.username(&user);
-    }
-
-    if let Some(password) = password {
-        connect_options = connect_options.password(&password);
-    }
-
-    let pool = PgPool::connect_with(connect_options).await?;
-
-    Ok(pool)
-}
-
-async fn run_migrations(pool: &PgPool) -> sqlx::Result<()> {
-    static MIGRATOR: Migrator = sqlx::migrate!();
-    MIGRATOR.run(pool).await?;
-
-    Ok(())
-}
+use crate::config::Configuration;
 
 #[tokio::main]
-async fn main() {
-    setup();
+async fn main() -> Result<()> {
+    let (config, pool) = foundation_init::run_with_bootstrap::<Configuration>().await?;
 
-    let pool = setup_database_pool()
-        .await
-        .expect("Failed to setup database pool");
-
-    // Run the migrations
-    run_migrations(&pool)
-        .await
-        .expect("Failed to run migrations");
-
-    let state = AppState { pool };
+    let state = AppState {
+        pool,
+        decoding_key: DecodingKey::from_secret(config.authorisation.jwt_key.as_bytes()),
+    };
 
     let app = Router::new()
         .route("/health", get(endpoints::health))
-        .nest("/api", endpoints::router(state))
-        .layer(TraceLayer);
+        .nest("/api", endpoints::router(state));
 
-    let host = Ipv4Addr::UNSPECIFIED;
-    let port = 3025;
-    let addr = SocketAddrV4::new(host, port);
+    let addr = SocketAddrV4::new(config.server.host, config.server.port);
+    let listener = TcpListener::bind(&addr).await?;
 
-    tracing::info!(?addr, "Listening for connections");
+    let server = Server::new(app, listener);
+    server.run().await?;
 
-    let listener = TcpListener::bind(&addr)
-        .await
-        .expect("Failed to bind listener");
-
-    axum::serve(listener, app.into_make_service())
-        .await
-        .expect("Failed to serve application");
+    Ok(())
 }
