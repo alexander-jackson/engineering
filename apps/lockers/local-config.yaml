@@ -1,0 +1,21 @@
+server:
+  host: 0.0.0.0
+  port: 8000
+
+telemetry:
+  enabled: false
+  endpoint: "http://localhost:4318/v1/traces"
+
+database:
+  host: localhost
+  port: 5432
+
+  root:
+    username: alex
+    password: ""
+    database: postgres
+
+  application:
+    username: lockersblue
+    password: test
+    database: lockers

@@ -2767,6 +2767,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "lockers"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "color-eyre",
+ "foundation-http-server",
+ "foundation-init",
+ "foundation-uid",
+ "http-body-util",
+ "serde",
+ "sqlx",
+ "tera",
+ "tokio",
+ "tower 0.5.2",
+ "tower-http 0.5.2",
+ "tower-util",
+ "tracing",
+ "urlencoding",
+ "uuid",
+]
+
+[[package]]
 name = "log"
 version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"

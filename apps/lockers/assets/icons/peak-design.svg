@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Peak Design 30L - Distinctive rectangular profile with rear hatch -->
+
+  <!-- Main body - structured rectangular shape -->
+  <rect x="14" y="8" width="36" height="48" rx="3" fill="#4a4a4a" stroke="#fbbf24" stroke-width="1.5"/>
+
+  <!-- Rear hatch panel (distinctive feature) -->
+  <rect x="18" y="12" width="28" height="40" rx="2" fill="#3a3a3a" stroke="#fbbf24" stroke-width="1"/>
+
+  <!-- Side pockets -->
+  <ellipse cx="12" cy="30" rx="3" ry="8" fill="#5a5a5a" stroke="#fbbf24" stroke-width="1"/>
+  <ellipse cx="52" cy="30" rx="3" ry="8" fill="#5a5a5a" stroke="#fbbf24" stroke-width="1"/>
+
+  <!-- Top pocket subdivision -->
+  <rect x="20" y="12" width="24" height="8" rx="1.5" fill="#2a2a2a" stroke="#fbbf24" stroke-width="0.8"/>
+
+  <!-- Grab handles (360-degree) -->
+  <path d="M 28 8 Q 32 4 36 8" stroke="#fbbf24" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M 50 26 Q 54 30 50 34" stroke="#fbbf24" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+
+  <!-- Shoulder straps - minimal tucked away design -->
+  <path d="M 22 10 Q 20 14 20 20 L 20 52" stroke="#fbbf24" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M 42 10 Q 44 14 44 20 L 44 52" stroke="#fbbf24" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Zipper details for rear hatch -->
+  <line x1="18" y1="28" x2="46" y2="28" stroke="#fbbf24" stroke-width="0.5" stroke-dasharray="2,2"/>
+
+  <!-- Bottom reinforcement (900D liner) -->
+  <rect x="14" y="52" width="36" height="4" fill="#2a2a2a" stroke="#fbbf24" stroke-width="1"/>
+
+  <!-- Laptop compartment indicator -->
+  <rect x="24" y="18" width="16" height="20" rx="1" fill="none" stroke="#fbbf24" stroke-width="0.8" stroke-dasharray="3,2"/>
+</svg>

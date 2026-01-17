@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO locker_event (locker_event_uid, locker_number, bag_type_id, locker_event_type_id, occurred_at)\n            VALUES (\n                $1,\n                $2,\n                (SELECT id FROM bag_type WHERE name = $3),\n                (SELECT id FROM locker_event_type WHERE name = 'CheckIn'),\n                $4\n            )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2",
+        "Text",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "246e4a54d12c9ec868f10d7709d5e5335bce61d6fed1fe715717bfbb048db5f2"
+}

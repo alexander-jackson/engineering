@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH latest_events AS (\n                SELECT DISTINCT ON (locker_number)\n                    le.locker_event_uid,\n                    le.locker_number,\n                    le.bag_type_id,\n                    le.locker_event_type_id,\n                    le.occurred_at\n                FROM locker_event le\n                ORDER BY le.locker_number, le.occurred_at DESC\n            )\n            SELECT\n                latest.locker_event_uid as locker_uid,\n                latest.locker_number,\n                bt.name as \"bag_type!: String\",\n                latest.occurred_at as checked_in_at\n            FROM latest_events latest\n            JOIN bag_type bt ON bt.id = latest.bag_type_id\n            JOIN locker_event_type let ON let.id = latest.locker_event_type_id\n            WHERE let.name = 'CheckIn'\n            ORDER BY latest.locker_number ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "locker_uid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "locker_number",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 2,
+        "name": "bag_type!: String",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "checked_in_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2144cb9cad7ba48dfa51c444c76724994f266f716984a92cf5fedd87f86018a8"
+}
