@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT ON (locker_number) bag_type_id\n            FROM locker_event\n            WHERE locker_number = $1\n            ORDER BY locker_number, occurred_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "bag_type_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int2"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3d856845410cf14799cc43c93de4ffaaf7224b65cccf35e3b9d2ab936d96cc9d"
+}

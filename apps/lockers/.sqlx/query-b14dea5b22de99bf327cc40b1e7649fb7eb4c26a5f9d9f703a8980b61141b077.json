@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT let.name\n            FROM (\n                SELECT DISTINCT ON (locker_number) locker_event_type_id\n                FROM locker_event\n                WHERE locker_number = $1\n                ORDER BY locker_number, occurred_at DESC\n            ) latest\n            JOIN locker_event_type let ON let.id = latest.locker_event_type_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int2"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b14dea5b22de99bf327cc40b1e7649fb7eb4c26a5f9d9f703a8980b61141b077"
+}

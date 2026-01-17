@@ -12,6 +12,7 @@ members = [
 	"foundation/shutdown",
 	"foundation/telemetry",
 	"foundation/uid",
+	"lockers",
 	"opentracker/backend",
 	"pgmanager",
 	"tag-updater",

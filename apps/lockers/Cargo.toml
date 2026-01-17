@@ -1,0 +1,29 @@
+[package]
+name = "lockers"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "lockers"
+path = "src/main.rs"
+
+[dependencies]
+axum.workspace = true
+chrono = { version = "0.4.38", default-features = false, features = ["now", "serde"] }
+color-eyre = "0.6.3"
+foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
+foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
+foundation-uid = { version = "0.1.0", path = "../foundation/uid" }
+serde = { workspace = true, features = ["derive"] }
+sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
+tera = "1.20.0"
+tokio = { version = "1.39.3", features = ["rt-multi-thread", "macros"] }
+tower-http = { version = "0.5.2", features = ["fs", "trace"] }
+tracing.workspace = true
+urlencoding = "2.1.3"
+uuid = { version = "1.10.0", features = ["serde", "v4"] }
+
+[dev-dependencies]
+http-body-util = "0.1.2"
+tower = { version = "0.5.0", features = ["util"] }
+tower-util = "0.3.1"
