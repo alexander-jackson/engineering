@@ -1,0 +1,21 @@
+server:
+  host: 0.0.0.0
+  port: 8000
+
+database:
+  host: database.mesh.internal
+  port: 5432
+
+  root:
+    username: postgres
+    password: {{ F9whVjpxZc3lkbTbAnNKTiFrUwlC+vI4JkBnCpg0XAEvjFwuh4HsE9QO/Y+eHD9tWBuh4a6eCLSwc+iWq58cFyYbNAHV8LLCjuRhXuQTGYijcKLu/9QzHYpfpY9pZ5wEaizGT14tWyoDzsO++afdKUmLkNidGN3EvxZM/nUOSFGz1WGtn3kEGShCl+8/bPaLMpRN1w1a9SaLESSdtb7RD2sW1ggmaJUfiWwZetRRENprMLO3ch1F/N3p19FKh0O4j1a5glHRt95MJdhPhnArl+EHnYvVzSNeJFKVVBcMUYy88Nv/ZrmGAfHYgprw1YZEC3wyv5/ahBNeyXZAnRJpHA== }}
+    database: postgres
+
+  application:
+    username: lockersblue
+    password: {{ p14wo3EmXg7PHh2rXCX2OrXaJ9uwtNuzS7yRqxPSDeQbxCKEIRI2pqjCZL7m2IFbr7lpFWiAYEqLdD53E2Eo2RKOLWdaHsvPV3hvuhMrFOx1U1dtpBhhcYQSyhrvZmMgcalcBArnavDo8kFuuDTZvigRcves7jM62vgzsZXg1AO97oDwscQ2pIOBdn/2z7gLxeMhmLnu/tmGQ4ORfkb9nIEasgJHVhAMmjql3YlhqxUR0Tg6aimyLEw2f1cxQIiQXZinE2cgEDvmNQZxwPKpMbtSn4uZDkkLtW0IMoPBHj7kSqjLN6mXvUOtmHbodaQBJUOva7RT6BFLIYdgncAK6Q== }}
+    database: lockers
+
+telemetry:
+  enabled: false
+  endpoint: http://telemetry.mesh.internal:80/v1/traces

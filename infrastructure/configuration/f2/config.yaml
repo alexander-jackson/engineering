@@ -41,6 +41,15 @@ alb:
           location: s3
           bucket: configuration-68f6c7
           key: f2/certificates/uptime.opentracker.app/privkey.pem
+      lockers.opentracker.app:
+        cert_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/lockers.opentracker.app/fullchain.pem
+        key_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/lockers.opentracker.app/privkey.pem
       forkup.app:
         cert_file:
           location: s3
@@ -58,6 +67,7 @@ alb:
     domains:
       - today.opentracker.app
       - uptime.opentracker.app
+      - lockers.opentracker.app
 
 secrets:
   private_key:
@@ -146,6 +156,21 @@ services:
           bucket: configuration-68f6c7
           key: today/config.yaml
         target: /app/config/today.yaml
+
+  lockers:
+    image: alexanderjackson/lockers
+    tag: 20260117-0852
+    routes:
+      - host: lockers.opentracker.app
+        port: 8000
+    replicas: 1
+    volumes:
+      config:
+        source:
+          location: s3
+          bucket: configuration-68f6c7
+          key: lockers/config.yaml
+        target: /app/config/lockers.yaml
 
   pgmanager:
     image: alexanderjackson/pgmanager
