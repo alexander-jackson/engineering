@@ -18,9 +18,9 @@ FROM debian:trixie-slim
 WORKDIR /usr/src/app
 
 # Copy the built binary from the previous stage, as well as the runtime files
-COPY --from=builder /usr/src/app/apps/lockers/templates ./templates
-COPY --from=builder /usr/src/app/apps/lockers/assets ./assets
-COPY --from=builder /usr/src/app/apps/lockers/migrations ./migrations
+COPY --from=builder /usr/src/app/lockers/templates ./templates
+COPY --from=builder /usr/src/app/lockers/assets ./assets
+COPY --from=builder /usr/src/app/lockers/migrations ./migrations
 COPY --from=builder /usr/src/app/target/release/lockers ./
 
 # Command to run the application
