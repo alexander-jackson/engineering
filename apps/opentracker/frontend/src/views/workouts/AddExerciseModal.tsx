@@ -185,10 +185,12 @@ const AddExerciseModal = (props: Props) => {
   const resolved = resolve(pending, placeholder);
 
   // Fetch unique exercises and last session
-  const { data: uniqueExercises = [] } = useUniqueExercises(variant);
+  const { data: uniqueExercises = [] } = useUniqueExercises(resolved.variant);
   const { data: lastSession, isLoading: lastSessionLoading } = useLastSession(
-    variant !== ExerciseVariant.Unknown ? variant : undefined,
-    description && description.trim() !== "" ? description : undefined,
+    resolved.variant !== ExerciseVariant.Unknown ? resolved.variant : undefined,
+    resolved.description && resolved.description.trim() !== ""
+      ? resolved.description
+      : undefined,
     editIndex === undefined ? currentDate : undefined,
   );
 
@@ -269,7 +271,7 @@ const AddExerciseModal = (props: Props) => {
 
           <Search
             haystack={uniqueExercises}
-            needle={description}
+            needle={resolved.description}
             onClick={setDescription}
           />
 
@@ -277,9 +279,9 @@ const AddExerciseModal = (props: Props) => {
             lastSession={lastSession}
             loading={
               lastSessionLoading &&
-              variant !== ExerciseVariant.Unknown &&
-              !!description &&
-              description.trim() !== ""
+              resolved.variant !== ExerciseVariant.Unknown &&
+              !!resolved.description &&
+              resolved.description.trim() !== ""
             }
           />
 

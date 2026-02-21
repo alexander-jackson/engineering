@@ -1,4 +1,12 @@
-import { formatDate } from "./AddExerciseModal";
+import "@testing-library/jest-dom";
+import { render, screen, fireEvent } from "@testing-library/react";
+import AddExerciseModal, { formatDate } from "./AddExerciseModal";
+import { ExerciseVariant, Exercise } from "~/shared/types";
+import { useUniqueExercises } from "~/hooks/useAnalysis";
+import { useLastSession } from "~/hooks/useLastSession";
+
+jest.mock("~/hooks/useAnalysis");
+jest.mock("~/hooks/useLastSession");
 
 describe("formatDate", () => {
   it("formats date with 1st ordinal", () => {
@@ -39,5 +47,95 @@ describe("formatDate", () => {
 
   it("handles leap year dates", () => {
     expect(formatDate("2024-02-29")).toBe("Thu 29th February");
+  });
+});
+
+describe("AddExerciseModal", () => {
+  const mockUseUniqueExercises = useUniqueExercises as jest.Mock;
+  const mockUseLastSession = useLastSession as jest.Mock;
+
+  const latPulldown: Exercise = {
+    variant: ExerciseVariant.Other,
+    description: "Lat Pulldown",
+    weight: 80,
+    reps: 10,
+    sets: 3,
+  };
+
+  const renderModal = (exercises: Exercise[] = [latPulldown]) =>
+    render(
+      <AddExerciseModal
+        show={true}
+        onHide={jest.fn()}
+        exercises={exercises}
+        setExercises={jest.fn()}
+        currentDate="2024-01-15"
+        saveWorkout={jest.fn()}
+      />,
+    );
+
+  beforeEach(() => {
+    mockUseUniqueExercises.mockReturnValue({
+      data: ["Lat Pulldown", "Cable Row"],
+    });
+    mockUseLastSession.mockReturnValue({
+      data: {
+        recorded: "2024-01-10",
+        exercise: latPulldown,
+      },
+      isLoading: false,
+    });
+  });
+
+  it("uses the resolved variant and description to query the previous session", () => {
+    renderModal();
+
+    expect(mockUseLastSession).toHaveBeenCalledWith(
+      ExerciseVariant.Other,
+      "Lat Pulldown",
+      "2024-01-15",
+    );
+  });
+
+  it("uses the resolved variant to fetch unique exercises for suggestions", () => {
+    renderModal();
+
+    expect(mockUseUniqueExercises).toHaveBeenCalledWith(ExerciseVariant.Other);
+  });
+
+  it("displays the previous session information from the last workout", () => {
+    renderModal();
+
+    expect(
+      screen.getByText("Previous Session (Wed 10th January)"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("80 kg")).toBeInTheDocument();
+    expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("shows matching suggestions as the user types in the description field", () => {
+    renderModal();
+
+    fireEvent.change(screen.getByLabelText("Exercise"), {
+      target: { value: "Cable" },
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Cable Row" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not query previous session or suggestions without a placeholder", () => {
+    renderModal([]);
+
+    expect(mockUseLastSession).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      "2024-01-15",
+    );
+    expect(mockUseUniqueExercises).toHaveBeenCalledWith(
+      ExerciseVariant.Unknown,
+    );
   });
 });
