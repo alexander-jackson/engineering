@@ -75,7 +75,9 @@ describe("AddExerciseModal", () => {
     );
 
   beforeEach(() => {
-    mockUseUniqueExercises.mockReturnValue({ data: ["Lat Pulldown", "Cable Row"] });
+    mockUseUniqueExercises.mockReturnValue({
+      data: ["Lat Pulldown", "Cable Row"],
+    });
     mockUseLastSession.mockReturnValue({
       data: {
         recorded: "2024-01-10",
@@ -119,7 +121,9 @@ describe("AddExerciseModal", () => {
       target: { value: "Cable" },
     });
 
-    expect(screen.getByRole("button", { name: "Cable Row" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Cable Row" }),
+    ).toBeInTheDocument();
   });
 
   it("does not query previous session or suggestions without a placeholder", () => {
@@ -130,6 +134,8 @@ describe("AddExerciseModal", () => {
       undefined,
       "2024-01-15",
     );
-    expect(mockUseUniqueExercises).toHaveBeenCalledWith(ExerciseVariant.Unknown);
+    expect(mockUseUniqueExercises).toHaveBeenCalledWith(
+      ExerciseVariant.Unknown,
+    );
   });
 });
