@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT DISTINCT ON (o.uri)\n                o.origin_uid,\n                o.uri,\n                q.status,\n                q.latency_millis,\n                q.queried_at\n            FROM origin o\n            JOIN query q ON o.id = q.origin_id\n            ORDER BY o.uri, q.queried_at DESC\n        ",
+  "query": "\n            SELECT o.origin_uid, o.uri, q.status, q.latency_millis, q.queried_at\n            FROM origin o\n            JOIN LATERAL (\n                SELECT status, latency_millis, queried_at\n                FROM query\n                WHERE origin_id = o.id\n                ORDER BY queried_at DESC\n                LIMIT 1\n            ) q ON true\n        ",
   "describe": {
     "columns": [
       {
@@ -40,5 +40,5 @@
       false
     ]
   },
-  "hash": "a8ef08a6b7d9d3aa538f1567b0428d2ca7c4a72d388c1d0ae3745d2293a96dd5"
+  "hash": "9b04facc77fb22b7b3245a03b47194c50975b596b7b755279a5f228c853712af"
 }
