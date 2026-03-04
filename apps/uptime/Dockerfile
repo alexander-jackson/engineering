@@ -14,6 +14,8 @@ RUN cargo build --bin uptime --release
 # Start a new stage to create a smaller image without unnecessary build dependencies
 FROM debian:trixie-slim
 
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 # Set the working directory
 WORKDIR /usr/src/app
 
