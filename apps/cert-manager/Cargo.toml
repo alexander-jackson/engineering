@@ -1,0 +1,18 @@
+[package]
+name = "cert-manager"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+aws-config = "1.8.14"
+aws-sdk-route53 = "1.108.0"
+aws-sdk-s3 = "1.125.0"
+axum.workspace = true
+color-eyre = "0.6.3"
+foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
+foundation-init = { version = "0.1.0", path = "../foundation/init" }
+foundation-uid = { version = "0.1.0", path = "../foundation/uid" }
+instant-acme = "0.8.5"
+serde = { workspace = true, features = ["derive"] }
+tokio = { version = "1.39.3", features = ["rt-multi-thread", "macros"] }
+tracing.workspace = true

@@ -1,0 +1,7 @@
+server:
+  host: 127.0.0.1
+  port: 4444
+
+storage:
+  bucket: configuration-68f6c7
+  prefix: f2/certificates/test
