@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT DISTINCT ON (o.uri)\n                o.origin_uid,\n                o.uri,\n                qfr.name AS failure_reason,\n                qf.queried_at\n            FROM origin o\n            JOIN query_failure qf ON o.id = qf.origin_id\n            JOIN query_failure_reason qfr ON qfr.id = qf.failure_reason_id\n            ORDER BY o.uri, qf.queried_at DESC\n        ",
+  "query": "\n            SELECT o.origin_uid, o.uri, q.failure_reason, q.queried_at\n            FROM origin o\n            JOIN LATERAL (\n                SELECT qfr.name AS failure_reason, qf.queried_at\n                FROM query_failure qf\n                JOIN query_failure_reason qfr ON qfr.id = qf.failure_reason_id\n                WHERE qf.origin_id = o.id\n                ORDER BY qf.queried_at DESC\n                LIMIT 1\n            ) q ON true\n        ",
   "describe": {
     "columns": [
       {
@@ -34,5 +34,5 @@
       false
     ]
   },
-  "hash": "3cb21bcc0cd50f6ea5ab0e2b626d6ec9d97d3f60edad0198b856233971f35dd2"
+  "hash": "7e1dcfc898cf441c2d9273919a9b49eefcdf31729cb81be0a26a6faa0626b1d6"
 }

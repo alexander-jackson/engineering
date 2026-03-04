@@ -60,15 +60,15 @@ pub async fn fetch_origins_with_most_recent_success_metrics(
     let origins = sqlx::query_as!(
         IndexOrigin,
         r#"
-            SELECT DISTINCT ON (o.uri)
-                o.origin_uid,
-                o.uri,
-                q.status,
-                q.latency_millis,
-                q.queried_at
+            SELECT o.origin_uid, o.uri, q.status, q.latency_millis, q.queried_at
             FROM origin o
-            JOIN query q ON o.id = q.origin_id
-            ORDER BY o.uri, q.queried_at DESC
+            JOIN LATERAL (
+                SELECT status, latency_millis, queried_at
+                FROM query
+                WHERE origin_id = o.id
+                ORDER BY queried_at DESC
+                LIMIT 1
+            ) q ON true
         "#
     )
     .fetch_all(pool)
@@ -90,15 +90,16 @@ pub async fn fetch_origins_with_most_recent_failure_metrics(
     let origins = sqlx::query_as!(
         OriginFailure,
         r#"
-            SELECT DISTINCT ON (o.uri)
-                o.origin_uid,
-                o.uri,
-                qfr.name AS failure_reason,
-                qf.queried_at
+            SELECT o.origin_uid, o.uri, q.failure_reason, q.queried_at
             FROM origin o
-            JOIN query_failure qf ON o.id = qf.origin_id
-            JOIN query_failure_reason qfr ON qfr.id = qf.failure_reason_id
-            ORDER BY o.uri, qf.queried_at DESC
+            JOIN LATERAL (
+                SELECT qfr.name AS failure_reason, qf.queried_at
+                FROM query_failure qf
+                JOIN query_failure_reason qfr ON qfr.id = qf.failure_reason_id
+                WHERE qf.origin_id = o.id
+                ORDER BY qf.queried_at DESC
+                LIMIT 1
+            ) q ON true
         "#
     )
     .fetch_all(pool)
