@@ -17,7 +17,10 @@ impl AcmeClient {
             only_return_existing: false,
         };
 
-        tracing::info!(?new_account, "creating ACME account for certificate renewal");
+        tracing::info!(
+            ?new_account,
+            "creating ACME account for certificate renewal"
+        );
 
         let (account, _) = Account::builder()
             .unwrap()
@@ -103,7 +106,9 @@ impl AcmeOrder {
             }
             OrderStatus::Valid => {
                 tracing::info!("Order is already valid.");
-                Err(eyre!("order is already valid; no new certificate was issued"))
+                Err(eyre!(
+                    "order is already valid; no new certificate was issued"
+                ))
             }
             _ => Err(eyre!("unexpected order status after polling: {:?}", status)),
         }

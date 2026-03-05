@@ -81,7 +81,10 @@ async fn renew_certificate(
 
     let (private_key, cert_chain) = order.finalize().await.unwrap();
 
-    cert_store.put(&domain, &private_key, &cert_chain).await.unwrap();
+    cert_store
+        .put(&domain, &private_key, &cert_chain)
+        .await
+        .unwrap();
 
     format!("Certificate for domain '{domain}' has been renewed.")
 }
