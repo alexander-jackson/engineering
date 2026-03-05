@@ -73,17 +73,17 @@ impl AcmeOrder {
     /// finalizes, and polls for the certificate.
     /// Returns `(private_key_pem, cert_chain_pem)`.
     pub async fn finalize(mut self) -> Result<(String, String)> {
-        let mut authorisations = self.inner.authorizations();
+        {
+            let mut authorisations = self.inner.authorizations();
 
-        while let Some(Ok(mut auth)) = authorisations.next().await {
-            let mut challenge = auth
-                .challenge(ChallengeType::Dns01)
-                .ok_or_else(|| eyre!("no DNS-01 challenge found for authorization"))?;
+            while let Some(Ok(mut auth)) = authorisations.next().await {
+                let mut challenge = auth
+                    .challenge(ChallengeType::Dns01)
+                    .ok_or_else(|| eyre!("no DNS-01 challenge found for authorization"))?;
 
-            challenge.set_ready().await?;
+                challenge.set_ready().await?;
+            }
         }
-
-        drop(authorisations);
 
         let retry_policy = RetryPolicy::default();
         tracing::info!(?retry_policy, "Polling order status with retry policy");
