@@ -1,0 +1,11 @@
+run package:
+	cargo run --package {{package}} -- --config {{package}}/local-config.yaml
+
+check package:
+	cargo check --package {{package}}
+
+format package:
+	cargo +nightly fmt --package {{package}}
+
+lint package:
+	cargo clippy --package {{package}} -- -D warnings

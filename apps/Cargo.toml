@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+	"cert-manager",
 	"dns-server",
 	"foundation/args",
 	"foundation/configuration",
