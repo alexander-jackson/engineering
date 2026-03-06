@@ -1,5 +1,5 @@
 # Use a Rust base image with Cargo installed
-FROM rust:1.89.0 AS builder
+FROM rust:1.93.1 AS builder
 
 # Set the working directory inside the container
 WORKDIR /usr/src/app
