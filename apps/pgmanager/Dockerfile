@@ -13,9 +13,9 @@ COPY . .
 RUN cargo build --release --package pgmanager
 
 # We do not need the Rust toolchain to run the binary!
-FROM debian:bookworm AS runtime
+FROM debian:trixie-slim AS runtime
 
-RUN apt-get update && apt-get install -y postgresql-client-15 ca-certificates
+RUN apt-get update && apt-get install -y postgresql-client-17 ca-certificates
 
 WORKDIR /app
 COPY --from=builder /app/target/release/pgmanager ./pgmanager

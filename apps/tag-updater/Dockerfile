@@ -13,7 +13,7 @@ COPY . .
 RUN cargo build --release --package tag-updater
 
 # We do not need the Rust toolchain to run the binary!
-FROM debian:bookworm AS runtime
+FROM debian:trixie-slim AS runtime
 
 RUN apt-get update && apt-get install -y pkg-config libssl-dev ssh ca-certificates && ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
