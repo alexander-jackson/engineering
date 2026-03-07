@@ -15,9 +15,13 @@ RUN cargo build --release --package tag-updater
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y ca-certificates ssh \
-    && ssh-keyscan -t rsa github.com >> /etc/ssh/ssh_known_hosts \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd -m -u 1000 appuser
+RUN mkdir -p /home/appuser/.ssh \
+    && ssh-keyscan -t rsa github.com >> /home/appuser/.ssh/known_hosts \
+    && chown -R appuser:appuser /home/appuser/.ssh \
+    && chmod 700 /home/appuser/.ssh \
+    && chmod 600 /home/appuser/.ssh/known_hosts
 WORKDIR /app
 COPY --from=builder /app/target/release/tag-updater ./tag-updater
 USER appuser
