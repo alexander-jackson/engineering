@@ -1,25 +1,24 @@
-# Use a Rust base image with Cargo installed
-FROM rust:1.94.0 AS builder
+FROM lukemathwalker/cargo-chef:0.1.77-rust-1.94.0-slim-bookworm AS chef
+WORKDIR /app
 
-# Set the working directory inside the container
-WORKDIR /usr/src/app
-
-# Copy the Cargo.toml and Cargo.lock files
+FROM chef AS planner
 COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Build your application
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --package opentracker --recipe-path recipe.json
+COPY . .
 ENV SQLX_OFFLINE=true
-RUN cargo build --bin opentracker --release
+RUN cargo build --release --package opentracker
 
-# Start a new stage to create a smaller image without unnecessary build dependencies
-FROM debian:trixie-slim
-
-# Set the working directory
-WORKDIR /usr/src/app
-
-# Copy the built binary from the previous stage, as well as the runtime files
-COPY --from=builder /usr/src/app/opentracker/backend/migrations ./migrations
-COPY --from=builder /usr/src/app/target/release/opentracker ./
-
-# Command to run the application
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+    && apt-get install -y ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN useradd -m -u 1000 appuser
+WORKDIR /app
+COPY --from=builder /app/target/release/opentracker ./opentracker
+COPY --from=builder /app/opentracker/backend/migrations ./migrations
+USER appuser
 CMD ["./opentracker"]
