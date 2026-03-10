@@ -3,6 +3,7 @@ use axum::body::Body;
 use axum::http::header::{AsHeaderName, CONTENT_TYPE, LOCATION};
 use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
+use foundation_templating::TemplateEngine;
 use http_body_util::BodyExt;
 use serde_test::{Token, assert_ser_tokens};
 use sqlx::PgPool;
@@ -10,7 +11,6 @@ use tower::ServiceExt;
 
 use crate::persistence::Content;
 use crate::server::IndexCache;
-use crate::templates::TemplateEngine;
 
 const FORM_MIME_TYPE: &str = "application/x-www-form-urlencoded";
 

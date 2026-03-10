@@ -12,6 +12,7 @@ members = [
 	"foundation/recurring-job",
 	"foundation/shutdown",
 	"foundation/telemetry",
+	"foundation/templating",
 	"foundation/uid",
 	"lockers",
 	"opentracker/backend",

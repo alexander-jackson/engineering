@@ -1,0 +1,14 @@
+[package]
+name = "foundation-templating"
+version = "0.1.0"
+edition = "2024"
+
+[dev-dependencies]
+http-body-util = "0.1.2"
+tokio = { version = "1", features = ["macros", "rt"] }
+
+[dependencies]
+axum = { version = "0.8.4", default-features = false }
+color-eyre = "0.6.3"
+serde.workspace = true
+tera = "1.20.0"

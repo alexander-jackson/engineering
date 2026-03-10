@@ -1810,6 +1810,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "foundation-templating"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "color-eyre",
+ "http-body-util",
+ "serde",
+ "tera",
+ "tokio",
+]
+
+[[package]]
 name = "foundation-uid"
 version = "0.1.0"
 dependencies = [
@@ -2974,11 +2986,11 @@ dependencies = [
  "color-eyre",
  "foundation-http-server",
  "foundation-init",
+ "foundation-templating",
  "foundation-uid",
  "http-body-util",
  "serde",
  "sqlx",
- "tera",
  "tokio",
  "tower 0.5.3",
  "tower-http 0.5.2",
@@ -5211,6 +5223,7 @@ dependencies = [
  "dotenvy",
  "foundation-http-server",
  "foundation-init",
+ "foundation-templating",
  "foundation-uid",
  "http-body-util",
  "moka",
@@ -5219,7 +5232,6 @@ dependencies = [
  "serde",
  "serde_test",
  "sqlx",
- "tera",
  "tokio",
  "tower 0.5.3",
  "tower-http 0.5.2",
@@ -5694,12 +5706,12 @@ dependencies = [
  "foundation-init",
  "foundation-recurring-job",
  "foundation-shutdown",
+ "foundation-templating",
  "humantime",
  "mockito",
  "reqwest",
  "serde",
  "sqlx",
- "tera",
  "tokio",
  "tokio-rustls 0.26.4",
  "tower-http 0.6.8",

@@ -16,7 +16,7 @@ foundation-init = { version = "0.1.0", path = "../foundation/init", features = [
 foundation-uid = { version = "0.1.0", path = "../foundation/uid" }
 serde = { workspace = true, features = ["derive"] }
 sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
-tera = "1.20.0"
+foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
 tokio = { version = "1.39.3", features = ["rt-multi-thread", "macros"] }
 tower-http = { version = "0.5.2", features = ["fs", "trace"] }
 tracing.workspace = true
