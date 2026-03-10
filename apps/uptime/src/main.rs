@@ -12,7 +12,6 @@ mod config;
 mod persistence;
 mod poller;
 mod server;
-mod templates;
 
 use crate::certificate_checker::CertificateChecker;
 use crate::config::Configuration;

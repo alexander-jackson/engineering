@@ -69,28 +69,36 @@ mod tests {
 
     #[tokio::test]
     async fn rendered_template_returns_200() {
-        let template = RenderedTemplate { inner: String::new() };
+        let template = RenderedTemplate {
+            inner: String::new(),
+        };
         let response = template.into_response();
         assert_eq!(response.status(), 200);
     }
 
     #[tokio::test]
     async fn rendered_template_sets_content_type_html() {
-        let template = RenderedTemplate { inner: String::new() };
+        let template = RenderedTemplate {
+            inner: String::new(),
+        };
         let response = template.into_response();
         assert_eq!(response.headers()["content-type"], "text/html");
     }
 
     #[tokio::test]
     async fn rendered_template_sets_cache_control_no_store() {
-        let template = RenderedTemplate { inner: String::new() };
+        let template = RenderedTemplate {
+            inner: String::new(),
+        };
         let response = template.into_response();
         assert_eq!(response.headers()["cache-control"], "no-store");
     }
 
     #[tokio::test]
     async fn rendered_template_body_contains_rendered_content() {
-        let template = RenderedTemplate { inner: "<h1>Hello</h1>".to_owned() };
+        let template = RenderedTemplate {
+            inner: "<h1>Hello</h1>".to_owned(),
+        };
         assert_eq!(body_string(template).await, "<h1>Hello</h1>");
     }
 }
