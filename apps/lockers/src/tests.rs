@@ -5,9 +5,8 @@ use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
 use http_body_util::BodyExt;
 use sqlx::PgPool;
+use foundation_templating::TemplateEngine;
 use tower::ServiceExt;
-
-use crate::templates::TemplateEngine;
 
 const FORM_MIME_TYPE: &str = "application/x-www-form-urlencoded";
 

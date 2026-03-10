@@ -8,6 +8,7 @@ use axum::routing::{get, post};
 use chrono::Utc;
 use color_eyre::eyre::Result;
 use foundation_http_server::Server;
+use foundation_templating::{RenderedTemplate, TemplateEngine};
 use serde::Deserialize;
 use sqlx::PgPool;
 use tokio::net::TcpListener;
@@ -16,7 +17,7 @@ use uuid::Uuid;
 
 use crate::error::ServerResult;
 use crate::persistence::BagType;
-use crate::templates::{IndexContext, RenderedTemplate, TemplateEngine};
+use crate::templates::IndexContext;
 
 #[derive(Clone)]
 struct ApplicationState {

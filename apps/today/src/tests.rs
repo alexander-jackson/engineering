@@ -6,11 +6,11 @@ use axum::response::Response;
 use http_body_util::BodyExt;
 use serde_test::{Token, assert_ser_tokens};
 use sqlx::PgPool;
+use foundation_templating::TemplateEngine;
 use tower::ServiceExt;
 
 use crate::persistence::Content;
 use crate::server::IndexCache;
-use crate::templates::TemplateEngine;
 
 const FORM_MIME_TYPE: &str = "application/x-www-form-urlencoded";
 

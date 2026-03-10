@@ -18,7 +18,7 @@ humantime = "2.1.0"
 reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls", "rustls-tls-webpki-roots"] }
 serde = { version = "1.0.216", features = ["derive"] }
 sqlx = { version = "0.8.2", default-features = false, features = ["chrono", "macros", "migrate", "postgres", "runtime-tokio-rustls", "uuid"] }
-tera = "1.20.0"
+foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
 tokio = { version = "1.41.0", features = ["macros", "rt", "net"] }
 tokio-rustls = { version = "0.26", features = ["ring"] }
 tower-http = { version = "0.6.2", features = ["fs"] }

@@ -8,6 +8,7 @@ use axum::{Form, Router};
 use chrono::Utc;
 use color_eyre::eyre::Result;
 use foundation_http_server::Server;
+use foundation_templating::{RenderedTemplate, TemplateEngine};
 use humantime::format_duration;
 use serde::{Deserialize, Serialize, Serializer};
 use sqlx::PgPool;
@@ -15,8 +16,6 @@ use sqlx::types::chrono::DateTime;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 use uuid::Uuid;
-
-use crate::templates::{RenderedTemplate, TemplateEngine};
 
 /// A wrapper type for timestamps that serializes as a human-readable duration relative to now
 #[derive(Clone)]

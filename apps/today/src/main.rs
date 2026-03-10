@@ -1,6 +1,7 @@
 use std::net::SocketAddrV4;
 
 use color_eyre::eyre::Result;
+use foundation_templating::TemplateEngine;
 use tokio::net::TcpListener;
 
 use crate::server::IndexCache;
@@ -13,7 +14,6 @@ mod templates;
 mod uid;
 
 use crate::config::Configuration;
-use crate::templates::TemplateEngine;
 
 #[tokio::main]
 async fn main() -> Result<()> {

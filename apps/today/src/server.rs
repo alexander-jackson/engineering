@@ -10,6 +10,7 @@ use axum::routing::{get, patch, post};
 use chrono::Utc;
 use color_eyre::eyre::Result;
 use foundation_http_server::Server;
+use foundation_templating::{RenderedTemplate, TemplateEngine};
 use moka::future::Cache;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -18,7 +19,7 @@ use tower_http::services::ServeDir;
 
 use crate::error::ServerResult;
 use crate::persistence::ItemState;
-use crate::templates::{IndexContext, RenderedTemplate, TemplateEngine};
+use crate::templates::IndexContext;
 use crate::uid::ItemUid;
 
 pub type IndexCache = Cache<(), Arc<IndexContext>>;
