@@ -101,7 +101,7 @@ services:
 
   forkup-frontend:
     image: alexanderjackson/forkup-frontend
-    tag: 20251229-1216
+    tag: 20260312-0805
     routes:
       - host: forkup.app
         port: 80
