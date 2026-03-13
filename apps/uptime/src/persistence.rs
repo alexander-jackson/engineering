@@ -459,33 +459,6 @@ pub async fn fetch_most_recent_certificate_check(
     Ok(result)
 }
 
-pub async fn certificate_expires_within(
-    pool: &PgPool,
-    origin_uid: Uuid,
-    threshold: Duration,
-) -> Result<Option<CertificateCheck>> {
-    let boundary = Utc::now() + threshold;
-
-    let cert_check = sqlx::query_as!(
-        CertificateCheck,
-        r#"
-            SELECT cc.expires_at, cc.checked_at
-            FROM certificate_check cc
-            JOIN origin o ON o.id = cc.origin_id
-            WHERE o.origin_uid = $1
-            AND cc.expires_at <= $2
-            ORDER BY cc.checked_at DESC
-            LIMIT 1
-        "#,
-        origin_uid,
-        boundary,
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    Ok(cert_check)
-}
-
 #[derive(Serialize)]
 pub struct RecentNotification {
     pub notification_uid: Uuid,

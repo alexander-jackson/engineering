@@ -6,7 +6,7 @@ use tracing::{error, info};
 
 mod tls;
 
-use tls::check_certificate_expiry;
+use crate::certificate_checker::tls::check_certificate_expiry;
 
 pub struct CertificateChecker {
     pool: PgPool,

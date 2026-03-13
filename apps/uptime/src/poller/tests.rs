@@ -356,6 +356,51 @@ async fn notification_types_have_independent_cooldowns(pool: PgPool) -> Result<(
 }
 
 #[sqlx::test]
+async fn renewed_certificate_does_not_trigger_notification(pool: PgPool) -> Result<()> {
+    let mut server = mockito::Server::new_async().await;
+    let uri = server.url();
+
+    let poller = create_poller(&pool);
+
+    let origin_uid = Uuid::new_v4();
+    crate::persistence::insert_origin(&pool, origin_uid, &uri).await?;
+
+    // Insert an old certificate check that was expiring soon (e.g. before renewal)
+    let old_expires_at = chrono::Utc::now() + Duration::days(20);
+    let old_checked_at = chrono::Utc::now() - Duration::days(10);
+    crate::persistence::insert_certificate_check(&pool, origin_uid, old_expires_at, old_checked_at)
+        .await?;
+
+    // Insert a newer certificate check reflecting the renewed cert (90 days away)
+    let renewed_expires_at = chrono::Utc::now() + Duration::days(90);
+    let renewed_checked_at = chrono::Utc::now();
+    crate::persistence::insert_certificate_check(
+        &pool,
+        origin_uid,
+        renewed_expires_at,
+        renewed_checked_at,
+    )
+    .await?;
+
+    let mock = server
+        .mock("GET", "/")
+        .with_status(200)
+        .create_async()
+        .await;
+
+    poller.query_all_origins().await?;
+
+    mock.assert_async().await;
+
+    // No notification should be sent because the most recent check shows the cert is healthy
+    let map = poller.notifier.sent_messages.read().await;
+
+    assert!(map.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test]
 async fn certificate_notifications_respect_cooldown(pool: PgPool) -> Result<()> {
     let mut server = mockito::Server::new_async().await;
     let uri = server.url();
