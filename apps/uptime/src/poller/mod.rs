@@ -225,22 +225,31 @@ impl<N: Notifier> Poller<N> {
     }
 
     async fn check_for_pending_notifications(&self, origin_uid: Uuid, uri: &str) -> Result<()> {
+        self.check_for_certificate_expiry(origin_uid, uri).await?;
+        self.check_for_outage(origin_uid, uri).await?;
+
+        Ok(())
+    }
+
+    async fn check_for_certificate_expiry(&self, origin_uid: Uuid, uri: &str) -> Result<()> {
         let PollerConfiguration {
-            alert_threshold,
             certificate_alert_threshold,
             topic,
+            ..
         } = &self.configuration;
 
         // Check for certificate expiry
         let certificate_expiry_threshold = chrono::Duration::days(30);
-        let cert_check = crate::persistence::certificate_expires_within(
-            &self.pool,
-            origin_uid,
-            certificate_expiry_threshold,
-        )
-        .await?;
 
-        if let Some(check) = cert_check {
+        let most_recent_check =
+            crate::persistence::fetch_most_recent_certificate_check(&self.pool, origin_uid).await?;
+
+        if let Some(check) = most_recent_check {
+            if check.expires_at - Utc::now() > certificate_expiry_threshold {
+                tracing::debug!(%origin_uid, expires_at = %check.expires_at, "certificate is not expiring soon");
+                return Ok(());
+            }
+
             let cooled_down = crate::persistence::latest_notification_older_than(
                 &self.pool,
                 origin_uid,
@@ -249,37 +258,48 @@ impl<N: Notifier> Poller<N> {
             )
             .await?;
 
-            if cooled_down {
-                let now = Utc::now();
-                let days_remaining = (check.expires_at - now).num_days();
-
-                let subject = "Certificate expiring soon";
-                let message = format!(
-                    "The TLS certificate for {uri} will expire in {} days (on {})",
-                    days_remaining,
-                    check.expires_at.format("%Y-%m-%d")
-                );
-
-                self.notifier.notify(topic, subject, &message).await?;
-
-                let created_at = Utc::now();
-
-                let notification_uid = crate::persistence::insert_notification(
-                    &self.pool,
-                    origin_uid,
-                    NotificationType::CertificateExpiry,
-                    topic,
-                    subject,
-                    &message,
-                    created_at,
-                )
-                .await?;
-
-                tracing::info!(%origin_uid, %notification_uid, days_remaining, "routed certificate expiry notification");
-            } else {
-                tracing::debug!(%origin_uid, "certificate expires soon, but a notification has been sent recently");
+            if !cooled_down {
+                tracing::debug!(%origin_uid, expires_at = %check.expires_at, "certificate is expiring soon, but a notification has been sent recently");
+                return Ok(());
             }
+
+            let now = Utc::now();
+            let days_remaining = (check.expires_at - now).num_days();
+
+            let subject = "Certificate expiring soon";
+            let message = format!(
+                "The TLS certificate for {uri} will expire in {} days (on {})",
+                days_remaining,
+                check.expires_at.format("%Y-%m-%d")
+            );
+
+            self.notifier.notify(topic, subject, &message).await?;
+
+            let created_at = Utc::now();
+
+            let notification_uid = crate::persistence::insert_notification(
+                &self.pool,
+                origin_uid,
+                NotificationType::CertificateExpiry,
+                topic,
+                subject,
+                &message,
+                created_at,
+            )
+            .await?;
+
+            tracing::info!(%origin_uid, %notification_uid, days_remaining, "routed certificate expiry notification");
         }
+
+        Ok(())
+    }
+
+    async fn check_for_outage(&self, origin_uid: Uuid, uri: &str) -> Result<()> {
+        let PollerConfiguration {
+            alert_threshold,
+            topic,
+            ..
+        } = &self.configuration;
 
         // Check for failure rate
         let exceeded = crate::persistence::failure_rate_exceeded(
