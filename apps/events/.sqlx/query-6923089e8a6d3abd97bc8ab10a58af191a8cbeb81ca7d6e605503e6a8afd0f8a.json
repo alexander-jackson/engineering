@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO retainer_event (event_type_id, occurred_at)\n            VALUES ((SELECT id FROM retainer_event_type WHERE name = $1), $2)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6923089e8a6d3abd97bc8ab10a58af191a8cbeb81ca7d6e605503e6a8afd0f8a"
+}

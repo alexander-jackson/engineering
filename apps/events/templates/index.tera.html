@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Retainer wear tracker" />
+    <title>Retainer Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#1e201e',
+                            card: '#2a2c2a',
+                            text: '#ecdfcc',
+                            border: '#3e403e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="h-full bg-dark-bg text-dark-text">
+    <div class="min-h-full flex flex-col">
+        <!-- Header -->
+        <header class="bg-dark-card shadow-lg border-b border-dark-border">
+            <div class="max-w-lg mx-auto px-4 sm:px-6">
+                <div class="py-6">
+                    <h1 class="text-3xl font-bold text-dark-text">
+                        <span class="text-amber-400">Retainer</span> Tracker
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-400">22+ hours/day target</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main content -->
+        <main class="max-w-lg mx-auto w-full px-4 sm:px-6 py-8 flex flex-col gap-6">
+
+            <!-- Status card -->
+            <div class="bg-dark-card rounded-lg shadow-lg border border-dark-border p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <span class="text-lg font-medium text-gray-400">Current Status</span>
+                    {% if is_inserted %}
+                    <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-900/30 border border-green-600/40 text-green-400 font-semibold text-sm">
+                        <span class="w-2 h-2 rounded-full bg-green-400"></span>
+                        In
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-900/30 border border-red-600/40 text-red-400 font-semibold text-sm">
+                        <span class="w-2 h-2 rounded-full bg-red-400"></span>
+                        Out
+                    </span>
+                    {% endif %}
+                </div>
+
+                <!-- Wear time -->
+                <div class="mb-4">
+                    <p class="text-sm text-gray-400 mb-1">Wear time today</p>
+                    <p class="text-4xl font-bold text-dark-text">{{ wear_time_display }}</p>
+                </div>
+
+                <!-- Target progress -->
+                <div class="{% if is_on_track %}text-green-400{% else %}text-amber-400{% endif %} text-sm font-medium">
+                    {% if target_display == "Target achieved!" %}
+                    ✓ {{ target_display }}
+                    {% else %}
+                    {% if is_on_track %}
+                    ↗ {{ target_display }}
+                    {% else %}
+                    ⚠ {{ target_display }}
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Action button -->
+            <div>
+                {% if is_inserted %}
+                <form action="/remove" method="POST">
+                    <button
+                        type="submit"
+                        class="w-full px-6 py-4 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/40 font-semibold text-lg rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-dark-bg"
+                    >
+                        Take Out
+                    </button>
+                </form>
+                {% else %}
+                <form action="/insert" method="POST">
+                    <button
+                        type="submit"
+                        class="w-full px-6 py-4 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-600/40 font-semibold text-lg rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-dark-bg"
+                    >
+                        Put In
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+
+        </main>
+    </div>
+</body>
+</html>
