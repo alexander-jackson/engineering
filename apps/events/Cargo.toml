@@ -1,0 +1,20 @@
+[package]
+name = "events"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "events"
+path = "src/main.rs"
+
+[dependencies]
+axum.workspace = true
+chrono = { version = "0.4.38", default-features = false, features = ["now", "serde"] }
+color-eyre = "0.6.3"
+foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
+foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
+foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
+serde = { workspace = true, features = ["derive"] }
+sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls", "chrono"] }
+tokio = { version = "1.39.3", features = ["rt-multi-thread", "macros"] }
+tracing.workspace = true

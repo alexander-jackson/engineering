@@ -3,6 +3,7 @@ resolver = "3"
 members = [
 	"cert-manager",
 	"dns-server",
+	"events",
 	"foundation/args",
 	"foundation/configuration",
 	"foundation/database-bootstrap",
