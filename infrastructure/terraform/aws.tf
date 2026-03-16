@@ -439,6 +439,7 @@ resource "aws_route53_zone" "forkup" {
 resource "aws_route53_record" "records" {
   for_each = toset([
     "", // root record
+    "events",
     "lockers",
     "tags",
     "today",

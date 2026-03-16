@@ -1,0 +1,21 @@
+server:
+  host: 0.0.0.0
+  port: 3333
+
+database:
+  host: database.mesh.internal
+  port: 5432
+
+  root:
+    username: postgres
+    password: {{ gskUlosseX9+tGcGCy3Uds9a9Xlf1QtPPTxEEgjfjyQej7HE/TZcf8/+FTVXZG8F9A2P2tXsZYLn1DVggt/0JUX85mMLrP3sVqNncXu91YwaeomXC0/q0XApcFYg7L4MHS49uXlLZxmTaFsh8h5Qx+jQAPq7bDoWIcsc0CFKmGMUw2H8BXr6DQNpF04Y+um56/fe0l02j32G7Wna5IU7vZOCLqqMZzGCuuP8Yj9hDcRePi401rTaeDygVwPQPvJAmKlb1/fsGO691RLKbmThJdQ+YZnh1CA91Oj9SnRa7q9PV2jJ7NWcsHkQOetN6Bj8xTYBZiOfcCTOBiMRXTFvAw== }}
+    database: postgres
+
+  application:
+    username: eventsblue
+    password: {{ Xo1Tyv2L+SJ9kF5sR/JGMa/HeO7XHPP7i2l9ugkGnTdQ5M8M2K6Vs8nx7Fwr89AFrbm+ECv3uBBw68xF/keLkHgdpdAHbKxlyFrbj1WDPSgdKTys5pWsyoi7gYYfFXI7Vdtrx4owEtoTR1ZGWBeL7Zvz560nExD6H1/dTbRv6yI2koLzX/M1GctxPyiVFYAZc2BERvWOmaQG4TGRcLWwW/BKvzD0VEFP47mS+VdmdQ8vYu7MisJBuybaqDjsu7/HEbqPKN1rgvvtuhkFo2cM18812xWey1V4BrlGMJrw9QJ/HrwVRELOXIjHkRZC98RgcFuJtvvJFvU1ccM4PcWeBA== }}
+    database: events
+
+telemetry:
+  enabled: false
+  endpoint: http://telemetry.mesh.internal:80/v1/traces
