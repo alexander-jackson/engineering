@@ -50,6 +50,15 @@ alb:
           location: s3
           bucket: configuration-68f6c7
           key: f2/certificates/lockers.opentracker.app/privkey.pem
+      events.opentracker.app:
+        cert_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/events.opentracker.app/fullchain.pem
+        key_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/events.opentracker.app/privkey.pem
       forkup.app:
         cert_file:
           location: s3
@@ -68,6 +77,7 @@ alb:
       - today.opentracker.app
       - uptime.opentracker.app
       - lockers.opentracker.app
+      - events.opentracker.app
 
 secrets:
   private_key:
@@ -212,3 +222,18 @@ services:
           bucket: configuration-68f6c7
           key: uptime/config.yaml
         target: /app/config/uptime.yaml
+
+  events:
+    image: alexanderjackson/events
+    tag: 20260315-2007
+    routes:
+      - host: events.opentracker.app
+        port: 3333
+    replicas: 1
+    volumes:
+      config:
+        source:
+          location: s3
+          bucket: configuration-68f6c7
+          key: events/config.yaml
+        target: /app/config/events.yaml
