@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::persistence::{DailyStats, EventType};
+use crate::persistence::{DailyStats, DayHistory, EventType};
 
 #[derive(Serialize)]
 pub struct IndexContext {
@@ -46,6 +46,35 @@ impl From<DailyStats> for IndexContext {
             action_label,
             action_path,
         }
+    }
+}
+
+#[derive(Serialize)]
+pub struct HistoryEntry {
+    pub date: String,
+    pub wear_time_display: String,
+    pub out_time_display: String,
+    pub is_on_track: bool,
+}
+
+#[derive(Serialize)]
+pub struct HistoryContext {
+    pub entries: Vec<HistoryEntry>,
+}
+
+impl From<Vec<DayHistory>> for HistoryContext {
+    fn from(days: Vec<DayHistory>) -> Self {
+        let entries = days
+            .into_iter()
+            .map(|day| HistoryEntry {
+                date: day.date.format("%a, %d %b %Y").to_string(),
+                wear_time_display: format_minutes(day.wear_minutes),
+                out_time_display: format_minutes(day.out_minutes),
+                is_on_track: day.is_on_track,
+            })
+            .collect();
+
+        Self { entries }
     }
 }
 
