@@ -6,6 +6,7 @@ use crate::persistence::{DailyStats, EventType};
 pub struct IndexContext {
     pub is_inserted: bool,
     pub wear_time_display: String,
+    pub out_time_display: String,
     pub target_display: String,
     pub is_on_track: bool,
     pub action_label: &'static str,
@@ -17,6 +18,7 @@ impl From<DailyStats> for IndexContext {
         let is_inserted = stats.current_state == EventType::Inserted;
 
         let wear_time_display = format_minutes(stats.wear_minutes);
+        let out_time_display = format_minutes(stats.out_minutes);
 
         let target_minutes = 22 * 60;
         let remaining_target = (target_minutes - stats.wear_minutes).max(0);
@@ -38,6 +40,7 @@ impl From<DailyStats> for IndexContext {
         Self {
             is_inserted,
             wear_time_display,
+            out_time_display,
             target_display,
             is_on_track: stats.is_on_track,
             action_label,

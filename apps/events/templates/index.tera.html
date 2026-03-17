@@ -65,6 +65,12 @@
                     <p class="text-4xl font-bold text-dark-text">{{ wear_time_display }}</p>
                 </div>
 
+                <!-- Out time -->
+                <div class="mb-4">
+                    <p class="text-sm text-gray-400 mb-1">Out time today</p>
+                    <p class="text-2xl font-semibold text-gray-300">{{ out_time_display }}</p>
+                </div>
+
                 <!-- Target progress -->
                 <div class="{% if is_on_track %}text-green-400{% else %}text-amber-400{% endif %} text-sm font-medium">
                     {% if target_display == "Target achieved!" %}
