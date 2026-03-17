@@ -10,6 +10,7 @@ pub enum EventType {
 
 pub struct DailyStats {
     pub wear_minutes: i64,
+    pub out_minutes: i64,
     pub is_on_track: bool,
     pub current_state: EventType,
 }
@@ -89,6 +90,9 @@ pub async fn get_daily_stats(
         wear_minutes += now.signed_duration_since(insert_time).num_minutes();
     }
 
+    let elapsed_minutes = now.signed_duration_since(today_start).num_minutes();
+    let out_minutes = (elapsed_minutes - wear_minutes).max(0);
+
     // Minutes remaining in today
     let end_of_day = today_start + Duration::hours(24);
     let remaining_minutes = end_of_day.signed_duration_since(now).num_minutes().max(0);
@@ -97,6 +101,7 @@ pub async fn get_daily_stats(
 
     Ok(DailyStats {
         wear_minutes,
+        out_minutes,
         is_on_track,
         current_state,
     })
