@@ -14,7 +14,7 @@ use tokio::net::TcpListener;
 
 use crate::error::ServerResult;
 use crate::persistence::EventType;
-use crate::templates::IndexContext;
+use crate::templates::{HistoryContext, IndexContext};
 
 #[derive(Clone)]
 struct ApplicationState {
@@ -30,6 +30,7 @@ pub fn build(template_engine: TemplateEngine, pool: PgPool, listener: TcpListene
 
     let router = Router::new()
         .route("/", get(index))
+        .route("/history", get(history))
         .route("/insert", post(insert))
         .route("/remove", post(remove))
         .with_state(state);
@@ -54,6 +55,21 @@ async fn index(
     let stats = crate::persistence::get_daily_stats(&pool, today_start, Utc::now()).await?;
     let context = IndexContext::from(stats);
     let rendered = template_engine.render_serialized("index.tera.html", &context)?;
+
+    Ok(rendered)
+}
+
+#[tracing::instrument(skip(template_engine, pool))]
+async fn history(
+    State(ApplicationState {
+        template_engine,
+        pool,
+        ..
+    }): State<ApplicationState>,
+) -> ServerResult<RenderedTemplate> {
+    let days = crate::persistence::get_history(&pool, Utc::now()).await?;
+    let context = HistoryContext::from(days);
+    let rendered = template_engine.render_serialized("history.tera.html", &context)?;
 
     Ok(rendered)
 }
