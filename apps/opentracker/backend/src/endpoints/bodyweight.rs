@@ -1,5 +1,6 @@
 use axum::extract::{Json, Path, State};
 use axum::routing::{Router, get};
+use chrono::Utc;
 
 use crate::auth::Claims;
 use crate::endpoints::AppState;
@@ -103,7 +104,8 @@ pub async fn get_bodyweight_statistics(
     State(AppState { pool }): State<AppState>,
     claims: Claims,
 ) -> ServerResponse<Json<persistence::statistics::BodyweightStatistics>> {
-    let stats = persistence::statistics::get_bodyweight_statistics(claims.id, &pool).await?;
+    let stats =
+        persistence::statistics::get_bodyweight_statistics(claims.id, &pool, Utc::now()).await?;
 
     tracing::info!("Fetched bodyweight statistics");
 

@@ -1,4 +1,4 @@
-use chrono::Duration;
+use chrono::{DateTime, Duration, Months, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -184,7 +184,11 @@ pub struct BodyweightStatistics {
 pub async fn get_bodyweight_statistics(
     user_id: Uuid,
     pool: &PgPool,
+    now: DateTime<Utc>,
 ) -> sqlx::Result<BodyweightStatistics> {
+    let one_week_prior = (now - Duration::weeks(1)).date_naive();
+    let one_month_prior = (now.checked_sub_months(Months::new(1)).unwrap()).date_naive();
+
     sqlx::query_as!(
         BodyweightStatistics,
         r#"
@@ -198,7 +202,7 @@ pub async fn get_bodyweight_statistics(
                 SELECT bodyweight
                 FROM bodyweight
                 WHERE bodyweight.account_id = account_id
-                AND recorded > now() - INTERVAL '1 week'
+                AND recorded >= $2
                 ORDER BY recorded ASC
                 LIMIT 1
             )
@@ -207,7 +211,7 @@ pub async fn get_bodyweight_statistics(
                 SELECT bodyweight
                 FROM bodyweight
                 WHERE bodyweight.account_id = account_id
-                AND recorded > now() - INTERVAL '1 month'
+                AND recorded >= $3
                 ORDER BY recorded ASC
                 LIMIT 1
             )
@@ -216,20 +220,22 @@ pub async fn get_bodyweight_statistics(
                 SELECT AVG(bodyweight)
                 FROM bodyweight
                 WHERE bodyweight.account_id = account_id
-                AND recorded > now() - INTERVAL '1 week'
+                AND recorded >= $2
             ) AS average_last_week,
             (
                 SELECT AVG(bodyweight)
                 FROM bodyweight
                 WHERE bodyweight.account_id = account_id
-                AND recorded > now() - INTERVAL '1 month'
+                AND recorded >= $3
             ) AS average_last_month
         FROM bodyweight
         WHERE bodyweight.account_id = account_id
         ORDER BY recorded DESC
         LIMIT 1
         "#,
-        user_id
+        user_id,
+        one_week_prior,
+        one_month_prior,
     )
     .fetch_one(pool)
     .await

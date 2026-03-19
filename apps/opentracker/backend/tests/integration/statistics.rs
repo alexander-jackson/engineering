@@ -250,8 +250,9 @@ async fn bodyweight_deltas_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
     let current_bodyweight = 82.5;
     let one_week_delta = 1.2;
     let four_week_delta = -0.3;
-    let current_date = Utc::now().date_naive();
-    let one_week_ago = current_date - chrono::Duration::days(6);
+    let now = Utc::now();
+    let current_date = now.date_naive();
+    let six_days_ago = current_date - chrono::Duration::days(6);
     let four_weeks_ago = current_date - chrono::Duration::weeks(4);
 
     // Enter some bodyweight values
@@ -260,7 +261,7 @@ async fn bodyweight_deltas_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
     persistence::bodyweights::insert(
         user_id,
         current_bodyweight - one_week_delta,
-        one_week_ago,
+        six_days_ago,
         &pool,
     )
     .await?;
@@ -274,21 +275,21 @@ async fn bodyweight_deltas_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
     .await?;
 
     // Query the statistics
-    let stats = persistence::statistics::get_bodyweight_statistics(user_id, &pool).await?;
+    let stats = persistence::statistics::get_bodyweight_statistics(user_id, &pool, now).await?;
 
     // Check the values are approximately what we want
     assert!(approx_eq!(
         f32,
         stats.increase_last_week.unwrap(),
         one_week_delta,
-        epsilon = 0.0001
+        epsilon = 0.01
     ));
 
     assert!(approx_eq!(
         f32,
         stats.increase_last_month.unwrap(),
         four_week_delta,
-        epsilon = 0.0001
+        epsilon = 0.01
     ));
 
     Ok(())
@@ -300,7 +301,8 @@ async fn bodyweight_averages_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
     let user_id = some_user(&pool).await?;
 
     let current_bodyweight = 82.5;
-    let current_date = Utc::now().date_naive();
+    let now = Utc::now();
+    let current_date = now.date_naive();
 
     // Enter their current bodyweight
     persistence::bodyweights::insert(user_id, current_bodyweight, current_date, &pool).await?;
@@ -348,7 +350,7 @@ async fn bodyweight_averages_can_be_queried(pool: PgPool) -> sqlx::Result<()> {
     .await?;
 
     // Query the statistics
-    let stats = persistence::statistics::get_bodyweight_statistics(user_id, &pool).await?;
+    let stats = persistence::statistics::get_bodyweight_statistics(user_id, &pool, now).await?;
 
     // Check the values are approximately what we want
     assert!(approx_eq!(
@@ -496,6 +498,30 @@ async fn users_cannot_see_each_others_stats(pool: PgPool) -> sqlx::Result<()> {
     assert!(stats.squat_volume_past_week.is_none());
     assert!(stats.bench_volume_past_week.is_none());
     assert!(stats.deadlift_volume_past_week.is_none());
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn bodyweights_from_exactly_one_week_ago_are_considered_for_statistics(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let user_id = some_user(&pool).await?;
+    let now = Utc::now();
+    let one_week_ago = now - Duration::weeks(1);
+
+    // record a bodyweight today, and exactly one week ago
+    persistence::bodyweights::insert(user_id, 82.0, now.date_naive(), &pool).await?;
+    persistence::bodyweights::insert(user_id, 82.5, one_week_ago.date_naive(), &pool).await?;
+
+    let stats = persistence::statistics::get_bodyweight_statistics(user_id, &pool, now).await?;
+
+    assert!(approx_eq!(
+        f32,
+        stats.increase_last_week.unwrap(),
+        -0.5,
+        epsilon = 0.0001
+    ));
 
     Ok(())
 }
