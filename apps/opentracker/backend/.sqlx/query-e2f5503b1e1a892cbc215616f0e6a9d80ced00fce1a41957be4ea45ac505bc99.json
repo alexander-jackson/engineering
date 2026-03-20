@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH account_id AS (\n            SELECT id\n            FROM account\n            WHERE account_uid = $1\n        )\n        SELECT\n            bodyweight - (\n                SELECT bodyweight\n                FROM bodyweight\n                WHERE bodyweight.account_id = account_id\n                AND recorded >= $2\n                ORDER BY recorded ASC\n                LIMIT 1\n            )\n            AS increase_last_week,\n            bodyweight - (\n                SELECT bodyweight\n                FROM bodyweight\n                WHERE bodyweight.account_id = account_id\n                AND recorded >= $3\n                ORDER BY recorded ASC\n                LIMIT 1\n            )\n            AS increase_last_month,\n            (\n                SELECT AVG(bodyweight)\n                FROM bodyweight\n                WHERE bodyweight.account_id = account_id\n                AND recorded >= $2\n            ) AS average_last_week,\n            (\n                SELECT AVG(bodyweight)\n                FROM bodyweight\n                WHERE bodyweight.account_id = account_id\n                AND recorded >= $3\n            ) AS average_last_month\n        FROM bodyweight\n        WHERE bodyweight.account_id = account_id\n        ORDER BY recorded DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "increase_last_week",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 1,
+        "name": "increase_last_month",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 2,
+        "name": "average_last_week",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 3,
+        "name": "average_last_month",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e2f5503b1e1a892cbc215616f0e6a9d80ced00fce1a41957be4ea45ac505bc99"
+}
