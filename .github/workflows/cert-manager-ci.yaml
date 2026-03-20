@@ -33,6 +33,7 @@ jobs:
         run: sqlx database create
 
       - name: Run migrations
+        working-directory: ./apps/cert-manager
         run: sqlx migrate run
 
       - uses: taiki-e/install-action@nextest
