@@ -10,9 +10,11 @@ aws-sdk-s3 = "1.125.0"
 axum.workspace = true
 color-eyre = "0.6.3"
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
-foundation-init = { version = "0.1.0", path = "../foundation/init" }
+foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
 foundation-uid = { version = "0.1.0", path = "../foundation/uid" }
 instant-acme = "0.8.5"
 serde = { workspace = true, features = ["derive"] }
+sqlx = { version = "0.8.2", default-features = false, features = ["chrono", "macros", "migrate", "postgres", "runtime-tokio-rustls", "uuid"] }
 tokio = { version = "1.39.3", features = ["rt-multi-thread", "macros"] }
 tracing.workspace = true
+uuid = { version = "1.11.0", features = ["serde", "v4"] }

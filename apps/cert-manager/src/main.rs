@@ -12,7 +12,9 @@ use tokio::net::TcpListener;
 mod acme;
 mod configuration;
 mod dns;
+mod persistence;
 mod storage;
+mod uid;
 
 use crate::acme::AcmeClient;
 use crate::configuration::Configuration;

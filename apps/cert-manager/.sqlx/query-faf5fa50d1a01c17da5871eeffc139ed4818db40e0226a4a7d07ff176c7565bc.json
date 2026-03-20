@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO certificate (certificate_uid, domain_id, created_at, expires_at)\n            VALUES (\n                $1,\n                (SELECT id FROM domain WHERE domain_uid = $2 LIMIT 1),\n                $3,\n                $4\n            )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "faf5fa50d1a01c17da5871eeffc139ed4818db40e0226a4a7d07ff176c7565bc"
+}
