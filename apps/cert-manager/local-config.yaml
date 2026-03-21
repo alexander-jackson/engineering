@@ -2,6 +2,20 @@ server:
   host: 127.0.0.1
   port: 4444
 
+database:
+  host: localhost
+  port: 5432
+  
+  root:
+    username: alex
+    password: ""
+    database: postgres
+
+  application:
+    username: certmanagerblue
+    password: test
+    database: certmanager
+
 storage:
   bucket: configuration-68f6c7
   prefix: f2/certificates/test
