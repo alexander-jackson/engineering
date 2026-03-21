@@ -975,8 +975,10 @@ dependencies = [
  "foundation-uid",
  "instant-acme",
  "serde",
+ "sqlx",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
