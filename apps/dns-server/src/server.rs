@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
-use foundation_shutdown::ShutdownCoordinator;
+use foundation_shutdown::{CancellationToken, GracefulTask};
 use hickory_server::ServerFuture;
 use tokio::net::{TcpListener, UdpSocket};
 
@@ -14,7 +14,6 @@ use crate::upstream::UpstreamResolver;
 
 pub struct DnsServer {
     server_future: ServerFuture<DnsRequestHandler>,
-    coordinator: ShutdownCoordinator,
 }
 
 impl DnsServer {
@@ -42,21 +41,12 @@ impl DnsServer {
             register_tls_listener(&mut server_future, tls_config).await?;
         }
 
-        let coordinator = ShutdownCoordinator::new();
-
-        Ok(Self {
-            server_future,
-            coordinator,
-        })
+        Ok(Self { server_future })
     }
+}
 
-    #[tracing::instrument(skip(self))]
-    pub async fn run(mut self) -> Result<()> {
-        let token = self.coordinator.token();
-        self.coordinator.listen_for_signals();
-
-        tracing::info!("dns server started");
-
+impl GracefulTask for DnsServer {
+    async fn run_until_shutdown(mut self, token: CancellationToken) -> Result<()> {
         tokio::select! {
             result = self.server_future.block_until_done() => {
                 result?;

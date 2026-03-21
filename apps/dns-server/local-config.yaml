@@ -1,0 +1,21 @@
+server:
+  protocols:
+    udp:
+      host: 127.0.0.1
+      port: 5555
+
+upstream:
+  resolver: all.dns.mullvad.net
+  port: 443
+  protocol: https
+  timeout_seconds: 5
+
+blocklist:
+  source:
+    location: filesystem
+    path: ./blocklist.txt
+  refresh_interval_seconds: 3600
+
+cache:
+  max_entries: 10000
+  default_ttl_seconds: 300

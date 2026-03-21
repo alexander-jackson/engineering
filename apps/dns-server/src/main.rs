@@ -1,4 +1,5 @@
 use color_eyre::eyre::Result;
+use foundation_shutdown::ShutdownCoordinator;
 
 mod blocklist;
 mod cache;
@@ -35,7 +36,7 @@ async fn main() -> Result<()> {
 
     let server = DnsServer::new(upstream, blocklist, cache, &config.server.protocols).await?;
 
-    server.run().await?;
+    ShutdownCoordinator::new().with_task(server).run().await?;
 
     Ok(())
 }
