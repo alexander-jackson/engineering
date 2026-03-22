@@ -5,7 +5,6 @@ mod blocklist;
 mod cache;
 mod config;
 mod handler;
-mod http_server;
 mod server;
 mod tls;
 mod upstream;
