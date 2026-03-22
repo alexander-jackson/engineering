@@ -9,6 +9,7 @@ aws-sdk-route53 = "1.108.0"
 aws-sdk-s3 = "1.125.0"
 axum.workspace = true
 color-eyre = "0.6.3"
+foundation-configuration = { version = "0.1.0", path = "../foundation/configuration" }
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
 foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
 foundation-recurring-job = { version = "0.1.0", path = "../foundation/recurring-job" }

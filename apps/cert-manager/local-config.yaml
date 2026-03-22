@@ -19,3 +19,7 @@ database:
 storage:
   bucket: configuration-68f6c7
   prefix: f2/certificates/test
+
+acme:
+  environment: staging
+  contact: alexanderjackson@protonmail.com

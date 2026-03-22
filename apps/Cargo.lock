@@ -970,6 +970,7 @@ dependencies = [
  "aws-sdk-s3",
  "axum",
  "color-eyre",
+ "foundation-configuration",
  "foundation-http-server",
  "foundation-init",
  "foundation-recurring-job",

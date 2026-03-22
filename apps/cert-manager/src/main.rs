@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
     let route53_client = aws_sdk_route53::Client::new(&sdk_config);
     let s3_client = aws_sdk_s3::Client::new(&sdk_config);
 
-    let acme_client = AcmeClient::new().await?;
+    let acme_client = AcmeClient::new(config.acme.environment, &config.acme.contact).await?;
     let dns_client = DnsClient::new(route53_client.clone());
     let cert_store = CertificateStore::new(s3_client.clone(), config.storage.clone());
 

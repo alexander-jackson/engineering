@@ -3,6 +3,23 @@ use instant_acme::{
     Account, ChallengeType, Identifier, LetsEncrypt, NewAccount, NewOrder, Order, OrderStatus,
     RetryPolicy,
 };
+use serde::Deserialize;
+
+#[derive(Copy, Clone, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Environment {
+    Staging,
+    Production,
+}
+
+impl From<Environment> for LetsEncrypt {
+    fn from(env: Environment) -> Self {
+        match env {
+            Environment::Staging => LetsEncrypt::Staging,
+            Environment::Production => LetsEncrypt::Production,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct AcmeClient {
@@ -10,9 +27,11 @@ pub struct AcmeClient {
 }
 
 impl AcmeClient {
-    pub async fn new() -> Result<Self> {
+    pub async fn new(environment: Environment, contact: &str) -> Result<Self> {
+        let contact = format!("mailto:{contact}");
+
         let new_account = NewAccount {
-            contact: &["mailto:alexanderjackson@protonmail.com"],
+            contact: &[&contact],
             terms_of_service_agreed: true,
             only_return_existing: false,
         };
@@ -22,9 +41,11 @@ impl AcmeClient {
             "creating ACME account for certificate renewal"
         );
 
+        let url = LetsEncrypt::from(environment).url();
+
         let (account, _) = Account::builder()
             .unwrap()
-            .create(&new_account, LetsEncrypt::Staging.url().to_owned(), None)
+            .create(&new_account, url.to_owned(), None)
             .await?;
 
         Ok(Self { account })
