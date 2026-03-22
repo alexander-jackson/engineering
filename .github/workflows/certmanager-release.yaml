@@ -3,13 +3,13 @@ on:
     branches: ["master"]
     paths:
     - 'apps/foundation/**'
-    - 'apps/cert-manager/**'
-    - '.github/workflows/cert-manager-release.yaml'
+    - 'apps/certmanager/**'
+    - '.github/workflows/certmanager-release.yaml'
 
-name: cert-manager Release
+name: certmanager Release
 
 env:
-  APPLICATION_NAME: cert-manager
+  APPLICATION_NAME: certmanager
 
 jobs:
   docker:
@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./apps/cert-manager
+        working-directory: ./apps/certmanager
     steps:
       - uses: actions/checkout@v5
       - name: Generate tag

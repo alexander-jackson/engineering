@@ -962,7 +962,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cert-manager"
+name = "certmanager"
 version = "0.1.0"
 dependencies = [
  "aws-config",
