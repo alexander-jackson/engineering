@@ -1,8 +1,17 @@
 server:
   protocols:
-    udp:
+    tls:
       host: 0.0.0.0
-      port: 5353
+      port: 853
+      cert:
+        location: s3
+        bucket: configuration
+        key: cert.pem
+      key:
+        location: s3
+        bucket: configuration
+        key: key.pem
+      refresh_interval_seconds: 86400
 
 upstream:
   resolver: all.dns.mullvad.net

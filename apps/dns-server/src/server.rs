@@ -1,15 +1,17 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
 use foundation_shutdown::{CancellationToken, GracefulTask};
 use hickory_server::ServerFuture;
-use tokio::net::{TcpListener, UdpSocket};
+use tokio::net::TcpListener;
 
 use crate::blocklist::BlocklistManager;
 use crate::cache::ResponseCache;
-use crate::config::{ProtocolsConfig, TlsConfig, UdpConfig};
+use crate::config::TlsConfig;
 use crate::handler::DnsRequestHandler;
+use crate::tls::CertificateResolver;
 use crate::upstream::UpstreamResolver;
 
 pub struct DnsServer {
@@ -17,29 +19,18 @@ pub struct DnsServer {
 }
 
 impl DnsServer {
-    #[tracing::instrument(skip(upstream, blocklist, cache))]
+    #[tracing::instrument(skip(upstream, blocklist, cache, config, certificate_resolver))]
     pub async fn new(
         upstream: UpstreamResolver,
         blocklist: BlocklistManager,
         cache: ResponseCache,
-        protocols: &ProtocolsConfig,
+        config: &TlsConfig,
+        certificate_resolver: CertificateResolver,
     ) -> Result<Self> {
         let handler = DnsRequestHandler::new(upstream, blocklist, cache);
         let mut server_future = ServerFuture::new(handler);
 
-        if protocols.udp.is_none() && protocols.tls.is_none() {
-            return Err(color_eyre::eyre::eyre!(
-                "at least one protocol (UDP or TLS) must be configured"
-            ));
-        }
-
-        if let Some(ref udp_config) = protocols.udp {
-            register_udp_listener(&mut server_future, udp_config).await?;
-        }
-
-        if let Some(ref tls_config) = protocols.tls {
-            register_tls_listener(&mut server_future, tls_config).await?;
-        }
+        register_tls_listener(&mut server_future, config, certificate_resolver).await?;
 
         Ok(Self { server_future })
     }
@@ -61,32 +52,18 @@ impl GracefulTask for DnsServer {
     }
 }
 
-async fn register_udp_listener(
-    server_future: &mut ServerFuture<DnsRequestHandler>,
-    config: &UdpConfig,
-) -> Result<()> {
-    let addr = SocketAddr::new(config.host.into(), config.port);
-    let socket = UdpSocket::bind(addr).await?;
-
-    tracing::info!(%addr, "bound UDP socket for DNS queries");
-    server_future.register_socket(socket);
-
-    Ok(())
-}
-
 async fn register_tls_listener(
     server_future: &mut ServerFuture<DnsRequestHandler>,
     config: &TlsConfig,
+    certificate_resolver: CertificateResolver,
 ) -> Result<()> {
     let addr = SocketAddr::new(config.host.into(), config.port);
-
-    let config = crate::tls::load_tls_config(config).await?;
     let listener = TcpListener::bind(addr).await?;
 
     tracing::info!(%addr, "bound TLS listener for DNS over TLS queries");
 
     let timeout = Duration::from_secs(300);
-    server_future.register_tls_listener(listener, timeout, config)?;
+    server_future.register_tls_listener(listener, timeout, Arc::new(certificate_resolver))?;
 
     Ok(())
 }

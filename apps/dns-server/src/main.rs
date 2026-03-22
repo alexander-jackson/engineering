@@ -5,6 +5,7 @@ mod blocklist;
 mod cache;
 mod config;
 mod handler;
+mod http_server;
 mod server;
 mod tls;
 mod upstream;
@@ -13,19 +14,15 @@ use crate::blocklist::BlocklistManager;
 use crate::cache::ResponseCache;
 use crate::config::Configuration;
 use crate::server::DnsServer;
+use crate::tls::CertificateResolver;
 use crate::upstream::UpstreamResolver;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = foundation_init::run::<Configuration>()?;
-
-    if config.server.protocols.tls.is_some() {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-    }
+    let _ = rustls::crypto::ring::default_provider().install_default();
 
     tracing::info!(
-        udp_enabled = config.server.protocols.udp.is_some(),
-        tls_enabled = config.server.protocols.tls.is_some(),
         upstream = %config.upstream.resolver,
         "dns server initialized"
     );
@@ -34,9 +31,24 @@ async fn main() -> Result<()> {
     let upstream = UpstreamResolver::new(&config.upstream).await?;
     let cache = ResponseCache::new(&config.cache);
 
-    let server = DnsServer::new(upstream, blocklist, cache, &config.server.protocols).await?;
+    let tls_config = &config.server.protocols.tls;
 
-    ShutdownCoordinator::new().with_task(server).run().await?;
+    let certificate_resolver = CertificateResolver::new(tls_config.clone()).await?;
+
+    let dns_server = DnsServer::new(
+        upstream,
+        blocklist,
+        cache,
+        tls_config,
+        certificate_resolver.clone(),
+    )
+    .await?;
+
+    ShutdownCoordinator::new()
+        .with_task(dns_server)
+        .with_task(certificate_resolver)
+        .run()
+        .await?;
 
     Ok(())
 }

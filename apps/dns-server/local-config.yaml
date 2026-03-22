@@ -1,8 +1,15 @@
 server:
   protocols:
-    udp:
+    tls:
       host: 127.0.0.1
-      port: 5555
+      port: 8853
+      cert:
+        location: filesystem
+        path: ./certificates/local-fullchain.pem
+      key:
+        location: filesystem
+        path: ./certificates/local-privkey.pem
+      refresh_interval_seconds: 86400
 
 upstream:
   resolver: all.dns.mullvad.net

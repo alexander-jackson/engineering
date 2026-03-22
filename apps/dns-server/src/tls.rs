@@ -1,10 +1,68 @@
 use std::io::Cursor;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
-use rustls::server::{ResolvesServerCert, ServerConfig};
+use foundation_shutdown::{CancellationToken, GracefulTask};
+use rustls::server::{ClientHello, ResolvesServerCert, ServerConfig};
+use rustls::sign::CertifiedKey;
 
 use crate::config::TlsConfig;
+
+#[derive(Clone, Debug)]
+pub struct CertificateResolver {
+    configuration: Arc<TlsConfig>,
+    resolver: Arc<RwLock<Arc<dyn ResolvesServerCert>>>,
+}
+
+impl CertificateResolver {
+    pub async fn new(configuration: TlsConfig) -> Result<Self> {
+        let resolver = load_tls_config(&configuration).await?;
+
+        Ok(Self {
+            configuration: Arc::new(configuration),
+            resolver: Arc::new(RwLock::new(resolver)),
+        })
+    }
+
+    pub async fn reload(&self) -> Result<()> {
+        let resolver = load_tls_config(&self.configuration).await?;
+        let mut writer = self.resolver.write().unwrap();
+
+        *writer = resolver;
+
+        Ok(())
+    }
+}
+
+impl GracefulTask for CertificateResolver {
+    async fn run_until_shutdown(self, token: CancellationToken) -> Result<()> {
+        let duration = Duration::from_secs(self.configuration.refresh_interval_seconds);
+        let mut interval = tokio::time::interval(duration);
+
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    if let Err(e) = self.reload().await {
+                        tracing::error!(error = %e, "failed to reload TLS certificates");
+                    }
+                }
+                _ = token.cancelled() => {
+                    tracing::info!("received shutdown signal, stopping certificate resolver");
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl ResolvesServerCert for CertificateResolver {
+    fn resolve(&self, client_hello: ClientHello<'_>) -> Option<Arc<CertifiedKey>> {
+        self.resolver.read().unwrap().resolve(client_hello)
+    }
+}
 
 /// Load TLS certificates and create cert resolver for hickory-server
 #[tracing::instrument(skip(config))]

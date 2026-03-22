@@ -19,16 +19,7 @@ pub struct ServerConfig {
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 pub struct ProtocolsConfig {
-    #[serde(default)]
-    pub udp: Option<UdpConfig>,
-    #[serde(default)]
-    pub tls: Option<TlsConfig>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
-pub struct UdpConfig {
-    pub host: Ipv4Addr,
-    pub port: u16,
+    pub tls: TlsConfig,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -37,6 +28,7 @@ pub struct TlsConfig {
     pub port: u16,
     pub cert: ExternalBytes,
     pub key: ExternalBytes,
+    pub refresh_interval_seconds: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -68,7 +60,7 @@ mod tests {
     use hickory_proto::xfer::Protocol;
 
     use crate::config::{
-        BlocklistConfig, CacheConfig, Configuration, ProtocolsConfig, ServerConfig, UdpConfig,
+        BlocklistConfig, CacheConfig, Configuration, ProtocolsConfig, ServerConfig, TlsConfig,
         UpstreamConfig,
     };
 
@@ -79,11 +71,19 @@ mod tests {
         let expected = Configuration {
             server: ServerConfig {
                 protocols: ProtocolsConfig {
-                    udp: Some(UdpConfig {
+                    tls: TlsConfig {
                         host: Ipv4Addr::new(0, 0, 0, 0),
-                        port: 5353,
-                    }),
-                    tls: None,
+                        port: 853,
+                        cert: ExternalBytes::S3 {
+                            bucket: "configuration".into(),
+                            key: "cert.pem".into(),
+                        },
+                        key: ExternalBytes::S3 {
+                            bucket: "configuration".into(),
+                            key: "key.pem".into(),
+                        },
+                        refresh_interval_seconds: 86400,
+                    },
                 },
             },
             upstream: UpstreamConfig {
