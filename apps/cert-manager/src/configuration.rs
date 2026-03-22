@@ -1,11 +1,15 @@
 use std::net::Ipv4Addr;
 
+use foundation_configuration::Secret;
 use serde::Deserialize;
+
+use crate::acme::Environment;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Configuration {
     pub server: ServerConfiguration,
     pub storage: StorageConfiguration,
+    pub acme: AcmeConfiguration,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -18,4 +22,10 @@ pub struct ServerConfiguration {
 pub struct StorageConfiguration {
     pub bucket: String,
     pub prefix: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct AcmeConfiguration {
+    pub contact: Secret<String>,
+    pub environment: Environment,
 }
