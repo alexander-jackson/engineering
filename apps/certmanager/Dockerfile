@@ -18,5 +18,6 @@ RUN apt-get update \
 RUN useradd -m -u 1000 appuser
 WORKDIR /app
 COPY --from=builder /app/target/release/certmanager ./certmanager
+COPY --from=builder /app/lockers/migrations ./migrations
 USER appuser
 CMD ["./certmanager", "--config", "/app/config/certmanager.yaml"]
