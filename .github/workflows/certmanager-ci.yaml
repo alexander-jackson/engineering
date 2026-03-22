@@ -3,17 +3,17 @@ on:
     branches: ["master"]
     paths:
     - 'apps/foundation/**'
-    - 'apps/cert-manager/**'
-    - '.github/workflows/cert-manager-ci.yaml'
+    - 'apps/certmanager/**'
+    - '.github/workflows/certmanager-ci.yaml'
 
-name: cert-manager CI
+name: certmanager CI
 
 jobs:
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: postgresql://postgres:password@localhost:5432/cert-manager
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/certmanager
     services:
       postgres:
         image: postgres
@@ -33,12 +33,12 @@ jobs:
         run: sqlx database create
 
       - name: Run migrations
-        working-directory: ./apps/cert-manager
+        working-directory: ./apps/certmanager
         run: sqlx migrate run
 
       - uses: taiki-e/install-action@nextest
       - name: Run tests
-        run: cargo nextest run --manifest-path apps/cert-manager/Cargo.toml
+        run: cargo nextest run --manifest-path apps/certmanager/Cargo.toml
 
   fmt:
     name: Rustfmt
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: rustup component add rustfmt
-      - run: cargo fmt --manifest-path apps/cert-manager/Cargo.toml --all -- --check
+      - run: cargo fmt --manifest-path apps/certmanager/Cargo.toml --all -- --check
 
   clippy:
     name: Clippy
@@ -56,4 +56,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: rustup component add clippy
-      - run: cargo clippy --manifest-path apps/cert-manager/Cargo.toml -- -D warnings
+      - run: cargo clippy --manifest-path apps/certmanager/Cargo.toml -- -D warnings

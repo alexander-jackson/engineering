@@ -7,9 +7,9 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --package cert-manager --recipe-path recipe.json
+RUN cargo chef cook --release --package certmanager --recipe-path recipe.json
 COPY . .
-RUN cargo build --release --package cert-manager
+RUN cargo build --release --package certmanager
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
@@ -17,6 +17,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd -m -u 1000 appuser
 WORKDIR /app
-COPY --from=builder /app/target/release/cert-manager ./cert-manager
+COPY --from=builder /app/target/release/certmanager ./certmanager
 USER appuser
-CMD ["./cert-manager", "--config", "/app/config/cert-manager.yaml"]
+CMD ["./certmanager", "--config", "/app/config/certmanager.yaml"]

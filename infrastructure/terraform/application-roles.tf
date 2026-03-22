@@ -2,7 +2,7 @@ module "application_role" {
   source = "./modules/application-role"
 
   for_each = {
-    cert-manager = jsonencode({
+    certmanager = jsonencode({
       Statement = [
         {
           Action   = ["route53:ListHostedZones", "route53:GetChange"]
