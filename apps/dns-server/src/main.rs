@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
 
     let dns_server = DnsServer::new(
         upstream,
-        blocklist,
+        blocklist.clone(),
         cache,
         tls_config,
         certificate_resolver.clone(),
@@ -46,6 +46,7 @@ async fn main() -> Result<()> {
     ShutdownCoordinator::new()
         .with_task(dns_server)
         .with_task(certificate_resolver)
+        .with_task(blocklist)
         .run()
         .await?;
 
