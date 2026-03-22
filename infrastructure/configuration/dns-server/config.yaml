@@ -11,6 +11,7 @@ server:
         location: s3
         bucket: configuration-68f6c7
         key: f2/certificates/dns.opentracker.app/privkey.pem
+      refresh_interval_seconds: 86400
 
 upstream:
   resolver: all.dns.mullvad.net
