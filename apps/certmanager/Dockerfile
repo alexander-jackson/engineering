@@ -19,5 +19,7 @@ RUN useradd -m -u 1000 appuser
 WORKDIR /app
 COPY --from=builder /app/target/release/certmanager ./certmanager
 COPY --from=builder /app/certmanager/migrations ./migrations
+COPY --from=builder /app/certmanager/templates ./templates
+COPY --from=builder /app/certmanager/assets ./assets
 USER appuser
 CMD ["./certmanager", "--config", "/app/config/certmanager.yaml"]
