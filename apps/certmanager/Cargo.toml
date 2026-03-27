@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 aws-config = "1.8.14"
+aws-credential-types = "1.2.14"
 aws-sdk-route53 = "1.108.0"
 aws-sdk-s3 = "1.125.0"
 axum.workspace = true
