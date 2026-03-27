@@ -966,6 +966,7 @@ name = "certmanager"
 version = "0.1.0"
 dependencies = [
  "aws-config",
+ "aws-credential-types",
  "aws-sdk-route53",
  "aws-sdk-s3",
  "axum",
