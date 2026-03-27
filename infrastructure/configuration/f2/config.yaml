@@ -256,6 +256,7 @@ services:
         port: 4444
     replicas: 1
     environment:
+      RUST_LOG: trace
       AWS_ROLE_ARN: arn:aws:iam::558855412466:role/certmanager-role
     volumes:
       config:
