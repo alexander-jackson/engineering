@@ -30,13 +30,6 @@ variable "logging" {
   description = "Parameters for use in logging output"
 }
 
-variable "backups" {
-  type = object({
-    bucket = string
-  })
-  description = "Parameters for use in taking database backups"
-}
-
 variable "hackathon" {
   type = object({
     bucket = string
@@ -44,21 +37,9 @@ variable "hackathon" {
   description = "Parameters for use in the hackathon"
 }
 
-variable "alerting" {
-  type = object({
-    topic_arn = string
-  })
-  description = "Parameters for use in alerting for outages"
-}
-
 variable "key_name" {
   type        = string
   description = "The name of the `aws_key_pair` to use for the instance access"
-}
-
-variable "hosted_zones" {
-  type        = list(string)
-  description = "The hosted zone identifiers for Let's Encrypt renewals"
 }
 
 variable "inbound_http_subnet_id" {

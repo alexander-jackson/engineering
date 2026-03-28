@@ -34,16 +34,6 @@ resource "aws_iam_policy" "this" {
         Resource = format("arn:aws:s3:::%s/*", var.configuration.bucket)
       },
       {
-        Action   = ["route53:ListHostedZones", "route53:GetChange"]
-        Effect   = "Allow"
-        Resource = "*"
-      },
-      {
-        Action   = ["route53:ChangeResourceRecordSets"]
-        Effect   = "Allow"
-        Resource = formatlist("arn:aws:route53:::hostedzone/%s", var.hosted_zones)
-      },
-      {
         Action   = ["s3:ListBucket"]
         Effect   = "Allow"
         Resource = format("arn:aws:s3:::%s", var.logging.bucket)
@@ -52,16 +42,6 @@ resource "aws_iam_policy" "this" {
         Action   = ["s3:PutObject"]
         Effect   = "Allow"
         Resource = format("arn:aws:s3:::%s/*", var.logging.bucket)
-      },
-      {
-        Action   = ["s3:PutObject"]
-        Effect   = "Allow"
-        Resource = format("arn:aws:s3:::%s/*", var.backups.bucket)
-      },
-      {
-        Action   = ["sns:Publish"]
-        Effect   = "Allow"
-        Resource = var.alerting.topic_arn
       },
       {
         Action   = ["s3:GetObject", "s3:PutObject"]
