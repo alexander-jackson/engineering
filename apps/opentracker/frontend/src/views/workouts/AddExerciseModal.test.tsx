@@ -113,9 +113,7 @@ describe("AddExerciseModal", () => {
     expect(
       screen.getByText("Previous Session (Wed 10th January)"),
     ).toBeInTheDocument();
-    expect(screen.getByText("80 kg")).toBeInTheDocument();
-    expect(screen.getByText("10")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("80 kg · 10 reps × 3 sets")).toBeInTheDocument();
   });
 
   it("shows matching suggestions as the user types in the description field", () => {
@@ -171,9 +169,7 @@ describe("AddExerciseModal", () => {
     expect(
       screen.getByText("Best Session (Last 3 Months) (Fri 5th January)"),
     ).toBeInTheDocument();
-    expect(screen.getByText("90 kg")).toBeInTheDocument();
-    expect(screen.getByText("8")).toBeInTheDocument();
-    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(screen.getByText("90 kg · 8 reps × 4 sets")).toBeInTheDocument();
   });
 
   it("shows a loading indicator while the best session is loading", () => {

@@ -113,33 +113,19 @@ const SessionDisplay = ({
   const { exercise } = session;
 
   return (
-    <div className="mb-3 p-3 bg-light rounded">
-      <h6 className="text-dark mb-2">
-        {label} ({formatDate(session.recorded)})
+    <div className="mb-2 p-2 bg-light rounded">
+      <div className="d-flex justify-content-between align-items-center mb-1">
+        <small className="text-muted fw-semibold">
+          {label} ({formatDate(session.recorded)})
+        </small>
         {isPersonalBest && (
-          <span className="badge bg-warning text-dark ms-2">Personal Best</span>
+          <span className="badge bg-warning text-dark">Personal Best</span>
         )}
-      </h6>
-      <Row className="text-dark">
-        <Col>
-          <small className="text-muted">Weight:</small>
-          <div>{exercise.weight} kg</div>
-        </Col>
-        <Col>
-          <small className="text-muted">Reps:</small>
-          <div>{exercise.reps}</div>
-        </Col>
-        <Col>
-          <small className="text-muted">Sets:</small>
-          <div>{exercise.sets}</div>
-        </Col>
-        {exercise.rpe && (
-          <Col>
-            <small className="text-muted">RPE:</small>
-            <div>{exercise.rpe}</div>
-          </Col>
-        )}
-      </Row>
+      </div>
+      <div className="text-dark small">
+        {exercise.weight} kg · {exercise.reps} reps × {exercise.sets} sets
+        {exercise.rpe && ` · RPE ${exercise.rpe}`}
+      </div>
     </div>
   );
 };
