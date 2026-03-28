@@ -1,8 +1,5 @@
 use std::net::SocketAddrV4;
 
-use aws_config::BehaviorVersion;
-use aws_config::sts::AssumeRoleProvider;
-use aws_credential_types::provider::SharedCredentialsProvider;
 use color_eyre::eyre::Result;
 use foundation_shutdown::ShutdownCoordinator;
 use foundation_templating::TemplateEngine;
@@ -32,22 +29,7 @@ async fn main() -> Result<()> {
     let (config, pool) = foundation_init::run_with_bootstrap::<Configuration>().await?;
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let base_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
-    let sdk_config = match std::env::var("AWS_ROLE_ARN") {
-        Ok(role_arn) => {
-            let provider = AssumeRoleProvider::builder(role_arn)
-                .session_name(env!("CARGO_PKG_NAME"))
-                .configure(&base_config)
-                .build()
-                .await;
-
-            base_config
-                .into_builder()
-                .credentials_provider(SharedCredentialsProvider::new(provider))
-                .build()
-        }
-        Err(_) => base_config,
-    };
+    let sdk_config = foundation_credentials::load().await?;
     let route53_client = aws_sdk_route53::Client::new(&sdk_config);
     let s3_client = aws_sdk_s3::Client::new(&sdk_config);
 

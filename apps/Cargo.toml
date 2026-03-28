@@ -6,6 +6,7 @@ members = [
 	"events",
 	"foundation/args",
 	"foundation/configuration",
+	"foundation/credentials",
 	"foundation/database-bootstrap",
 	"foundation/http-server",
 	"foundation/init",

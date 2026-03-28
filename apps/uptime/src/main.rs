@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use aws_config::BehaviorVersion;
 use color_eyre::eyre::Result;
 use foundation_recurring_job::RecurringJob;
 use foundation_shutdown::ShutdownCoordinator;
@@ -21,7 +20,7 @@ use crate::poller::{AlertThreshold, CertificateAlertThreshold, Poller, PollerCon
 async fn main() -> Result<()> {
     let (config, pool) = foundation_init::run_with_bootstrap::<Configuration>().await?;
 
-    let sdk_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let sdk_config = foundation_credentials::load().await?;
     let sns_client = aws_sdk_sns::Client::new(&sdk_config);
 
     let configuration = PollerConfiguration::new(
