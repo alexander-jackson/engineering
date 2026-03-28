@@ -91,10 +91,12 @@ const SessionDisplay = ({
   label,
   session,
   loading,
+  isPersonalBest,
 }: {
   label: string;
   session?: LastExerciseSession | null;
   loading?: boolean;
+  isPersonalBest?: boolean;
 }) => {
   if (loading) {
     return (
@@ -114,6 +116,9 @@ const SessionDisplay = ({
     <div className="mb-3 p-3 bg-light rounded">
       <h6 className="text-dark mb-2">
         {label} ({formatDate(session.recorded)})
+        {isPersonalBest && (
+          <span className="badge bg-warning text-dark ms-2">Personal Best</span>
+        )}
       </h6>
       <Row className="text-dark">
         <Col>
@@ -204,6 +209,11 @@ const AddExerciseModal = (props: Props) => {
     ...sessionQueryArgs,
   );
 
+  const isSameSession =
+    !!lastSession &&
+    !!bestSession &&
+    lastSession.recorded === bestSession.recorded;
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -288,6 +298,7 @@ const AddExerciseModal = (props: Props) => {
           <SessionDisplay
             label="Previous Session"
             session={lastSession}
+            isPersonalBest={isSameSession}
             loading={
               lastSessionLoading &&
               resolved.variant !== ExerciseVariant.Unknown &&
@@ -296,16 +307,18 @@ const AddExerciseModal = (props: Props) => {
             }
           />
 
-          <SessionDisplay
-            label="Best Session (Last 3 Months)"
-            session={bestSession}
-            loading={
-              bestSessionLoading &&
-              resolved.variant !== ExerciseVariant.Unknown &&
-              !!resolved.description &&
-              resolved.description.trim() !== ""
-            }
-          />
+          {!isSameSession && (
+            <SessionDisplay
+              label="Best Session (Last 3 Months)"
+              session={bestSession}
+              loading={
+                bestSessionLoading &&
+                resolved.variant !== ExerciseVariant.Unknown &&
+                !!resolved.description &&
+                resolved.description.trim() !== ""
+              }
+            />
+          )}
 
           <Row>
             <Col>

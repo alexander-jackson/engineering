@@ -194,6 +194,56 @@ describe("AddExerciseModal", () => {
     expect(screen.queryByText(/Best Session/)).not.toBeInTheDocument();
   });
 
+  it("shows a Personal Best badge and single box when sessions share the same recorded date", () => {
+    mockUseBestSession.mockReturnValue({
+      data: { recorded: "2024-01-10", exercise: latPulldown },
+      isLoading: false,
+    });
+
+    renderModal();
+
+    expect(screen.getByText("Personal Best")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Best Session \(Last 3 Months\)/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows two separate boxes without a badge when sessions have different recorded dates", () => {
+    const bestExercise: Exercise = {
+      variant: ExerciseVariant.Other,
+      description: "Lat Pulldown",
+      weight: 90,
+      reps: 8,
+      sets: 4,
+    };
+    mockUseBestSession.mockReturnValue({
+      data: { recorded: "2024-01-05", exercise: bestExercise },
+      isLoading: false,
+    });
+
+    renderModal();
+
+    expect(
+      screen.getByText("Previous Session (Wed 10th January)"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Best Session (Last 3 Months) (Fri 5th January)"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Personal Best")).not.toBeInTheDocument();
+  });
+
+  it("shows both loading indicators independently while sessions are loading", () => {
+    mockUseLastSession.mockReturnValue({ data: undefined, isLoading: true });
+    mockUseBestSession.mockReturnValue({ data: undefined, isLoading: true });
+
+    renderModal();
+
+    expect(screen.getByText("Loading previous session...")).toBeInTheDocument();
+    expect(
+      screen.getByText("Loading best session (last 3 months)..."),
+    ).toBeInTheDocument();
+  });
+
   it("does not query best session when editing an existing exercise", () => {
     renderModal();
 
