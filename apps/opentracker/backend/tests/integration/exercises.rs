@@ -379,6 +379,210 @@ async fn last_session_can_be_fetched_for_freeform_exercises(pool: PgPool) -> sql
 }
 
 #[sqlx::test]
+async fn best_session_can_be_fetched_for_structured_exercises(pool: PgPool) -> sqlx::Result<()> {
+    let user_id = some_user(&pool).await?;
+
+    // Three workouts: the oldest has the highest estimated 1RM and is outside the 3-month
+    // window, the middle has the highest estimated 1RM within the window, and the most recent
+    // has a lower estimated 1RM despite heavier weight (because RPE 3 means it was easy).
+    // current_date = Apr 20 2024; 3-month window starts Jan 20 2024.
+    // Formula: (100 * weight) / (48.8 + 53.8 * exp(-0.075 * (reps + (10 - rpe))))
+    let outside_window_date = date(10, 1, 2024); // outside window, highest 1RM overall
+    let best_in_window_date = date(1, 2, 2024); // inside window, best 1RM within window
+    let recent_date = date(15, 3, 2024); // inside window, low RPE deflates estimated 1RM
+
+    let outside_workout_id =
+        persistence::workouts::create_or_fetch(user_id, outside_window_date, &pool).await?;
+    let best_workout_id =
+        persistence::workouts::create_or_fetch(user_id, best_in_window_date, &pool).await?;
+    let recent_workout_id =
+        persistence::workouts::create_or_fetch(user_id, recent_date, &pool).await?;
+
+    // Outside window: 120 kg × 3 reps @ RPE 9 → estimated 1RM ≈ 135.4 kg (excluded)
+    let outside_exercise = forms::Exercise {
+        variant: forms::ExerciseVariant::Squat,
+        description: String::from("Competition"),
+        weight: 120.0,
+        reps: 3,
+        sets: 3,
+        rpe: Some(9.0),
+    };
+
+    // Inside window, best: 100 kg × 5 reps @ RPE 5 → estimated 1RM ≈ 134.7 kg
+    // Low RPE means lots of reps in reserve, so the formula projects a high 1RM
+    let best_exercise = forms::Exercise {
+        variant: forms::ExerciseVariant::Squat,
+        description: String::from("Competition"),
+        weight: 100.0,
+        reps: 5,
+        sets: 3,
+        rpe: Some(5.0),
+    };
+
+    // Inside window, recent: 115 kg × 1 rep @ RPE 10 → estimated 1RM ≈ 116.5 kg
+    // Higher raw weight but a near-max single gives a much lower estimated 1RM
+    let recent_exercise = forms::Exercise {
+        variant: forms::ExerciseVariant::Squat,
+        description: String::from("Competition"),
+        weight: 115.0,
+        reps: 1,
+        sets: 1,
+        rpe: Some(10.0),
+    };
+
+    persistence::exercises::insert(outside_workout_id, &outside_exercise, &pool).await?;
+    persistence::exercises::insert(best_workout_id, &best_exercise, &pool).await?;
+    persistence::exercises::insert(recent_workout_id, &recent_exercise, &pool).await?;
+
+    let current_date = date(20, 4, 2024);
+    let result = persistence::exercises::fetch_best_session(
+        user_id,
+        forms::ExerciseVariant::Squat,
+        "Competition",
+        current_date,
+        &pool,
+    )
+    .await?;
+
+    // Should return the best session within the window (Feb 1), not the most recent (Mar 15)
+    // and not the one outside the window (Jan 10)
+    assert!(result.is_some());
+    let (exercise, recorded_date) = result.unwrap();
+    assert_eq!(exercise.weight, 100.0);
+    assert_eq!(exercise.reps, 5);
+    assert_eq!(recorded_date, best_in_window_date);
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn best_session_returns_none_when_no_previous_session_exists(
+    pool: PgPool,
+) -> sqlx::Result<()> {
+    let user_id = some_user(&pool).await?;
+
+    let current_date = date(20, 1, 2024);
+    let result = persistence::exercises::fetch_best_session(
+        user_id,
+        forms::ExerciseVariant::Bench,
+        "Competition",
+        current_date,
+        &pool,
+    )
+    .await?;
+
+    assert!(result.is_none());
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn best_session_excludes_current_date(pool: PgPool) -> sqlx::Result<()> {
+    let user_id = some_user(&pool).await?;
+
+    let first_date = date(10, 1, 2024);
+    let second_date = date(15, 1, 2024);
+
+    let first_workout_id =
+        persistence::workouts::create_or_fetch(user_id, first_date, &pool).await?;
+    let second_workout_id =
+        persistence::workouts::create_or_fetch(user_id, second_date, &pool).await?;
+
+    // First date has a lower 1RM; second date (current_date) has the highest 1RM
+    let first_exercise = forms::Exercise {
+        variant: forms::ExerciseVariant::Deadlift,
+        description: String::from("Competition"),
+        weight: 150.0,
+        reps: 3,
+        sets: 3,
+        rpe: Some(8.0),
+    };
+
+    let second_exercise = forms::Exercise {
+        variant: forms::ExerciseVariant::Deadlift,
+        description: String::from("Competition"),
+        weight: 200.0,
+        reps: 1,
+        sets: 1,
+        rpe: None,
+    };
+
+    persistence::exercises::insert(first_workout_id, &first_exercise, &pool).await?;
+    persistence::exercises::insert(second_workout_id, &second_exercise, &pool).await?;
+
+    // Use the second date as current_date — its exercise should be excluded
+    let result = persistence::exercises::fetch_best_session(
+        user_id,
+        forms::ExerciseVariant::Deadlift,
+        "Competition",
+        second_date,
+        &pool,
+    )
+    .await?;
+
+    assert!(result.is_some());
+    let (exercise, recorded_date) = result.unwrap();
+    assert_eq!(exercise.weight, 150.0);
+    assert_eq!(recorded_date, first_date);
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn best_session_can_be_fetched_for_freeform_exercises(pool: PgPool) -> sqlx::Result<()> {
+    let user_id = some_user(&pool).await?;
+
+    let first_date = date(10, 1, 2024);
+    let second_date = date(15, 1, 2024);
+
+    let first_workout_id =
+        persistence::workouts::create_or_fetch(user_id, first_date, &pool).await?;
+    let second_workout_id =
+        persistence::workouts::create_or_fetch(user_id, second_date, &pool).await?;
+
+    // First date has the higher 1RM; second date is more recent but lower
+    let first_exercise = forms::Exercise {
+        variant: forms::ExerciseVariant::Other,
+        description: String::from("Barbell Row"),
+        weight: 100.0,
+        reps: 3,
+        sets: 4,
+        rpe: Some(8.0),
+    };
+
+    let second_exercise = forms::Exercise {
+        variant: forms::ExerciseVariant::Other,
+        description: String::from("Barbell Row"),
+        weight: 80.0,
+        reps: 8,
+        sets: 4,
+        rpe: Some(7.5),
+    };
+
+    persistence::exercises::insert(first_workout_id, &first_exercise, &pool).await?;
+    persistence::exercises::insert(second_workout_id, &second_exercise, &pool).await?;
+
+    let current_date = date(20, 1, 2024);
+    let result = persistence::exercises::fetch_best_session(
+        user_id,
+        forms::ExerciseVariant::Other,
+        "Barbell Row",
+        current_date,
+        &pool,
+    )
+    .await?;
+
+    // Should return the first exercise (higher 1RM), not the more recent second
+    assert!(result.is_some());
+    let (exercise, recorded_date) = result.unwrap();
+    assert_eq!(exercise.weight, 100.0);
+    assert_eq!(exercise.reps, 3);
+    assert_eq!(recorded_date, first_date);
+
+    Ok(())
+}
+
+#[sqlx::test]
 async fn last_session_only_returns_matching_exercise_variant(pool: PgPool) -> sqlx::Result<()> {
     let user_id = some_user(&pool).await?;
 

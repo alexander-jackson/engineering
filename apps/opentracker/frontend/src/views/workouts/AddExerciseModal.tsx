@@ -8,6 +8,7 @@ import { DateTime } from "luxon";
 
 import { useUniqueExercises } from "~/hooks/useAnalysis";
 import { useLastSession } from "~/hooks/useLastSession";
+import { useBestSession } from "~/hooks/useBestSession";
 import { Exercise, ExerciseVariant, LastExerciseSession } from "~/shared/types";
 import Search from "~/components/Search";
 import VariantSelector from "~/components/VariantSelector";
@@ -86,31 +87,33 @@ export const formatDate = (dateString: string): string => {
   return `${dayOfWeek} ${getOrdinal(day)} ${month}`;
 };
 
-const PreviousSessionDisplay = ({
-  lastSession,
+const SessionDisplay = ({
+  label,
+  session,
   loading,
 }: {
-  lastSession?: LastExerciseSession | null;
+  label: string;
+  session?: LastExerciseSession | null;
   loading?: boolean;
 }) => {
   if (loading) {
     return (
       <div className="mb-3 p-3 bg-light rounded">
-        <div className="text-muted">Loading previous session...</div>
+        <div className="text-muted">Loading {label.toLowerCase()}...</div>
       </div>
     );
   }
 
-  if (!lastSession) {
+  if (!session) {
     return null;
   }
 
-  const { exercise } = lastSession;
+  const { exercise } = session;
 
   return (
     <div className="mb-3 p-3 bg-light rounded">
       <h6 className="text-dark mb-2">
-        Previous Session ({formatDate(lastSession.recorded)})
+        {label} ({formatDate(session.recorded)})
       </h6>
       <Row className="text-dark">
         <Col>
@@ -186,12 +189,19 @@ const AddExerciseModal = (props: Props) => {
 
   // Fetch unique exercises and last session
   const { data: uniqueExercises = [] } = useUniqueExercises(resolved.variant);
-  const { data: lastSession, isLoading: lastSessionLoading } = useLastSession(
+  const sessionQueryArgs = [
     resolved.variant !== ExerciseVariant.Unknown ? resolved.variant : undefined,
     resolved.description && resolved.description.trim() !== ""
       ? resolved.description
       : undefined,
     editIndex === undefined ? currentDate : undefined,
+  ] as const;
+
+  const { data: lastSession, isLoading: lastSessionLoading } = useLastSession(
+    ...sessionQueryArgs,
+  );
+  const { data: bestSession, isLoading: bestSessionLoading } = useBestSession(
+    ...sessionQueryArgs,
   );
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -275,10 +285,22 @@ const AddExerciseModal = (props: Props) => {
             onClick={setDescription}
           />
 
-          <PreviousSessionDisplay
-            lastSession={lastSession}
+          <SessionDisplay
+            label="Previous Session"
+            session={lastSession}
             loading={
               lastSessionLoading &&
+              resolved.variant !== ExerciseVariant.Unknown &&
+              !!resolved.description &&
+              resolved.description.trim() !== ""
+            }
+          />
+
+          <SessionDisplay
+            label="Best Session (Last 3 Months)"
+            session={bestSession}
+            loading={
+              bestSessionLoading &&
               resolved.variant !== ExerciseVariant.Unknown &&
               !!resolved.description &&
               resolved.description.trim() !== ""
