@@ -263,6 +263,122 @@ pub async fn rename_structured(
     .map(|r| r.rows_affected())
 }
 
+pub async fn fetch_best_session(
+    user_id: Uuid,
+    variant: ExerciseVariant,
+    description: &str,
+    exclude_date: chrono::NaiveDate,
+    pool: &PgPool,
+) -> sqlx::Result<Option<(Exercise, chrono::NaiveDate)>> {
+    match variant {
+        ExerciseVariant::Other => {
+            fetch_best_session_freeform(user_id, description, exclude_date, pool).await
+        }
+        _ => fetch_best_session_structured(user_id, variant, description, exclude_date, pool).await,
+    }
+}
+
+async fn fetch_best_session_structured(
+    user_id: Uuid,
+    variant: ExerciseVariant,
+    description: &str,
+    exclude_date: chrono::NaiveDate,
+    pool: &PgPool,
+) -> sqlx::Result<Option<(Exercise, chrono::NaiveDate)>> {
+    let result = sqlx::query_as!(
+        DatedExercise,
+        r#"
+        SELECT
+            w.recorded AS "recorded!: _",
+            se.variant AS "variant!: ExerciseVariant",
+            se.description AS "description!",
+            se.weight AS "weight!",
+            se.reps AS "reps!",
+            se.sets AS "sets!",
+            se.rpe
+        FROM structured_exercise se
+        JOIN workout w ON w.id = se.workout_id
+        JOIN account a ON a.id = w.account_id
+        WHERE a.account_uid = $1
+        AND se.variant = $2
+        AND se.description = $3
+        AND w.recorded < $4
+        AND w.recorded >= $4 - INTERVAL '3 months'
+        ORDER BY (100 * se.weight) / (48.8 + 53.8 * exp(-0.075 * (se.reps + (10 - COALESCE(se.rpe, 8.0))))) DESC, w.recorded DESC
+        LIMIT 1
+        "#,
+        user_id,
+        variant as ExerciseVariant,
+        description,
+        exclude_date,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.map(|r| {
+        (
+            Exercise {
+                variant: r.variant,
+                description: r.description,
+                weight: r.weight,
+                reps: r.reps,
+                sets: r.sets,
+                rpe: r.rpe,
+            },
+            r.recorded.0,
+        )
+    }))
+}
+
+async fn fetch_best_session_freeform(
+    user_id: Uuid,
+    description: &str,
+    exclude_date: chrono::NaiveDate,
+    pool: &PgPool,
+) -> sqlx::Result<Option<(Exercise, chrono::NaiveDate)>> {
+    let result = sqlx::query_as!(
+        DatedExercise,
+        r#"
+        SELECT
+            w.recorded AS "recorded!: _",
+            fe.variant AS "variant!: ExerciseVariant",
+            fe.description AS "description!",
+            fe.weight AS "weight!",
+            fe.reps AS "reps!",
+            fe.sets AS "sets!",
+            fe.rpe
+        FROM freeform_exercise fe
+        JOIN workout w ON w.id = fe.workout_id
+        JOIN account a ON a.id = w.account_id
+        WHERE a.account_uid = $1
+        AND fe.description = $2
+        AND w.recorded < $3
+        AND w.recorded >= $3 - INTERVAL '3 months'
+        ORDER BY (100 * fe.weight) / (48.8 + 53.8 * exp(-0.075 * (fe.reps + (10 - COALESCE(fe.rpe, 8.0))))) DESC, w.recorded DESC
+        LIMIT 1
+        "#,
+        user_id,
+        description,
+        exclude_date,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.map(|r| {
+        (
+            Exercise {
+                variant: r.variant,
+                description: r.description,
+                weight: r.weight,
+                reps: r.reps,
+                sets: r.sets,
+                rpe: r.rpe,
+            },
+            r.recorded.0,
+        )
+    }))
+}
+
 pub async fn fetch_last_session(
     user_id: Uuid,
     variant: ExerciseVariant,

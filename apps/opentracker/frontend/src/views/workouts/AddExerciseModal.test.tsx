@@ -4,9 +4,11 @@ import AddExerciseModal, { formatDate } from "./AddExerciseModal";
 import { ExerciseVariant, Exercise } from "~/shared/types";
 import { useUniqueExercises } from "~/hooks/useAnalysis";
 import { useLastSession } from "~/hooks/useLastSession";
+import { useBestSession } from "~/hooks/useBestSession";
 
 jest.mock("~/hooks/useAnalysis");
 jest.mock("~/hooks/useLastSession");
+jest.mock("~/hooks/useBestSession");
 
 describe("formatDate", () => {
   it("formats date with 1st ordinal", () => {
@@ -53,6 +55,7 @@ describe("formatDate", () => {
 describe("AddExerciseModal", () => {
   const mockUseUniqueExercises = useUniqueExercises as jest.Mock;
   const mockUseLastSession = useLastSession as jest.Mock;
+  const mockUseBestSession = useBestSession as jest.Mock;
 
   const latPulldown: Exercise = {
     variant: ExerciseVariant.Other,
@@ -85,6 +88,7 @@ describe("AddExerciseModal", () => {
       },
       isLoading: false,
     });
+    mockUseBestSession.mockReturnValue({ data: null, isLoading: false });
   });
 
   it("uses the resolved variant and description to query the previous session", () => {
@@ -136,6 +140,86 @@ describe("AddExerciseModal", () => {
     );
     expect(mockUseUniqueExercises).toHaveBeenCalledWith(
       ExerciseVariant.Unknown,
+    );
+  });
+
+  it("uses the resolved variant and description to query the best session", () => {
+    renderModal();
+
+    expect(mockUseBestSession).toHaveBeenCalledWith(
+      ExerciseVariant.Other,
+      "Lat Pulldown",
+      "2024-01-15",
+    );
+  });
+
+  it("displays the best session from the last 3 months", () => {
+    const bestExercise: Exercise = {
+      variant: ExerciseVariant.Other,
+      description: "Lat Pulldown",
+      weight: 90,
+      reps: 8,
+      sets: 4,
+    };
+    mockUseBestSession.mockReturnValue({
+      data: { recorded: "2024-01-05", exercise: bestExercise },
+      isLoading: false,
+    });
+
+    renderModal();
+
+    expect(
+      screen.getByText("Best Session (Last 3 Months) (Fri 5th January)"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("90 kg")).toBeInTheDocument();
+    expect(screen.getByText("8")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+  });
+
+  it("shows a loading indicator while the best session is loading", () => {
+    mockUseBestSession.mockReturnValue({ data: undefined, isLoading: true });
+
+    renderModal();
+
+    expect(
+      screen.getByText("Loading best session (last 3 months)..."),
+    ).toBeInTheDocument();
+  });
+
+  it("does not display best session when there is no data", () => {
+    mockUseBestSession.mockReturnValue({ data: null, isLoading: false });
+
+    renderModal();
+
+    expect(screen.queryByText(/Best Session/)).not.toBeInTheDocument();
+  });
+
+  it("does not query best session when editing an existing exercise", () => {
+    renderModal();
+
+    expect(mockUseBestSession).toHaveBeenCalledWith(
+      ExerciseVariant.Other,
+      "Lat Pulldown",
+      "2024-01-15",
+    );
+
+    const editExercise = { exercise: latPulldown, index: 0 };
+    render(
+      <AddExerciseModal
+        show={true}
+        onHide={jest.fn()}
+        exercises={[latPulldown]}
+        setExercises={jest.fn()}
+        currentDate="2024-01-15"
+        saveWorkout={jest.fn()}
+        editExercise={editExercise}
+      />,
+    );
+
+    expect(mockUseBestSession).toHaveBeenCalledWith(
+      ExerciseVariant.Other,
+      "Lat Pulldown",
+      undefined,
     );
   });
 });
