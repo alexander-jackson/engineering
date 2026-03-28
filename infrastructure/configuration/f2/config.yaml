@@ -196,6 +196,8 @@ services:
     image: alexanderjackson/pgmanager
     tag: 20260328-0709
     replicas: 1
+    environment:
+      AWS_ROLE_ARN: arn:aws:iam::558855412466:role/pgmanager-role
     volumes:
       config:
         source:
@@ -225,6 +227,7 @@ services:
 
       SERVER_ADDR: "0.0.0.0:8000"
       SNS_TOPIC: "arn:aws:sns:eu-west-1:558855412466:outages"
+      AWS_ROLE_ARN: arn:aws:iam::558855412466:role/uptime-role
     volumes:
       config:
         source:
