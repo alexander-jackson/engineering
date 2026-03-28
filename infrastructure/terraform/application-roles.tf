@@ -27,6 +27,26 @@ module "application_role" {
         },
       ]
     })
+
+    pgmanager = jsonencode({
+      Statement = [
+        {
+          Action   = ["s3:PutObject"]
+          Effect   = "Allow"
+          Resource = format("%s/*", module.postgres_backups_bucket.arn)
+        },
+      ]
+    })
+
+    uptime = jsonencode({
+      Statement = [
+        {
+          Action   = ["sns:Publish"]
+          Effect   = "Allow"
+          Resource = aws_sns_topic.outages.arn
+        },
+      ]
+    })
   }
 
   application_name   = each.key
