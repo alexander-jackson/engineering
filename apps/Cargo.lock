@@ -965,13 +965,12 @@ dependencies = [
 name = "certmanager"
 version = "0.1.0"
 dependencies = [
- "aws-config",
- "aws-credential-types",
  "aws-sdk-route53",
  "aws-sdk-s3",
  "axum",
  "color-eyre",
  "foundation-configuration",
+ "foundation-credentials",
  "foundation-http-server",
  "foundation-init",
  "foundation-recurring-job",
@@ -1749,6 +1748,16 @@ dependencies = [
  "serde",
  "serde_yaml",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "foundation-credentials"
+version = "0.1.0"
+dependencies = [
+ "aws-config",
+ "aws-credential-types",
+ "color-eyre",
  "tracing",
 ]
 
@@ -3620,12 +3629,12 @@ dependencies = [
 name = "pgmanager"
 version = "0.1.0"
 dependencies = [
- "aws-config",
  "aws-sdk-s3",
  "chrono",
  "color-eyre",
  "flate2",
  "foundation-configuration",
+ "foundation-credentials",
  "foundation-init",
  "humansize",
  "pico-args",
@@ -5723,12 +5732,12 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 name = "uptime"
 version = "0.1.0"
 dependencies = [
- "aws-config",
  "aws-sdk-sns",
  "axum",
  "chrono",
  "color-eyre",
  "dotenvy",
+ "foundation-credentials",
  "foundation-http-server",
  "foundation-init",
  "foundation-recurring-job",

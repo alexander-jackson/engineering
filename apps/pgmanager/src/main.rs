@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use aws_config::BehaviorVersion;
 use aws_sdk_s3::primitives::ByteStream;
 use chrono::Utc;
 use color_eyre::eyre::Result;
@@ -19,7 +18,7 @@ use crate::utils::{compress, get_initial_offset};
 async fn main() -> Result<()> {
     let config = foundation_init::run::<Configuration>()?;
 
-    let sdk_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let sdk_config = foundation_credentials::load().await?;
     let s3_client = aws_sdk_s3::Client::new(&sdk_config);
 
     match config.backup_schedule {
