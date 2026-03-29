@@ -20,14 +20,14 @@ impl From<DailyStats> for IndexContext {
         let wear_time_display = format_minutes(stats.wear_minutes);
         let out_time_display = format_minutes(stats.out_minutes);
 
-        let target_minutes = 22 * 60;
-        let remaining_target = (target_minutes - stats.wear_minutes).max(0);
-        let target_display = if remaining_target == 0 {
-            "Target achieved!".to_owned()
+        let budget_minutes = 2 * 60;
+        let remaining_budget = (budget_minutes - stats.out_minutes).max(0);
+        let target_display = if stats.out_minutes >= budget_minutes {
+            "Out-time budget exceeded".to_owned()
         } else {
             format!(
-                "{} remaining to hit target",
-                format_minutes(remaining_target)
+                "{} of out-time budget remaining",
+                format_minutes(remaining_budget)
             )
         };
 
