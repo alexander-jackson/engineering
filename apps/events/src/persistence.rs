@@ -108,11 +108,7 @@ pub async fn get_daily_stats(
     let elapsed_minutes = now.signed_duration_since(today_start).num_minutes();
     let out_minutes = (elapsed_minutes - wear_minutes).max(0);
 
-    // Minutes remaining in today
-    let end_of_day = today_start + Duration::hours(24);
-    let remaining_minutes = end_of_day.signed_duration_since(now).num_minutes().max(0);
-
-    let is_on_track = wear_minutes + remaining_minutes >= 22 * 60;
+    let is_on_track = out_minutes < 2 * 60;
 
     Ok(DailyStats {
         wear_minutes,
@@ -196,11 +192,7 @@ pub async fn get_history(pool: &PgPool, now: DateTime<Utc>) -> Result<Vec<DayHis
 
         let elapsed_minutes = effective_end.signed_duration_since(day_start).num_minutes();
         let out_minutes = (elapsed_minutes - wear_minutes).max(0);
-        let remaining_minutes = day_end
-            .signed_duration_since(effective_end)
-            .num_minutes()
-            .max(0);
-        let is_on_track = wear_minutes + remaining_minutes >= 22 * 60;
+        let is_on_track = out_minutes < 2 * 60;
 
         results.push(DayHistory {
             date: day,
@@ -379,9 +371,11 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn on_track_when_enough_remaining_time_to_hit_target(pool: PgPool) -> Result<()> {
-        // 2 hours into the day, 0 minutes worn — 22 * 60 = 1320 minutes needed,
-        // 22 hours remaining, so still on track
+    async fn on_track_when_out_time_under_budget(pool: PgPool) -> Result<()> {
+        // 2 hours into the day, retainer worn the whole time — 0 minutes out, on track
+        let insert_at = today_start();
+        record_event(&pool, EventType::Inserted, insert_at).await?;
+
         let now = today_start() + chrono::Duration::hours(2);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
@@ -391,9 +385,9 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn not_on_track_when_too_little_time_remains(pool: PgPool) -> Result<()> {
-        // 23 hours into the day, 0 minutes worn — only 60 minutes left, can't hit target
-        let now = today_start() + chrono::Duration::hours(23);
+    async fn not_on_track_when_out_time_exceeds_budget(pool: PgPool) -> Result<()> {
+        // 3 hours out with no wear — exceeds 2 hour budget
+        let now = today_start() + chrono::Duration::hours(3);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert!(!stats.is_on_track);
@@ -402,18 +396,12 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn on_track_when_wear_time_plus_remaining_meets_target(pool: PgPool) -> Result<()> {
-        // 23 hours into the day, retainer worn for 21 hours and 30 mins — 30 mins left,
-        // total = 21h30 + 30min = 22h, exactly on target
-        let insert_at = today_start();
-        let remove_at = insert_at + chrono::Duration::minutes(21 * 60 + 30);
-        record_event(&pool, EventType::Inserted, insert_at).await?;
-        record_event(&pool, EventType::Removed, remove_at).await?;
-
-        let now = today_start() + chrono::Duration::hours(23);
+    async fn not_on_track_when_out_time_exactly_at_budget(pool: PgPool) -> Result<()> {
+        // Exactly 2 hours out — threshold is strict (< 2h), so 2h exactly is not on track
+        let now = today_start() + chrono::Duration::hours(2);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
-        assert!(stats.is_on_track);
+        assert!(!stats.is_on_track);
 
         Ok(())
     }
@@ -576,13 +564,14 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn past_day_is_on_track_when_22_hours_worn(pool: PgPool) -> Result<()> {
+    async fn past_day_is_on_track_when_out_time_under_budget(pool: PgPool) -> Result<()> {
+        // 23 hours worn = 1 hour out, under the 2 hour budget
         let day1 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
         record_event(&pool, EventType::Inserted, day1).await?;
         record_event(
             &pool,
             EventType::Removed,
-            day1 + chrono::Duration::hours(22),
+            day1 + chrono::Duration::hours(23),
         )
         .await?;
 
@@ -595,7 +584,8 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn past_day_is_not_on_track_when_under_22_hours_worn(pool: PgPool) -> Result<()> {
+    async fn past_day_is_not_on_track_when_out_time_exceeds_budget(pool: PgPool) -> Result<()> {
+        // 20 hours worn = 4 hours out, exceeds the 2 hour budget
         let day1 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
         record_event(&pool, EventType::Inserted, day1).await?;
         record_event(
