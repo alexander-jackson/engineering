@@ -108,11 +108,7 @@ pub async fn get_daily_stats(
     let elapsed_minutes = now.signed_duration_since(today_start).num_minutes();
     let out_minutes = (elapsed_minutes - wear_minutes).max(0);
 
-    // Minutes remaining in today
-    let end_of_day = today_start + Duration::hours(24);
-    let remaining_minutes = end_of_day.signed_duration_since(now).num_minutes().max(0);
-
-    let is_on_track = wear_minutes + remaining_minutes >= 22 * 60;
+    let is_on_track = out_minutes < 2 * 60;
 
     Ok(DailyStats {
         wear_minutes,
@@ -196,11 +192,7 @@ pub async fn get_history(pool: &PgPool, now: DateTime<Utc>) -> Result<Vec<DayHis
 
         let elapsed_minutes = effective_end.signed_duration_since(day_start).num_minutes();
         let out_minutes = (elapsed_minutes - wear_minutes).max(0);
-        let remaining_minutes = day_end
-            .signed_duration_since(effective_end)
-            .num_minutes()
-            .max(0);
-        let is_on_track = wear_minutes + remaining_minutes >= 22 * 60;
+        let is_on_track = out_minutes < 2 * 60;
 
         results.push(DayHistory {
             date: day,
