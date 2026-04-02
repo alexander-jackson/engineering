@@ -283,6 +283,13 @@ resource "aws_subnet" "telemetry" {
   availability_zone = "eu-west-1a"
 }
 
+# Required second AZ subnet for RDS DB subnet group (AWS mandates ≥2 AZs)
+resource "aws_subnet" "rds" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "eu-west-1b"
+}
+
 # Internet Gateway definition
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
@@ -477,4 +484,30 @@ resource "aws_route53_record" "postgres" {
   type    = "A"
   ttl     = 300
   records = [module.postgres.private_ip]
+}
+
+module "rds_postgres" {
+  source = "./modules/rds-postgres"
+  name   = "postgres"
+
+  vpc_id            = aws_vpc.main.id
+  subnet_ids        = [aws_subnet.main.id, aws_subnet.rds.id]
+  availability_zone = "eu-west-1a"
+
+  allowed_security_group_ids = [
+    module.primary.security_group_id,
+    module.postgres.security_group_id,
+  ]
+
+  engine_version    = "15"
+  instance_class    = "db.t4g.micro"
+  allocated_storage = 20
+}
+
+resource "aws_route53_record" "rds_postgres" {
+  zone_id = aws_route53_zone.internal.id
+  name    = "rds"
+  type    = "CNAME"
+  ttl     = 300
+  records = [module.rds_postgres.address]
 }
