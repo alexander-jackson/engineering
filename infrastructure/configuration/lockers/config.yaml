@@ -3,7 +3,7 @@ server:
   port: 8000
 
 database:
-  host: database.mesh.internal
+  host: rds.mesh.internal
   port: 5432
 
   root:
