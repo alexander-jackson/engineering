@@ -46,6 +46,12 @@ Shared libraries in `apps/foundation/`:
 
 ## Development Commands
 
+### Adding Dependencies
+```bash
+# Use cargo add — do not edit Cargo.toml manually
+cargo add <crate> -p <package>
+```
+
 ### Building
 ```bash
 # Build all workspace members

@@ -32,6 +32,8 @@ pub struct TargetDatabaseConfiguration {
     pub database: String,
     pub host: String,
     pub port: u16,
+    #[serde(default)]
+    pub ssl: bool,
 }
 
 impl From<&TargetDatabaseConfiguration> for tokio_postgres::Config {

@@ -3,6 +3,8 @@ use std::time::Duration;
 use aws_sdk_s3::primitives::ByteStream;
 use chrono::Utc;
 use color_eyre::eyre::Result;
+use native_tls::TlsConnector;
+use postgres_native_tls::MakeTlsConnector;
 use tokio::time::Instant;
 use tokio_postgres::NoTls;
 
@@ -53,15 +55,30 @@ async fn take_backups(
     let span = tracing::info_span!("backup", %date);
     let _guard = span.enter();
 
-    let (client, connection) = tokio_postgres::Config::from(database_config)
-        .connect(NoTls)
-        .await?;
-
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("connection error: {}", e);
-        }
-    });
+    let client = if database_config.ssl {
+        let tls = TlsConnector::builder()
+            .danger_accept_invalid_certs(true)
+            .build()?;
+        let (client, connection) = tokio_postgres::Config::from(database_config)
+            .connect(MakeTlsConnector::new(tls))
+            .await?;
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("connection error: {}", e);
+            }
+        });
+        client
+    } else {
+        let (client, connection) = tokio_postgres::Config::from(database_config)
+            .connect(NoTls)
+            .await?;
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("connection error: {}", e);
+            }
+        });
+        client
+    };
 
     let databases = discover(&client).await?;
 
