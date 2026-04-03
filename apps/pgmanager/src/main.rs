@@ -1,19 +1,22 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use aws_sdk_s3::primitives::ByteStream;
 use chrono::Utc;
 use color_eyre::eyre::Result;
-use native_tls::TlsConnector;
-use postgres_native_tls::MakeTlsConnector;
+use rustls::ClientConfig;
 use tokio::time::Instant;
 use tokio_postgres::NoTls;
+use tokio_postgres_rustls::MakeRustlsConnect;
 
 mod config;
 mod databases;
+mod tls;
 mod utils;
 
 use crate::config::{BackupLocation, BackupSchedule, Configuration, TargetDatabaseConfiguration};
 use crate::databases::{discover, dump};
+use crate::tls::NoCertificateVerification;
 use crate::utils::{compress, get_initial_offset};
 
 #[tokio::main(flavor = "current_thread")]
@@ -56,11 +59,12 @@ async fn take_backups(
     let _guard = span.enter();
 
     let client = if database_config.ssl {
-        let tls = TlsConnector::builder()
-            .danger_accept_invalid_certs(true)
-            .build()?;
+        let tls_config = ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(NoCertificateVerification))
+            .with_no_client_auth();
         let (client, connection) = tokio_postgres::Config::from(database_config)
-            .connect(MakeTlsConnector::new(tls))
+            .connect(MakeRustlsConnect::new(tls_config))
             .await?;
         tokio::spawn(async move {
             if let Err(e) = connection.await {

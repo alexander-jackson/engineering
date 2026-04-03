@@ -4,7 +4,7 @@ backup_location:
 
 backup_schedule:
   type: daily
-  time: 11:30
+  time: 11:40
 
 target_database:
   username: postgres
