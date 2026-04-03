@@ -43,6 +43,10 @@ pub async fn dump(config: &TargetDatabaseConfiguration, database: &str) -> Resul
         ])
         .stdout(Stdio::piped());
 
+    if config.ssl {
+        command.env("PGSSLMODE", "require");
+    }
+
     if let Some(password) = config.password.as_deref() {
         command.env("PGPASSWORD", password);
     }

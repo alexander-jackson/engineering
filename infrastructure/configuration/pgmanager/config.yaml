@@ -4,7 +4,7 @@ backup_location:
 
 backup_schedule:
   type: daily
-  time: 22:30
+  time: 11:30
 
 target_database:
   username: postgres
@@ -12,3 +12,4 @@ target_database:
   database: postgres
   host: rds.mesh.internal
   port: 5432
+  ssl: true
