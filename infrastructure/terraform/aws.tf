@@ -364,39 +364,6 @@ module "dns2" {
   elastic_ip_allocation_id = aws_eip.dns_server.id
 }
 
-module "postgres" {
-  source = "./modules/postgres"
-  name   = "postgres"
-
-  instance = {
-    type              = "t4g.nano"
-    ami               = "ami-0a1b36900d715a3ad"
-    vpc_id            = aws_vpc.main.id
-    subnet_id         = aws_subnet.main.id
-    availability_zone = "eu-west-1a"
-  }
-
-  configuration = {
-    major_version        = "15"
-    storage_size         = 1
-    backup_bucket        = module.postgres_backups_bucket.name
-    configuration_bucket = module.config_bucket.name
-  }
-
-  key_name   = aws_key_pair.main.key_name
-  elastic_ip = false
-}
-
-resource "aws_security_group_rule" "allow_inbound_connections_to_postgres_from_primary" {
-  description              = format("Allow inbound connections from %s", module.primary.security_group_id)
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = module.primary.security_group_id
-  security_group_id        = module.postgres.security_group_id
-}
-
 # Route table definitions
 resource "aws_route_table" "gateway" {
   vpc_id = aws_vpc.main.id
@@ -478,14 +445,6 @@ resource "aws_route53_zone" "internal" {
   }
 }
 
-resource "aws_route53_record" "postgres" {
-  zone_id = aws_route53_zone.internal.id
-  name    = "database"
-  type    = "A"
-  ttl     = 300
-  records = [module.postgres.private_ip]
-}
-
 module "rds_postgres" {
   source = "./modules/rds-postgres"
   name   = "postgres"
@@ -494,10 +453,7 @@ module "rds_postgres" {
   subnet_ids        = [aws_subnet.main.id, aws_subnet.rds.id]
   availability_zone = "eu-west-1a"
 
-  allowed_security_group_ids = [
-    module.primary.security_group_id,
-    module.postgres.security_group_id,
-  ]
+  allowed_security_group_ids = [module.primary.security_group_id]
 
   engine_version    = "15"
   instance_class    = "db.t4g.micro"
