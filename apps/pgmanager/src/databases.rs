@@ -14,7 +14,8 @@ pub async fn discover(client: &Client) -> Result<Vec<String>> {
         WHERE datname NOT IN (
             'postgres',
             'template0',
-            'template1'
+            'template1',
+            'rdsadmin'
         )
     "#;
 
