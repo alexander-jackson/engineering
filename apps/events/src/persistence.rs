@@ -25,6 +25,7 @@ pub struct DailyStats {
     pub out_minutes: i64,
     pub is_on_track: bool,
     pub current_state: EventType,
+    pub seating_count: i32,
 }
 
 #[tracing::instrument(skip(pool))]
@@ -110,11 +111,21 @@ pub async fn get_daily_stats(
 
     let is_on_track = out_minutes < 2 * 60;
 
+    let seating_count = sqlx::query_scalar!(
+        r#"SELECT COUNT(*)::INT FROM retainer_seating WHERE occurred_at >= $1 AND occurred_at < $2"#,
+        today_start,
+        now,
+    )
+    .fetch_one(pool)
+    .await?
+    .unwrap_or(0);
+
     Ok(DailyStats {
         wear_minutes,
         out_minutes,
         is_on_track,
         current_state,
+        seating_count,
     })
 }
 
@@ -123,6 +134,7 @@ pub struct DayHistory {
     pub wear_minutes: i64,
     pub out_minutes: i64,
     pub is_on_track: bool,
+    pub seating_count: i32,
 }
 
 #[tracing::instrument(skip(pool))]
@@ -142,12 +154,18 @@ pub async fn get_history(pool: &PgPool, now: DateTime<Utc>) -> Result<Vec<DayHis
         return Ok(vec![]);
     }
 
+    let all_seatings =
+        sqlx::query_scalar!(r#"SELECT occurred_at FROM retainer_seating ORDER BY occurred_at ASC"#)
+            .fetch_all(pool)
+            .await?;
+
     let first_date = all_events[0].occurred_at.date_naive();
     let today_date = now.date_naive();
 
     let mut results = Vec::new();
     let mut carry_inserted = false;
     let mut event_idx = 0;
+    let mut seating_idx = 0;
     let mut day = first_date;
 
     while day <= today_date {
@@ -194,11 +212,20 @@ pub async fn get_history(pool: &PgPool, now: DateTime<Utc>) -> Result<Vec<DayHis
         let out_minutes = (elapsed_minutes - wear_minutes).max(0);
         let is_on_track = out_minutes < 2 * 60;
 
+        let mut seating_count: i32 = 0;
+        while seating_idx < all_seatings.len() && all_seatings[seating_idx] < effective_end {
+            if all_seatings[seating_idx] >= day_start {
+                seating_count += 1;
+            }
+            seating_idx += 1;
+        }
+
         results.push(DayHistory {
             date: day,
             wear_minutes,
             out_minutes,
             is_on_track,
+            seating_count,
         });
 
         carry_inserted = end_inserted;
@@ -234,13 +261,25 @@ pub async fn record_event(
     Ok(())
 }
 
+#[tracing::instrument(skip(pool))]
+pub async fn record_seating(pool: &PgPool, occurred_at: DateTime<Utc>) -> Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO retainer_seating (occurred_at) VALUES ($1)"#,
+        occurred_at
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{NaiveDate, TimeZone, Utc};
     use color_eyre::eyre::Result;
     use sqlx::PgPool;
 
-    use super::{EventType, get_daily_stats, get_history, record_event};
+    use super::{EventType, get_daily_stats, get_history, record_event, record_seating};
 
     fn today_start() -> chrono::DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap()
@@ -599,6 +638,79 @@ mod tests {
         let history = get_history(&pool, now).await?;
 
         assert!(!history[1].is_on_track);
+
+        Ok(())
+    }
+
+    // --- seating tests ---
+
+    #[sqlx::test]
+    async fn no_seatings_gives_zero_count(pool: PgPool) -> Result<()> {
+        let now = today_start() + chrono::Duration::hours(10);
+        let stats = get_daily_stats(&pool, today_start(), now).await?;
+
+        assert_eq!(stats.seating_count, 0);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn recording_seatings_increments_count(pool: PgPool) -> Result<()> {
+        let t = today_start() + chrono::Duration::hours(8);
+        record_seating(&pool, t).await?;
+        record_seating(&pool, t + chrono::Duration::hours(4)).await?;
+
+        let now = today_start() + chrono::Duration::hours(14);
+        let stats = get_daily_stats(&pool, today_start(), now).await?;
+
+        assert_eq!(stats.seating_count, 2);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn seating_from_previous_day_not_counted_today(pool: PgPool) -> Result<()> {
+        // Seating yesterday should not appear in today's count
+        record_seating(&pool, today_start() - chrono::Duration::hours(1)).await?;
+
+        let now = today_start() + chrono::Duration::hours(10);
+        let stats = get_daily_stats(&pool, today_start(), now).await?;
+
+        assert_eq!(stats.seating_count, 0);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn history_includes_correct_seating_count_per_day(pool: PgPool) -> Result<()> {
+        let day1 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+        let day2 = Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap();
+
+        // Anchor events so history spans two days
+        record_event(
+            &pool,
+            EventType::Inserted,
+            day1 + chrono::Duration::hours(8),
+        )
+        .await?;
+        record_event(
+            &pool,
+            EventType::Removed,
+            day1 + chrono::Duration::hours(20),
+        )
+        .await?;
+
+        // Two seatings on day 1, one on day 2
+        record_seating(&pool, day1 + chrono::Duration::hours(9)).await?;
+        record_seating(&pool, day1 + chrono::Duration::hours(18)).await?;
+        record_seating(&pool, day2 + chrono::Duration::hours(9)).await?;
+
+        let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
+        let history = get_history(&pool, now).await?;
+
+        // history[0] = Jan 2, history[1] = Jan 1
+        assert_eq!(history[1].seating_count, 2);
+        assert_eq!(history[0].seating_count, 1);
 
         Ok(())
     }

@@ -90,6 +90,7 @@ pub fn build(template_engine: TemplateEngine, pool: PgPool, listener: TcpListene
         .route("/history", get(history))
         .route("/insert", post(insert))
         .route("/remove", post(remove))
+        .route("/seating", post(seating))
         .with_state(state);
 
     Server::new(router, listener)
@@ -148,6 +149,16 @@ async fn remove(
 ) -> ServerResult<Response> {
     crate::persistence::record_event(&pool, EventType::Removed, form.into_utc()?).await?;
     tracing::info!("recorded remove event");
+    Ok(redirect("/")?)
+}
+
+#[tracing::instrument(skip(pool))]
+async fn seating(
+    State(ApplicationState { pool, .. }): State<ApplicationState>,
+    Form(form): Form<EventForm>,
+) -> ServerResult<Response> {
+    crate::persistence::record_seating(&pool, form.into_utc()?).await?;
+    tracing::info!("recorded seating");
     Ok(redirect("/")?)
 }
 
