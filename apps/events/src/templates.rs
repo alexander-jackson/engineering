@@ -11,6 +11,8 @@ pub struct IndexContext {
     pub is_on_track: bool,
     pub action_label: &'static str,
     pub action_path: &'static str,
+    pub seating_count: i32,
+    pub seating_target: i32,
 }
 
 impl From<DailyStats> for IndexContext {
@@ -45,6 +47,8 @@ impl From<DailyStats> for IndexContext {
             is_on_track: stats.is_on_track,
             action_label,
             action_path,
+            seating_count: stats.seating_count,
+            seating_target: 2,
         }
     }
 }
@@ -55,6 +59,8 @@ pub struct HistoryEntry {
     pub wear_time_display: String,
     pub out_time_display: String,
     pub is_on_track: bool,
+    pub seating_count: i32,
+    pub seating_target: i32,
 }
 
 #[derive(Serialize)]
@@ -71,6 +77,8 @@ impl From<Vec<DayHistory>> for HistoryContext {
                 wear_time_display: format_minutes(day.wear_minutes),
                 out_time_display: format_minutes(day.out_minutes),
                 is_on_track: day.is_on_track,
+                seating_count: day.seating_count,
+                seating_target: 2,
             })
             .collect();
 
