@@ -56,3 +56,76 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    use foundation_shutdown::{CancellationToken, GracefulTask};
+    use tokio::sync::Mutex;
+    use tokio::sync::mpsc::{Receiver, Sender};
+
+    use crate::RecurringJob;
+
+    struct State {
+        counter: AtomicUsize,
+        sender: Sender<()>,
+        receiver: Mutex<Receiver<()>>,
+    }
+
+    #[tokio::test]
+    async fn can_create_and_run_recurring_job() {
+        let counter = AtomicUsize::new(0);
+
+        let (test_sender, job_receiver) = tokio::sync::mpsc::channel(1);
+        let (job_sender, mut test_receiver) = tokio::sync::mpsc::channel(1);
+
+        let state = Arc::new(State {
+            counter,
+            sender: job_sender,
+            receiver: Mutex::new(job_receiver),
+        });
+
+        let job = RecurringJob::new(
+            "test-job",
+            Duration::from_millis(1),
+            Arc::clone(&state),
+            |state| {
+                Box::pin(async move {
+                    // wait for a message
+                    state.receiver.lock().await.recv().await;
+
+                    // do some work
+                    state.counter.fetch_add(1, Ordering::SeqCst);
+
+                    // notify the test that the job has been run
+                    state.sender.send(()).await.unwrap();
+
+                    Ok(())
+                })
+            },
+        );
+
+        let shutdown_token = CancellationToken::new();
+        let job_token = shutdown_token.clone();
+
+        tokio::spawn(async move {
+            job.run_until_shutdown(job_token).await.unwrap();
+        });
+
+        // trigger the job a couple of times
+        let iterations = 3;
+
+        for _ in 0..iterations {
+            test_sender.send(()).await.unwrap();
+            test_receiver.recv().await.unwrap();
+        }
+
+        // check the counter has been incremented the expected number of times
+        assert_eq!(state.counter.load(Ordering::SeqCst), iterations);
+
+        shutdown_token.cancel();
+    }
+}
