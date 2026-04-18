@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use color_eyre::eyre::Result;
 use foundation_recurring_job::RecurringJob;
 use foundation_shutdown::ShutdownCoordinator;
@@ -36,16 +34,9 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(config.server.addr).await?;
     let server = crate::server::build(pool.clone(), listener)?;
 
-    let poller_job = RecurringJob::new("uptime-poller", Duration::from_secs(60), poller, |p| {
-        Box::pin(async { p.query_all_origins().await })
-    });
+    let poller_job = RecurringJob::new(poller);
 
-    let cert_job = RecurringJob::new(
-        "certificate-checker",
-        Duration::from_secs(86400),
-        cert_checker,
-        |c| Box::pin(async { c.check_all_certificates().await }),
-    );
+    let cert_job = RecurringJob::new(cert_checker);
 
     ShutdownCoordinator::new()
         .with_task(poller_job)

@@ -1,6 +1,7 @@
 use std::net::SocketAddrV4;
 
 use color_eyre::eyre::Result;
+use foundation_recurring_job::RecurringJob;
 use foundation_shutdown::ShutdownCoordinator;
 use foundation_templating::TemplateEngine;
 use tokio::net::TcpListener;
@@ -49,7 +50,7 @@ async fn main() -> Result<()> {
 
     ShutdownCoordinator::new()
         .with_task(server)
-        .with_task(watcher)
+        .with_task(RecurringJob::new(watcher))
         .run()
         .await?;
 

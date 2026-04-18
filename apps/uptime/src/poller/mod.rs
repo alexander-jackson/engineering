@@ -2,6 +2,7 @@ use std::fmt::{self, Display};
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
+use foundation_recurring_job::Job;
 use sqlx::PgPool;
 use sqlx::types::chrono::Utc;
 use uuid::Uuid;
@@ -66,7 +67,12 @@ impl From<reqwest::Error> for FailureReason {
 }
 
 pub trait Notifier {
-    async fn notify(&self, topic: &str, subject: &str, message: &str) -> Result<()>;
+    fn notify(
+        &self,
+        topic: &str,
+        subject: &str,
+        message: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 impl Notifier for aws_sdk_sns::Client {
@@ -157,71 +163,6 @@ impl<N: Notifier> Poller<N> {
             notifier,
             configuration,
         }
-    }
-
-    pub async fn query_all_origins(&self) -> Result<()> {
-        let Self {
-            pool, http_client, ..
-        } = self;
-
-        // Find all the available origins
-        let origins = crate::persistence::fetch_origins(pool).await?;
-        let timeout = Duration::from_secs(3);
-
-        for Origin { origin_uid, uri } in origins {
-            let mut tx = pool.begin().await?;
-            let start = Utc::now();
-
-            match http_client.get(&uri).timeout(timeout).send().await {
-                Ok(res) => {
-                    let status = res.status();
-                    let latency_millis = (Utc::now() - start).num_milliseconds();
-
-                    let query_uid = crate::persistence::insert_query(
-                        &mut tx,
-                        origin_uid,
-                        status.as_u16(),
-                        latency_millis,
-                        start,
-                    )
-                    .await?;
-
-                    tracing::info!(
-                        %origin_uid,
-                        %query_uid,
-                        %status,
-                        %latency_millis,
-                        "made a request to the origin"
-                    );
-                }
-                Err(e) => {
-                    let failure_reason = FailureReason::from(e);
-
-                    let query_failure_uid = crate::persistence::insert_query_failure(
-                        &mut tx,
-                        origin_uid,
-                        failure_reason,
-                        start,
-                    )
-                    .await?;
-
-                    tracing::warn!(
-                        %origin_uid,
-                        %query_failure_uid,
-                        %failure_reason,
-                        "failed to make a request to the origin"
-                    );
-                }
-            }
-
-            tx.commit().await?;
-
-            // Check whether we need to notify someone
-            self.check_for_pending_notifications(origin_uid, &uri)
-                .await?;
-        }
-
-        Ok(())
     }
 
     async fn check_for_pending_notifications(&self, origin_uid: Uuid, uri: &str) -> Result<()> {
@@ -349,6 +290,76 @@ impl<N: Notifier> Poller<N> {
         .await?;
 
         tracing::info!(%origin_uid, %notification_uid, "routed a new notification");
+
+        Ok(())
+    }
+}
+
+impl<N: Notifier + Send + Sync + 'static> Job for Poller<N> {
+    const NAME: &'static str = "Origin Poller";
+    const INTERVAL: Duration = Duration::from_secs(60);
+
+    async fn run(&self) -> Result<()> {
+        let Self {
+            pool, http_client, ..
+        } = self;
+
+        // Find all the available origins
+        let origins = crate::persistence::fetch_origins(pool).await?;
+        let timeout = Duration::from_secs(3);
+
+        for Origin { origin_uid, uri } in origins {
+            let mut tx = pool.begin().await?;
+            let start = Utc::now();
+
+            match http_client.get(&uri).timeout(timeout).send().await {
+                Ok(res) => {
+                    let status = res.status();
+                    let latency_millis = (Utc::now() - start).num_milliseconds();
+
+                    let query_uid = crate::persistence::insert_query(
+                        &mut tx,
+                        origin_uid,
+                        status.as_u16(),
+                        latency_millis,
+                        start,
+                    )
+                    .await?;
+
+                    tracing::info!(
+                        %origin_uid,
+                        %query_uid,
+                        %status,
+                        %latency_millis,
+                        "made a request to the origin"
+                    );
+                }
+                Err(e) => {
+                    let failure_reason = FailureReason::from(e);
+
+                    let query_failure_uid = crate::persistence::insert_query_failure(
+                        &mut tx,
+                        origin_uid,
+                        failure_reason,
+                        start,
+                    )
+                    .await?;
+
+                    tracing::warn!(
+                        %origin_uid,
+                        %query_failure_uid,
+                        %failure_reason,
+                        "failed to make a request to the origin"
+                    );
+                }
+            }
+
+            tx.commit().await?;
+
+            // Check whether we need to notify someone
+            self.check_for_pending_notifications(origin_uid, &uri)
+                .await?;
+        }
 
         Ok(())
     }
