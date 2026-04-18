@@ -1,53 +1,43 @@
 use std::future::Future;
-use std::pin::Pin;
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
 use foundation_shutdown::{CancellationToken, GracefulTask};
 
-pub struct RecurringJob<T, F>
-where
-    T: Send + 'static,
-    F: for<'a> Fn(&'a T) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> + Send + 'static,
-{
-    name: String,
-    interval: Duration,
-    state: T,
-    job: F,
+pub trait Job: Send + 'static {
+    const NAME: &'static str;
+    const INTERVAL: Duration;
+
+    fn run(&self) -> impl Future<Output = Result<()>> + Send + '_;
 }
 
-impl<T, F> RecurringJob<T, F>
+pub struct RecurringJob<T>
 where
-    T: Send + 'static,
-    F: for<'a> Fn(&'a T) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> + Send + 'static,
+    T: Job,
 {
-    pub fn new(name: impl Into<String>, interval: Duration, state: T, job: F) -> Self {
-        Self {
-            name: name.into(),
-            interval,
-            state,
-            job,
-        }
+    state: T,
+}
+
+impl<T: Job> RecurringJob<T> {
+    pub fn new(state: T) -> Self {
+        Self { state }
     }
 }
 
-impl<T, F> GracefulTask for RecurringJob<T, F>
-where
-    T: Send + 'static,
-    F: for<'a> Fn(&'a T) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> + Send + 'static,
-{
+impl<T: Job> GracefulTask for RecurringJob<T> {
     async fn run_until_shutdown(self, shutdown: CancellationToken) -> Result<()> {
-        let mut interval = tokio::time::interval(self.interval);
+        let mut interval = tokio::time::interval(T::INTERVAL);
+        let job = T::NAME;
 
         loop {
             tokio::select! {
                 _ = shutdown.cancelled() => {
-                    tracing::info!(job = %self.name, "shutting down gracefully");
+                    tracing::info!(%job, "shutting down gracefully");
                     break;
                 }
                 _ = interval.tick() => {
-                    if let Err(e) = (self.job)(&self.state).await {
-                        tracing::warn!(job = %self.name, error = ?e, "job execution failed");
+                    if let Err(e) = self.state.run().await {
+                        tracing::warn!(%job, error = ?e, "job execution failed");
                     }
                 }
             }
@@ -59,54 +49,52 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::future::Future;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
 
+    use color_eyre::eyre::Result;
     use foundation_shutdown::{CancellationToken, GracefulTask};
     use tokio::sync::Mutex;
     use tokio::sync::mpsc::{Receiver, Sender};
 
-    use crate::RecurringJob;
+    use crate::{Job, RecurringJob};
 
-    struct State {
-        counter: AtomicUsize,
+    struct TestJob {
+        counter: Arc<AtomicUsize>,
         sender: Sender<()>,
         receiver: Mutex<Receiver<()>>,
     }
 
+    impl Job for TestJob {
+        const NAME: &'static str = "test-job";
+        const INTERVAL: Duration = Duration::from_millis(1);
+
+        fn run(&self) -> impl Future<Output = Result<()>> + Send + '_ {
+            async move {
+                self.receiver.lock().await.recv().await;
+                self.counter.fetch_add(1, Ordering::SeqCst);
+                self.sender.send(()).await.unwrap();
+
+                Ok(())
+            }
+        }
+    }
+
     #[tokio::test]
     async fn can_create_and_run_recurring_job() {
-        let counter = AtomicUsize::new(0);
-
+        let counter = Arc::new(AtomicUsize::new(0));
         let (test_sender, job_receiver) = tokio::sync::mpsc::channel(1);
         let (job_sender, mut test_receiver) = tokio::sync::mpsc::channel(1);
 
-        let state = Arc::new(State {
-            counter,
+        let job = TestJob {
+            counter: counter.clone(),
             sender: job_sender,
             receiver: Mutex::new(job_receiver),
-        });
+        };
 
-        let job = RecurringJob::new(
-            "test-job",
-            Duration::from_millis(1),
-            Arc::clone(&state),
-            |state| {
-                Box::pin(async move {
-                    // wait for a message
-                    state.receiver.lock().await.recv().await;
-
-                    // do some work
-                    state.counter.fetch_add(1, Ordering::SeqCst);
-
-                    // notify the test that the job has been run
-                    state.sender.send(()).await.unwrap();
-
-                    Ok(())
-                })
-            },
-        );
+        let job = RecurringJob::new(job);
 
         let shutdown_token = CancellationToken::new();
         let job_token = shutdown_token.clone();
@@ -115,7 +103,6 @@ mod tests {
             job.run_until_shutdown(job_token).await.unwrap();
         });
 
-        // trigger the job a couple of times
         let iterations = 3;
 
         for _ in 0..iterations {
@@ -123,8 +110,7 @@ mod tests {
             test_receiver.recv().await.unwrap();
         }
 
-        // check the counter has been incremented the expected number of times
-        assert_eq!(state.counter.load(Ordering::SeqCst), iterations);
+        assert_eq!(counter.load(Ordering::SeqCst), iterations);
 
         shutdown_token.cancel();
     }

@@ -1,5 +1,8 @@
+use std::time::Duration;
+
 use chrono::Utc;
 use color_eyre::eyre::Result;
+use foundation_recurring_job::Job;
 use reqwest::Client;
 use sqlx::PgPool;
 use tracing::{error, info};
@@ -17,8 +20,13 @@ impl CertificateChecker {
     pub fn new(pool: PgPool, http_client: Client) -> Self {
         Self { pool, http_client }
     }
+}
 
-    pub async fn check_all_certificates(&self) -> Result<()> {
+impl Job for CertificateChecker {
+    const NAME: &'static str = "Certificate Checker";
+    const INTERVAL: Duration = Duration::from_hours(24);
+
+    async fn run(&self) -> Result<()> {
         let origins = crate::persistence::fetch_origins(&self.pool).await?;
 
         for origin in origins {

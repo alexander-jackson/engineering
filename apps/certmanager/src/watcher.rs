@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
-use foundation_shutdown::{CancellationToken, GracefulTask};
+use foundation_recurring_job::Job;
 use sqlx::PgPool;
 use sqlx::types::chrono::Utc;
 
@@ -16,8 +16,13 @@ impl Watcher {
     pub fn new(renewer: Renewer, pool: PgPool) -> Self {
         Self { renewer, pool }
     }
+}
 
-    async fn poll(&self) -> Result<()> {
+impl Job for Watcher {
+    const NAME: &'static str = "Certificate Expiry Watcher";
+    const INTERVAL: Duration = Duration::from_hours(1);
+
+    async fn run(&self) -> Result<()> {
         // Find the certificate next expiring
         let expiries = crate::persistence::select_latest_expiry_per_domain(&self.pool).await?;
 
@@ -88,26 +93,6 @@ impl Watcher {
             %certificate_uid,
             "Certificate renewed and stored in database"
         );
-
-        Ok(())
-    }
-}
-
-impl GracefulTask for Watcher {
-    async fn run_until_shutdown(self, shutdown: CancellationToken) -> Result<()> {
-        loop {
-            tokio::select! {
-                _ = shutdown.cancelled() => {
-                    tracing::info!("Watcher received shutdown signal, exiting...");
-                    break;
-                }
-                result = self.poll() => {
-                    if let Err(e) = result {
-                        tracing::error!(?e, "Error while polling for certificate expiries");
-                    }
-                }
-            }
-        }
 
         Ok(())
     }

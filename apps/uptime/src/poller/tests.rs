@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use color_eyre::eyre::Result;
+use foundation_recurring_job::Job;
 use sqlx::PgPool;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -104,7 +105,7 @@ async fn can_query_all_origins(pool: PgPool) -> Result<()> {
         .create_async()
         .await;
 
-    poller.query_all_origins().await?;
+    poller.run().await?;
 
     mock.assert_async().await;
 
@@ -131,7 +132,7 @@ async fn can_record_client_failures(pool: PgPool) -> Result<()> {
         .create_async()
         .await;
 
-    poller.query_all_origins().await?;
+    poller.run().await?;
 
     mock.assert_async().await;
 
@@ -152,7 +153,7 @@ async fn can_record_query_failures(pool: PgPool) -> Result<()> {
     let origin_uid = Uuid::new_v4();
     crate::persistence::insert_origin(&pool, origin_uid, uri).await?;
 
-    poller.query_all_origins().await?;
+    poller.run().await?;
 
     let failure_reason = fetch_latest_query_failure(&pool, uri).await?;
 
@@ -176,7 +177,7 @@ async fn can_route_alerts_to_clients(pool: PgPool) -> Result<()> {
 
     // Make 3 queries, all of which fail
     for _ in 0..3 {
-        poller.query_all_origins().await?;
+        poller.run().await?;
     }
 
     let map = poller.notifier.sent_messages.read().await;
@@ -203,11 +204,11 @@ async fn alerts_are_not_constantly_routed(pool: PgPool) -> Result<()> {
 
     // Make 3 queries, all of which fail to trigger an alert
     for _ in 0..3 {
-        poller.query_all_origins().await?;
+        poller.run().await?;
     }
 
     // Trigger another query which fails
-    poller.query_all_origins().await?;
+    poller.run().await?;
 
     // Check we only sent a single message
     let map = poller.notifier.sent_messages.read().await;
@@ -230,14 +231,14 @@ async fn alerts_can_cooldown_after_firing(pool: PgPool) -> Result<()> {
 
     // Make 3 queries, all of which fail to trigger an alert
     for _ in 0..3 {
-        poller.query_all_origins().await?;
+        poller.run().await?;
     }
 
     // Wait for the cooldown to expire, with a small buffer
     sleep(Duration::milliseconds(150)).await?;
 
     // Trigger another query which fails
-    poller.query_all_origins().await?;
+    poller.run().await?;
 
     // Check we sent 2 messages since the cooldown had passed
     let map = poller.notifier.sent_messages.read().await;
@@ -268,7 +269,7 @@ async fn certificate_expiry_triggers_notification(pool: PgPool) -> Result<()> {
         .create_async()
         .await;
 
-    poller.query_all_origins().await?;
+    poller.run().await?;
 
     mock.assert_async().await;
 
@@ -305,7 +306,7 @@ async fn certificate_expiry_does_not_trigger_when_far_away(pool: PgPool) -> Resu
         .create_async()
         .await;
 
-    poller.query_all_origins().await?;
+    poller.run().await?;
 
     mock.assert_async().await;
 
@@ -336,7 +337,7 @@ async fn notification_types_have_independent_cooldowns(pool: PgPool) -> Result<(
 
     // Trigger 3 queries - all will fail due to bad request, but should also trigger cert alert
     for _ in 0..3 {
-        poller.query_all_origins().await?;
+        poller.run().await?;
     }
 
     // Check that both notifications were sent
@@ -388,7 +389,7 @@ async fn renewed_certificate_does_not_trigger_notification(pool: PgPool) -> Resu
         .create_async()
         .await;
 
-    poller.query_all_origins().await?;
+    poller.run().await?;
 
     mock.assert_async().await;
 
@@ -424,10 +425,10 @@ async fn certificate_notifications_respect_cooldown(pool: PgPool) -> Result<()> 
         .await;
 
     // Trigger first certificate notification
-    poller.query_all_origins().await?;
+    poller.run().await?;
 
     // Should not send another notification immediately
-    poller.query_all_origins().await?;
+    poller.run().await?;
 
     // Check only 1 notification sent
     {
@@ -439,7 +440,7 @@ async fn certificate_notifications_respect_cooldown(pool: PgPool) -> Result<()> 
     sleep(Duration::milliseconds(150)).await?;
 
     // Should send another notification after cooldown
-    poller.query_all_origins().await?;
+    poller.run().await?;
 
     mock.assert_async().await;
 
