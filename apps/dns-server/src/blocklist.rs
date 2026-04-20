@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
-use foundation_shutdown::GracefulTask;
+use foundation_recurring_job::Job;
 use tokio::sync::RwLock;
 
 use crate::config::BlocklistConfig;
@@ -80,14 +80,18 @@ impl BlocklistManager {
             blocklist: Default::default(),
         };
 
-        manager.refresh().await?;
-
         Ok(manager)
     }
+}
 
-    /// Refresh the blocklist from external source
-    #[tracing::instrument(skip(self))]
-    pub async fn refresh(&self) -> Result<()> {
+impl Job for BlocklistManager {
+    const NAME: &'static str = "blocklist-manager";
+
+    fn interval(&self) -> Duration {
+        Duration::from_secs(self.config.refresh_interval_seconds)
+    }
+
+    async fn run(&self) -> Result<()> {
         tracing::info!(
             source = ?self.config.source,
             "refreshing blocklist"
@@ -110,30 +114,6 @@ impl BlocklistManager {
         *self.blocklist.write().await = blocklist;
 
         tracing::info!(count, "blocklist refreshed successfully");
-
-        Ok(())
-    }
-}
-
-impl GracefulTask for BlocklistManager {
-    async fn run_until_shutdown(self, token: foundation_shutdown::CancellationToken) -> Result<()> {
-        let interval = Duration::from_secs(self.config.refresh_interval_seconds);
-
-        let mut ticker = tokio::time::interval(interval);
-
-        loop {
-            tokio::select! {
-                _ = ticker.tick() => {
-                    if let Err(e) = self.refresh().await {
-                        tracing::error!(error = ?e, "failed to refresh blocklist");
-                    }
-                }
-                _ = token.cancelled() => {
-                    tracing::info!("received shutdown signal, stopping blocklist manager");
-                    break;
-                }
-            }
-        }
 
         Ok(())
     }

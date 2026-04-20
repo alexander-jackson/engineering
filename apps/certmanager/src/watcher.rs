@@ -20,7 +20,10 @@ impl Watcher {
 
 impl Job for Watcher {
     const NAME: &'static str = "Certificate Expiry Watcher";
-    const INTERVAL: Duration = Duration::from_hours(1);
+
+    fn interval(&self) -> Duration {
+        Duration::from_hours(1)
+    }
 
     async fn run(&self) -> Result<()> {
         // Find the certificate next expiring

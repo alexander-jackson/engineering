@@ -1,4 +1,5 @@
 use color_eyre::eyre::Result;
+use foundation_recurring_job::RecurringJob;
 use foundation_shutdown::ShutdownCoordinator;
 
 mod blocklist;
@@ -45,8 +46,8 @@ async fn main() -> Result<()> {
 
     ShutdownCoordinator::new()
         .with_task(dns_server)
-        .with_task(certificate_resolver)
-        .with_task(blocklist)
+        .with_task(RecurringJob::new(blocklist))
+        .with_task(RecurringJob::new(certificate_resolver))
         .run()
         .await?;
 

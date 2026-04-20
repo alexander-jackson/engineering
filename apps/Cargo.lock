@@ -1459,6 +1459,7 @@ dependencies = [
  "dns-mock-server",
  "foundation-configuration",
  "foundation-init",
+ "foundation-recurring-job",
  "foundation-shutdown",
  "hickory-dns",
  "hickory-proto",
