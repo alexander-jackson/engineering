@@ -9,6 +9,7 @@ bytes = "1.11.0"
 color-eyre = "0.6.5"
 foundation-configuration = { version = "0.1.0", path = "../foundation/configuration", features = ["external-bytes"] }
 foundation-init = { version = "0.1.0", path = "../foundation/init" }
+foundation-recurring-job = { version = "0.1.0", path = "../foundation/recurring-job" }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 hickory-dns = { version = "0.25.2", default-features = false, features = ["resolver"] }
 hickory-proto = "0.25.2"

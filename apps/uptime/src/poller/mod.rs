@@ -297,7 +297,10 @@ impl<N: Notifier> Poller<N> {
 
 impl<N: Notifier + Send + Sync + 'static> Job for Poller<N> {
     const NAME: &'static str = "Origin Poller";
-    const INTERVAL: Duration = Duration::from_secs(60);
+
+    fn interval(&self) -> Duration {
+        Duration::from_secs(60)
+    }
 
     async fn run(&self) -> Result<()> {
         let Self {

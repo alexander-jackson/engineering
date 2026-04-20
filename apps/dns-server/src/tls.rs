@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
-use foundation_shutdown::{CancellationToken, GracefulTask};
+use foundation_recurring_job::Job;
 use rustls::server::{ClientHello, ResolvesServerCert, ServerConfig};
 use rustls::sign::CertifiedKey;
 
@@ -24,35 +24,20 @@ impl CertificateResolver {
             resolver: Arc::new(RwLock::new(resolver)),
         })
     }
+}
 
-    pub async fn reload(&self) -> Result<()> {
+impl Job for CertificateResolver {
+    const NAME: &'static str = "certificate-resolver";
+
+    fn interval(&self) -> Duration {
+        Duration::from_secs(self.configuration.refresh_interval_seconds)
+    }
+
+    async fn run(&self) -> Result<()> {
         let resolver = load_tls_config(&self.configuration).await?;
         let mut writer = self.resolver.write().unwrap();
 
         *writer = resolver;
-
-        Ok(())
-    }
-}
-
-impl GracefulTask for CertificateResolver {
-    async fn run_until_shutdown(self, token: CancellationToken) -> Result<()> {
-        let duration = Duration::from_secs(self.configuration.refresh_interval_seconds);
-        let mut interval = tokio::time::interval(duration);
-
-        loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    if let Err(e) = self.reload().await {
-                        tracing::error!(error = %e, "failed to reload TLS certificates");
-                    }
-                }
-                _ = token.cancelled() => {
-                    tracing::info!("received shutdown signal, stopping certificate resolver");
-                    break;
-                }
-            }
-        }
 
         Ok(())
     }

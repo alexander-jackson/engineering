@@ -6,9 +6,9 @@ use foundation_shutdown::{CancellationToken, GracefulTask};
 
 pub trait Job: Send + 'static {
     const NAME: &'static str;
-    const INTERVAL: Duration;
 
     fn run(&self) -> impl Future<Output = Result<()>> + Send + '_;
+    fn interval(&self) -> Duration;
 }
 
 pub struct RecurringJob<T>
@@ -26,7 +26,7 @@ impl<T: Job> RecurringJob<T> {
 
 impl<T: Job> GracefulTask for RecurringJob<T> {
     async fn run_until_shutdown(self, shutdown: CancellationToken) -> Result<()> {
-        let mut interval = tokio::time::interval(T::INTERVAL);
+        let mut interval = tokio::time::interval(self.state.interval());
         let job = T::NAME;
 
         loop {
@@ -69,7 +69,10 @@ mod tests {
 
     impl Job for TestJob {
         const NAME: &'static str = "test-job";
-        const INTERVAL: Duration = Duration::from_millis(1);
+
+        fn interval(&self) -> Duration {
+            Duration::from_millis(1)
+        }
 
         fn run(&self) -> impl Future<Output = Result<()>> + Send + '_ {
             async move {

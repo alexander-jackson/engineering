@@ -24,7 +24,10 @@ impl CertificateChecker {
 
 impl Job for CertificateChecker {
     const NAME: &'static str = "Certificate Checker";
-    const INTERVAL: Duration = Duration::from_hours(24);
+
+    fn interval(&self) -> Duration {
+        Duration::from_hours(24)
+    }
 
     async fn run(&self) -> Result<()> {
         let origins = crate::persistence::fetch_origins(&self.pool).await?;
