@@ -240,7 +240,7 @@ services:
 
   certmanager:
     image: alexanderjackson/certmanager
-    tag: 20260418-1047
+    tag: 20260420-1843
     routes:
       - host: certificates.opentracker.app
         port: 4444
