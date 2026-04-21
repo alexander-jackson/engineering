@@ -55,8 +55,8 @@ jobs:
               APPS_JSON=$(echo "$ALL_APPS" | jq -c .)
             else
               APPS_JSON=$(echo "$ALL_APPS" | jq -c --arg changed "$CHANGED" '
-                [.[] | select(
-                  ($changed | split("\n") | any(startswith("apps/" + .path + "/")))
+                [.[] | . as $app | select(
+                  ($changed | split("\n") | any(startswith("apps/" + $app.path + "/")))
                 )]
               ')
               echo "Apps to build: $APPS_JSON"
