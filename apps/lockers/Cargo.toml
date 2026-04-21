@@ -13,6 +13,7 @@ chrono = { version = "0.4.38", default-features = false, features = ["now", "ser
 color-eyre = "0.6.3"
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
 foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
+foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 foundation-uid = { version = "0.1.0", path = "../foundation/uid" }
 serde = { workspace = true, features = ["derive"] }
 sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }

@@ -12,6 +12,7 @@ use axum_extra::headers::authorization::Bearer;
 use color_eyre::eyre::{Context, Result, eyre};
 use foundation_configuration::Secret;
 use foundation_http_server::Server;
+use foundation_shutdown::ShutdownCoordinator;
 use git2::Repository;
 use serde::Deserialize;
 use tokio::net::TcpListener;
@@ -82,7 +83,8 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(addr).await?;
 
     let server = Server::new(router, listener);
-    server.run().await?;
+
+    ShutdownCoordinator::new().with_task(server).run().await?;
 
     Ok(())
 }

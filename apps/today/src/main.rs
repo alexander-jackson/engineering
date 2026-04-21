@@ -1,6 +1,7 @@
 use std::net::SocketAddrV4;
 
 use color_eyre::eyre::Result;
+use foundation_shutdown::ShutdownCoordinator;
 use foundation_templating::TemplateEngine;
 use tokio::net::TcpListener;
 
@@ -26,7 +27,7 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(addr).await?;
     let server = crate::server::build(template_engine, pool, index_cache, listener);
 
-    server.run().await?;
+    ShutdownCoordinator::new().with_task(server).run().await?;
 
     Ok(())
 }

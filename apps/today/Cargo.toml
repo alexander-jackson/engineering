@@ -10,6 +10,7 @@ color-eyre = "0.6.3"
 dotenvy = "0.15.7"
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
 foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
+foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 foundation-uid = { version = "0.1.0", path = "../foundation/uid" }
 moka = { version = "0.12.8", features = ["future"] }
 pico-args = "0.5.0"
