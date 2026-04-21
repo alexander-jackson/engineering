@@ -14,6 +14,7 @@ chrono-tz = "0.9.0"
 color-eyre = "0.6.3"
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
 foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
+foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
 serde = { workspace = true, features = ["derive"] }
 sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls", "chrono"] }
