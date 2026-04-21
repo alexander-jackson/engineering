@@ -36,4 +36,4 @@ jobs:
           file: ./apps/opentracker/backend/Dockerfile
       - name: Inform `tag-updater`
         run: |
-          curl https://tags.opentracker.app/update -X PUT -H "Content-Type: application/json" -H "Authorization: Bearer ${{ secrets.TAG_UPDATER_PASSPHRASE }}" --data '{"service": "backend", "tag": "${{ steps.tag.outputs.value }}"}'
+          curl https://tags.opentracker.app/update -X PUT -H "Content-Type: application/json" -H "Authorization: Bearer ${{ secrets.TAG_UPDATER_PASSPHRASE }}" --data '{"service": "opentracker-backend", "tag": "${{ steps.tag.outputs.value }}"}'

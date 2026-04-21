@@ -96,7 +96,7 @@ secrets:
     key: f2/private.key
 
 services:
-  frontend:
+  opentracker-frontend:
     image: alexanderjackson/opentracker-frontend
     tag: 20260328-1316
     routes:
@@ -104,7 +104,7 @@ services:
         port: 80
     replicas: 1
 
-  backend:
+  opentracker-backend:
     image: alexanderjackson/opentracker-backend
     tag: 20260420-1843
     routes:
