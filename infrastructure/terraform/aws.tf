@@ -458,6 +458,7 @@ module "rds_postgres" {
   engine_version    = "15"
   instance_class    = "db.t4g.micro"
   allocated_storage = 20
+  password          = var.db_password
 }
 
 resource "aws_route53_record" "rds_postgres" {
