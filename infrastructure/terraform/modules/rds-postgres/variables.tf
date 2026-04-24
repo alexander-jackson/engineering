@@ -40,3 +40,9 @@ variable "allocated_storage" {
   default     = 20
   description = "Storage allocation in GiB (minimum 20 for RDS)"
 }
+
+variable "password" {
+  type        = string
+  sensitive   = true
+  description = "Master password for the postgres user"
+}
