@@ -9,3 +9,6 @@ format package:
 
 lint package:
 	cargo clippy --package {{package}} -- -D warnings
+
+format-templates:
+	fd --type directory templates | xargs npx prettier --write

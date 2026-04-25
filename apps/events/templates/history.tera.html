@@ -1,98 +1,115 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" class="dark h-full">
-<head>
+  <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Retainer wear history" />
     <title>Retainer Tracker — History</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        dark: {
-                            bg: '#1e201e',
-                            card: '#2a2c2a',
-                            text: '#ecdfcc',
-                            border: '#3e403e',
-                        }
-                    }
-                }
-            }
-        }
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              dark: {
+                bg: "#1e201e",
+                card: "#2a2c2a",
+                text: "#ecdfcc",
+                border: "#3e403e",
+              },
+            },
+          },
+        },
+      };
     </script>
-</head>
+  </head>
 
-<body class="h-full bg-dark-bg text-dark-text">
+  <body class="h-full bg-dark-bg text-dark-text">
     <div class="min-h-full flex flex-col">
-        <!-- Header -->
-        <header class="bg-dark-card shadow-lg border-b border-dark-border">
-            <div class="max-w-lg mx-auto px-4 sm:px-6">
-                <div class="py-6 flex items-center justify-between">
-                    <div>
-                        <h1 class="text-3xl font-bold text-dark-text">
-                            <span class="text-amber-400">Retainer</span> Tracker
-                        </h1>
-                        <p class="mt-1 text-sm text-gray-400">22+ hours/day target</p>
-                    </div>
-                    <a href="/" class="text-sm text-amber-400 hover:text-amber-300 transition-colors">
-                        ← Today
-                    </a>
-                </div>
+      <!-- Header -->
+      <header class="bg-dark-card shadow-lg border-b border-dark-border">
+        <div class="max-w-lg mx-auto px-4 sm:px-6">
+          <div class="py-6 flex items-center justify-between">
+            <div>
+              <h1 class="text-3xl font-bold text-dark-text">
+                <span class="text-amber-400">Retainer</span> Tracker
+              </h1>
+              <p class="mt-1 text-sm text-gray-400">22+ hours/day target</p>
             </div>
-        </header>
+            <a
+              href="/"
+              class="text-sm text-amber-400 hover:text-amber-300 transition-colors"
+            >
+              ← Today
+            </a>
+          </div>
+        </div>
+      </header>
 
-        <!-- Main content -->
-        <main class="max-w-lg mx-auto w-full px-4 sm:px-6 py-8 flex flex-col gap-4">
+      <!-- Main content -->
+      <main
+        class="max-w-lg mx-auto w-full px-4 sm:px-6 py-8 flex flex-col gap-4"
+      >
+        <h2 class="text-lg font-semibold text-gray-400">History</h2>
 
-            <h2 class="text-lg font-semibold text-gray-400">History</h2>
-
-            {% if entries %}
-            <div class="flex flex-col gap-3">
-                {% for entry in entries %}
-                <div class="bg-dark-card rounded-lg border border-dark-border px-5 py-4">
-                    <div class="flex items-center justify-between mb-3">
-                        <span class="font-medium text-dark-text">{{ entry.date }}</span>
-                        {% if entry.is_on_track %}
-                        <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-900/30 border border-green-600/40 text-green-400">
-                            ✓ On track
-                        </span>
-                        {% else %}
-                        <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-900/30 border border-red-600/40 text-red-400">
-                            ✗ Missed target
-                        </span>
-                        {% endif %}
-                    </div>
-                    <div class="flex gap-8 text-sm">
-                        <div>
-                            <p class="text-gray-400 mb-0.5">Wear time</p>
-                            <p class="font-semibold text-dark-text">{{ entry.wear_time_display }}</p>
-                        </div>
-                        <div>
-                            <p class="text-gray-400 mb-0.5">Out time</p>
-                            <p class="font-semibold text-dark-text">{{ entry.out_time_display }}</p>
-                        </div>
-						{% if entry.seatings %}
-                        <div>
-                            <p class="text-gray-400 mb-0.5">Seatings</p>
-                            {% if entry.seatings.count >= entry.seatings.target %}
-                            <p class="font-semibold text-green-400">{{ entry.seatings.count }} / {{ entry.seatings.target }}</p>
-                            {% else %}
-                            <p class="font-semibold text-red-400">{{ entry.seatings.count }} / {{ entry.seatings.target }}</p>
-                            {% endif %}
-                        </div>
-						{% endif %}
-                    </div>
-                </div>
-                {% endfor %}
+        {% if entries %}
+        <div class="flex flex-col gap-3">
+          {% for entry in entries %}
+          <div
+            class="bg-dark-card rounded-lg border border-dark-border px-5 py-4"
+          >
+            <div class="flex items-center justify-between mb-3">
+              <span class="font-medium text-dark-text">{{ entry.date }}</span>
+              {% if entry.is_on_track %}
+              <span
+                class="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-900/30 border border-green-600/40 text-green-400"
+              >
+                ✓ On track
+              </span>
+              {% else %}
+              <span
+                class="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-900/30 border border-red-600/40 text-red-400"
+              >
+                ✗ Missed target
+              </span>
+              {% endif %}
             </div>
-            {% else %}
-            <p class="text-gray-400">No history yet.</p>
-            {% endif %}
-
-        </main>
+            <div class="flex gap-8 text-sm">
+              <div>
+                <p class="text-gray-400 mb-0.5">Wear time</p>
+                <p class="font-semibold text-dark-text">
+                  {{ entry.wear_time_display }}
+                </p>
+              </div>
+              <div>
+                <p class="text-gray-400 mb-0.5">Out time</p>
+                <p class="font-semibold text-dark-text">
+                  {{ entry.out_time_display }}
+                </p>
+              </div>
+              {% if entry.seatings %}
+              <div>
+                <p class="text-gray-400 mb-0.5">Seatings</p>
+                {% if entry.seatings.count >= entry.seatings.target %}
+                <p class="font-semibold text-green-400">
+                  {{ entry.seatings.count }} / {{ entry.seatings.target }}
+                </p>
+                {% else %}
+                <p class="font-semibold text-red-400">
+                  {{ entry.seatings.count }} / {{ entry.seatings.target }}
+                </p>
+                {% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-400">No history yet.</p>
+        {% endif %}
+      </main>
     </div>
-</body>
+  </body>
 </html>
