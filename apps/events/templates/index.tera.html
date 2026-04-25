@@ -1,192 +1,217 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" class="dark h-full">
-<head>
+  <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Retainer wear tracker" />
     <title>Retainer Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        dark: {
-                            bg: '#1e201e',
-                            card: '#2a2c2a',
-                            text: '#ecdfcc',
-                            border: '#3e403e',
-                        }
-                    }
-                }
-            }
-        }
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              dark: {
+                bg: "#1e201e",
+                card: "#2a2c2a",
+                text: "#ecdfcc",
+                border: "#3e403e",
+              },
+            },
+          },
+        },
+      };
     </script>
-</head>
+  </head>
 
-<body class="h-full bg-dark-bg text-dark-text">
+  <body class="h-full bg-dark-bg text-dark-text">
     <div class="min-h-full flex flex-col">
-        <!-- Header -->
-        <header class="bg-dark-card shadow-lg border-b border-dark-border">
-            <div class="max-w-lg mx-auto px-4 sm:px-6">
-                <div class="py-6 flex items-center justify-between">
-                    <div>
-                        <h1 class="text-3xl font-bold text-dark-text">
-                            <span class="text-amber-400">Retainer</span> Tracker
-                        </h1>
-                        <p class="mt-1 text-sm text-gray-400">22+ hours/day target</p>
-                    </div>
-                    <a href="/history" class="text-sm text-amber-400 hover:text-amber-300 transition-colors">
-                        History →
-                    </a>
-                </div>
+      <!-- Header -->
+      <header class="bg-dark-card shadow-lg border-b border-dark-border">
+        <div class="max-w-lg mx-auto px-4 sm:px-6">
+          <div class="py-6 flex items-center justify-between">
+            <div>
+              <h1 class="text-3xl font-bold text-dark-text">
+                <span class="text-amber-400">Retainer</span> Tracker
+              </h1>
+              <p class="mt-1 text-sm text-gray-400">22+ hours/day target</p>
             </div>
-        </header>
+            <a
+              href="/history"
+              class="text-sm text-amber-400 hover:text-amber-300 transition-colors"
+            >
+              History →
+            </a>
+          </div>
+        </div>
+      </header>
 
-        <!-- Main content -->
-        <main class="max-w-lg mx-auto w-full px-4 sm:px-6 py-8 flex flex-col gap-6">
+      <!-- Main content -->
+      <main
+        class="max-w-lg mx-auto w-full px-4 sm:px-6 py-8 flex flex-col gap-6"
+      >
+        <!-- Status card -->
+        <div
+          class="bg-dark-card rounded-lg shadow-lg border border-dark-border p-6"
+        >
+          <div class="flex items-center justify-between mb-6">
+            <span class="text-lg font-medium text-gray-400"
+              >Current Status</span
+            >
+            {% if is_inserted %}
+            <span
+              class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-900/30 border border-green-600/40 text-green-400 font-semibold text-sm"
+            >
+              <span class="w-2 h-2 rounded-full bg-green-400"></span>
+              In
+            </span>
+            {% else %}
+            <span
+              class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-900/30 border border-red-600/40 text-red-400 font-semibold text-sm"
+            >
+              <span class="w-2 h-2 rounded-full bg-red-400"></span>
+              Out
+            </span>
+            {% endif %}
+          </div>
 
-            <!-- Status card -->
-            <div class="bg-dark-card rounded-lg shadow-lg border border-dark-border p-6">
-                <div class="flex items-center justify-between mb-6">
-                    <span class="text-lg font-medium text-gray-400">Current Status</span>
-                    {% if is_inserted %}
-                    <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-900/30 border border-green-600/40 text-green-400 font-semibold text-sm">
-                        <span class="w-2 h-2 rounded-full bg-green-400"></span>
-                        In
-                    </span>
-                    {% else %}
-                    <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-900/30 border border-red-600/40 text-red-400 font-semibold text-sm">
-                        <span class="w-2 h-2 rounded-full bg-red-400"></span>
-                        Out
-                    </span>
-                    {% endif %}
-                </div>
+          <!-- Wear time -->
+          <div class="mb-4">
+            <p class="text-sm text-gray-400 mb-1">Wear time today</p>
+            <p class="text-4xl font-bold text-dark-text">
+              {{ wear_time_display }}
+            </p>
+          </div>
 
-                <!-- Wear time -->
-                <div class="mb-4">
-                    <p class="text-sm text-gray-400 mb-1">Wear time today</p>
-                    <p class="text-4xl font-bold text-dark-text">{{ wear_time_display }}</p>
-                </div>
+          <!-- Out time -->
+          <div class="mb-4">
+            <p class="text-sm text-gray-400 mb-1">Out time today</p>
+            <p class="text-2xl font-semibold text-gray-300">
+              {{ out_time_display }}
+            </p>
+          </div>
 
-                <!-- Out time -->
-                <div class="mb-4">
-                    <p class="text-sm text-gray-400 mb-1">Out time today</p>
-                    <p class="text-2xl font-semibold text-gray-300">{{ out_time_display }}</p>
-                </div>
+          <!-- Target progress -->
+          <div
+            class="{% if is_on_track %}text-green-400{% else %}text-amber-400{% endif %} text-sm font-medium mb-6"
+          >
+            {% if target_display == "Target achieved!" %} ✓ {{ target_display }}
+            {% else %} {% if is_on_track %} ↗ {{ target_display }} {% else %} ⚠
+            {{ target_display }} {% endif %} {% endif %}
+          </div>
 
-                <!-- Target progress -->
-                <div class="{% if is_on_track %}text-green-400{% else %}text-amber-400{% endif %} text-sm font-medium mb-6">
-                    {% if target_display == "Target achieved!" %}
-                    ✓ {{ target_display }}
-                    {% else %}
-                    {% if is_on_track %}
-                    ↗ {{ target_display }}
-                    {% else %}
-                    ⚠ {{ target_display }}
-                    {% endif %}
-                    {% endif %}
-                </div>
+          <!-- Action button -->
+          {% if is_inserted %}
+          <form action="/remove" method="POST">
+            <input type="hidden" name="timezone" value="" />
+            <button
+              type="submit"
+              class="w-full px-6 py-4 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/40 font-semibold text-lg rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-dark-bg"
+            >
+              Take Out
+            </button>
+            <details class="mt-3 text-sm">
+              <summary
+                class="cursor-pointer text-gray-400 hover:text-gray-300 select-none"
+              >
+                Set a different time
+              </summary>
+              <div class="mt-2">
+                <input
+                  type="datetime-local"
+                  name="occurred_at"
+                  class="w-full bg-dark-bg border border-dark-border rounded px-3 py-2 text-dark-text text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+            </details>
+          </form>
+          {% else %}
+          <form action="/insert" method="POST">
+            <input type="hidden" name="timezone" value="" />
+            <button
+              type="submit"
+              class="w-full px-6 py-4 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-600/40 font-semibold text-lg rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-dark-bg"
+            >
+              Put In
+            </button>
+            <details class="mt-3 text-sm">
+              <summary
+                class="cursor-pointer text-gray-400 hover:text-gray-300 select-none"
+              >
+                Set a different time
+              </summary>
+              <div class="mt-2">
+                <input
+                  type="datetime-local"
+                  name="occurred_at"
+                  class="w-full bg-dark-bg border border-dark-border rounded px-3 py-2 text-dark-text text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+            </details>
+          </form>
+          {% endif %}
+        </div>
 
-                <!-- Action button -->
-                {% if is_inserted %}
-                <form action="/remove" method="POST">
-                    <input type="hidden" name="timezone" value="" />
-                    <button
-                        type="submit"
-                        class="w-full px-6 py-4 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/40 font-semibold text-lg rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-dark-bg"
-                    >
-                        Take Out
-                    </button>
-                    <details class="mt-3 text-sm">
-                        <summary class="cursor-pointer text-gray-400 hover:text-gray-300 select-none">
-                            Set a different time
-                        </summary>
-                        <div class="mt-2">
-                            <input
-                                type="datetime-local"
-                                name="occurred_at"
-                                class="w-full bg-dark-bg border border-dark-border rounded px-3 py-2 text-dark-text text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
-                            />
-                        </div>
-                    </details>
-                </form>
-                {% else %}
-                <form action="/insert" method="POST">
-                    <input type="hidden" name="timezone" value="" />
-                    <button
-                        type="submit"
-                        class="w-full px-6 py-4 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-600/40 font-semibold text-lg rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-dark-bg"
-                    >
-                        Put In
-                    </button>
-                    <details class="mt-3 text-sm">
-                        <summary class="cursor-pointer text-gray-400 hover:text-gray-300 select-none">
-                            Set a different time
-                        </summary>
-                        <div class="mt-2">
-                            <input
-                                type="datetime-local"
-                                name="occurred_at"
-                                class="w-full bg-dark-bg border border-dark-border rounded px-3 py-2 text-dark-text text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
-                            />
-                        </div>
-                    </details>
-                </form>
-                {% endif %}
-            </div>
-
-            <!-- Seating card -->
-            <div class="bg-dark-card rounded-lg shadow-lg border border-dark-border p-6">
-                <div class="flex items-center justify-between mb-4">
-                    <span class="text-lg font-medium text-gray-400">Seating</span>
-                    {% if seating_count >= seating_target %}
-                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-900/30 border border-green-600/40 text-green-400">
-                        ✓ Done
-                    </span>
-                    {% else %}
-                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-900/30 border border-amber-600/40 text-amber-400">
-                        {{ seating_count }} / {{ seating_target }}
-                    </span>
-                    {% endif %}
-                </div>
-                <form action="/seating" method="POST">
-                    <input type="hidden" name="timezone" value="" />
-                    <button
-                        type="submit"
-                        class="w-full px-4 py-3 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-600/40 font-semibold rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-dark-bg"
-                    >
-                        Log Seating
-                    </button>
-                    <details class="mt-3 text-sm">
-                        <summary class="cursor-pointer text-gray-400 hover:text-gray-300 select-none">
-                            Set a different time
-                        </summary>
-                        <div class="mt-2">
-                            <input
-                                type="datetime-local"
-                                name="occurred_at"
-                                class="w-full bg-dark-bg border border-dark-border rounded px-3 py-2 text-dark-text text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
-                            />
-                        </div>
-                    </details>
-                </form>
-            </div>
-
-        </main>
+        <!-- Seating card -->
+        <div
+          class="bg-dark-card rounded-lg shadow-lg border border-dark-border p-6"
+        >
+          <div class="flex items-center justify-between mb-4">
+            <span class="text-lg font-medium text-gray-400">Seating</span>
+            {% if seating_count >= seating_target %}
+            <span
+              class="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-900/30 border border-green-600/40 text-green-400"
+            >
+              ✓ Done
+            </span>
+            {% else %}
+            <span
+              class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-900/30 border border-amber-600/40 text-amber-400"
+            >
+              {{ seating_count }} / {{ seating_target }}
+            </span>
+            {% endif %}
+          </div>
+          <form action="/seating" method="POST">
+            <input type="hidden" name="timezone" value="" />
+            <button
+              type="submit"
+              class="w-full px-4 py-3 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-600/40 font-semibold rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-dark-bg"
+            >
+              Log Seating
+            </button>
+            <details class="mt-3 text-sm">
+              <summary
+                class="cursor-pointer text-gray-400 hover:text-gray-300 select-none"
+              >
+                Set a different time
+              </summary>
+              <div class="mt-2">
+                <input
+                  type="datetime-local"
+                  name="occurred_at"
+                  class="w-full bg-dark-bg border border-dark-border rounded px-3 py-2 text-dark-text text-sm focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+            </details>
+          </form>
+        </div>
+      </main>
     </div>
     <script>
-        (function () {
-            var tz = '';
-            try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
-            document.querySelectorAll('form').forEach(function (form) {
-                form.addEventListener('submit', function () {
-                    var field = form.querySelector('input[name="timezone"]');
-                    if (field) field.value = tz;
-                });
-            });
-        })();
+      (function () {
+        var tz = "";
+        try {
+          tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+        } catch (e) {}
+        document.querySelectorAll("form").forEach(function (form) {
+          form.addEventListener("submit", function () {
+            var field = form.querySelector('input[name="timezone"]');
+            if (field) field.value = tz;
+          });
+        });
+      })();
     </script>
-</body>
+  </body>
 </html>
