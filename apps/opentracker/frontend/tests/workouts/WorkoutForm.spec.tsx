@@ -230,8 +230,10 @@ test("cancelling the delete workout confirmation does not delete exercises", asy
   const button = screen.getByRole("button", { name: "delete-workout" });
   userEvent.click(button);
 
-  // Get the cancellation button
-  const cancel = screen.getByRole("button", { name: "cancel-pending-action" });
+  // Get the cancellation button (wait for modal to appear)
+  const cancel = await waitFor(() =>
+    screen.getByRole("button", { name: "cancel-pending-action" })
+  );
   userEvent.click(cancel);
 
   // Validate all the exercises are still here
