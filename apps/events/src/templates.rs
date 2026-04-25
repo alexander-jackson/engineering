@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use serde::Serialize;
 
 use crate::persistence::{DailyStats, DayHistory, EventType};
@@ -59,8 +60,13 @@ pub struct HistoryEntry {
     pub wear_time_display: String,
     pub out_time_display: String,
     pub is_on_track: bool,
-    pub seating_count: i32,
-    pub seating_target: i32,
+    pub seatings: Option<SeatingInformation>,
+}
+
+#[derive(Serialize)]
+pub struct SeatingInformation {
+    pub count: i32,
+    pub target: i32,
 }
 
 #[derive(Serialize)]
@@ -68,17 +74,27 @@ pub struct HistoryContext {
     pub entries: Vec<HistoryEntry>,
 }
 
-impl From<Vec<DayHistory>> for HistoryContext {
-    fn from(days: Vec<DayHistory>) -> Self {
+impl HistoryContext {
+    pub fn from(days: Vec<DayHistory>, cutoff: NaiveDate) -> Self {
         let entries = days
             .into_iter()
-            .map(|day| HistoryEntry {
-                date: day.date.format("%a, %d %b %Y").to_string(),
-                wear_time_display: format_minutes(day.wear_minutes),
-                out_time_display: format_minutes(day.out_minutes),
-                is_on_track: day.is_on_track,
-                seating_count: day.seating_count,
-                seating_target: 2,
+            .map(|day| {
+                let seatings = if day.date >= cutoff {
+                    Some(SeatingInformation {
+                        count: day.seating_count,
+                        target: 2,
+                    })
+                } else {
+                    None
+                };
+
+                HistoryEntry {
+                    date: day.date.format("%a, %d %b %Y").to_string(),
+                    wear_time_display: format_minutes(day.wear_minutes),
+                    out_time_display: format_minutes(day.out_minutes),
+                    is_on_track: day.is_on_track,
+                    seatings,
+                }
             })
             .collect();
 
@@ -93,5 +109,41 @@ fn format_minutes(minutes: i64) -> String {
         format!("{}h {}m", hours, mins)
     } else {
         format!("{}m", mins)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::NaiveDate;
+
+    use crate::persistence::DayHistory;
+    use crate::templates::HistoryContext;
+
+    #[test]
+    fn cutoff_applies_to_history_entries() {
+        let cutoff = NaiveDate::from_ymd_opt(2024, 6, 1).unwrap();
+
+        let context = HistoryContext::from(
+            vec![
+                DayHistory {
+                    date: NaiveDate::from_ymd_opt(2024, 6, 2).unwrap(),
+                    wear_minutes: 480,
+                    out_minutes: 120,
+                    is_on_track: true,
+                    seating_count: 1,
+                },
+                DayHistory {
+                    date: NaiveDate::from_ymd_opt(2024, 5, 31).unwrap(),
+                    wear_minutes: 450,
+                    out_minutes: 150,
+                    is_on_track: false,
+                    seating_count: 0,
+                },
+            ],
+            cutoff,
+        );
+
+        assert!(context.entries[0].seatings.is_some());
+        assert!(context.entries[1].seatings.is_none());
     }
 }

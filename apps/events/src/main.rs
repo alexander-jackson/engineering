@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
 
     let addr = SocketAddrV4::new(config.server.host, config.server.port);
     let listener = TcpListener::bind(addr).await?;
-    let server = crate::server::build(template_engine, pool, listener);
+    let server = crate::server::build((*config).application, template_engine, pool, listener);
 
     ShutdownCoordinator::new().with_task(server).run().await?;
 
