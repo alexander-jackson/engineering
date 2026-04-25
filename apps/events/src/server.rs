@@ -14,6 +14,7 @@ use serde::{Deserialize, Deserializer};
 use sqlx::PgPool;
 use tokio::net::TcpListener;
 
+use crate::config::ApplicationConfiguration;
 use crate::error::ServerResult;
 use crate::persistence::EventType;
 use crate::templates::{HistoryContext, IndexContext};
@@ -75,12 +76,19 @@ impl EventForm {
 
 #[derive(Clone)]
 struct ApplicationState {
+    configuration: ApplicationConfiguration,
     template_engine: TemplateEngine,
     pool: PgPool,
 }
 
-pub fn build(template_engine: TemplateEngine, pool: PgPool, listener: TcpListener) -> Server {
+pub fn build(
+    configuration: ApplicationConfiguration,
+    template_engine: TemplateEngine,
+    pool: PgPool,
+    listener: TcpListener,
+) -> Server {
     let state = ApplicationState {
+        configuration,
         template_engine,
         pool,
     };
@@ -120,13 +128,14 @@ async fn index(
 #[tracing::instrument(skip(template_engine, pool))]
 async fn history(
     State(ApplicationState {
+        configuration,
         template_engine,
         pool,
         ..
     }): State<ApplicationState>,
 ) -> ServerResult<RenderedTemplate> {
     let days = crate::persistence::get_history(&pool, Utc::now()).await?;
-    let context = HistoryContext::from(days);
+    let context = HistoryContext::from(days, configuration.seating_cutoff);
     let rendered = template_engine.render_serialized("history.tera.html", &context)?;
 
     Ok(rendered)
