@@ -15,7 +15,7 @@ pub fn router() -> Router<AppState> {
 
 pub async fn fetch(
     claims: Claims,
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
 ) -> ServerResponse<Json<Option<Preferences>>> {
     let preferences = persistence::preferences::fetch(claims.id, &pool).await?;
 
@@ -26,7 +26,7 @@ pub async fn fetch(
 
 pub async fn update(
     claims: Claims,
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     Json(preferences): Json<Preferences>,
 ) -> ServerResponse<()> {
     persistence::preferences::update(claims.id, preferences, &pool).await?;

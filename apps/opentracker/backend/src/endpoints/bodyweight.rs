@@ -22,7 +22,7 @@ pub fn router() -> Router<AppState> {
 }
 
 pub async fn get_specific_bodyweight(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
 ) -> ServerResponse<Json<persistence::bodyweights::SpecificBodyweightRecord>> {
@@ -35,7 +35,7 @@ pub async fn get_specific_bodyweight(
 }
 
 pub async fn delete_specific_bodyweight(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
 ) -> ServerResponse<()> {
@@ -53,7 +53,7 @@ pub struct BodyweightRecords {
 }
 
 pub async fn get_all_bodyweights(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
 ) -> ServerResponse<Json<BodyweightRecords>> {
     let bodyweights = persistence::bodyweights::fetch_all(claims.id, &pool).await?;
@@ -76,7 +76,7 @@ pub async fn get_all_bodyweights(
 }
 
 pub async fn upload_bodyweight(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
     Json(data): Json<forms::Bodyweight>,
@@ -89,7 +89,7 @@ pub async fn upload_bodyweight(
 }
 
 pub async fn get_most_recent_bodyweight(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
 ) -> ServerResponse<Json<Option<persistence::bodyweights::BodyweightRecord>>> {
     let most_recent_bodyweight =
@@ -101,7 +101,7 @@ pub async fn get_most_recent_bodyweight(
 }
 
 pub async fn get_bodyweight_statistics(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
 ) -> ServerResponse<Json<persistence::statistics::BodyweightStatistics>> {
     let stats =
