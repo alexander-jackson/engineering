@@ -16,6 +16,7 @@ foundation-http-server = { version = "0.1.0", path = "../foundation/http-server"
 foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
+itertools = "0.14.0"
 serde = { workspace = true, features = ["derive"] }
 sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls", "chrono"] }
 tokio = { version = "1.39.3", features = ["rt-multi-thread", "macros"] }
