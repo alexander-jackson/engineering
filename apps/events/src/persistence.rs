@@ -74,63 +74,64 @@ pub async fn get_daily_stats(
     .await?;
 
     // Determine state at midnight
-    let was_inserted_at_midnight = previous_event
-        .map(|e| e.event_type == EventType::Inserted)
-        .unwrap_or(false);
+    let default_state = match previous_event.map(|e| e.event_type) {
+        Some(EventType::Inserted) => EventType::Inserted,
+        Some(EventType::Removed) | None => EventType::Removed,
+    };
 
     // insert a synthetic event at midnight to simplify wear time calculation logic
     today_events.insert(
         0,
         EventDetails {
-            event_type: if was_inserted_at_midnight {
-                EventType::Inserted
-            } else {
-                EventType::Removed
-            },
+            event_type: default_state,
             occurred_at: today_start,
         },
     );
 
-    let mut wear_minutes: i64 = 0;
-    let mut out_minutes: i64 = 0;
+    let (current_state, latest_event_time, wear_minutes, out_minutes) =
+        if let Some(last_event) = today_events.last() {
+            let (mut wear_minutes, mut out_minutes) = today_events.iter().tuple_windows().fold(
+                (0, 0),
+                |(wear_acc, out_acc), (before, after)| {
+                    let duration = after
+                        .occurred_at
+                        .signed_duration_since(before.occurred_at)
+                        .num_minutes();
 
-    let (current_state, latest_event_time) = if let Some(last_event) = today_events.last() {
-        (last_event.event_type, last_event.occurred_at)
-    } else {
-        // No events at all today, state is whatever it was at midnight
-        (
-            if was_inserted_at_midnight {
-                EventType::Inserted
+                    match before.event_type {
+                        EventType::Inserted => (wear_acc + duration, out_acc),
+                        EventType::Removed => (wear_acc, out_acc + duration),
+                    }
+                },
+            );
+
+            if last_event.event_type == EventType::Inserted {
+                wear_minutes += now
+                    .signed_duration_since(last_event.occurred_at)
+                    .num_minutes();
             } else {
-                EventType::Removed
-            },
-            today_start,
-        )
-    };
+                out_minutes += now
+                    .signed_duration_since(last_event.occurred_at)
+                    .num_minutes();
+            }
 
-    for (before, after) in today_events.iter().tuple_windows() {
-        let duration = after
-            .occurred_at
-            .signed_duration_since(before.occurred_at)
-            .num_minutes();
-
-        match before.event_type {
-            EventType::Inserted => wear_minutes += duration,
-            EventType::Removed => out_minutes += duration,
-        }
-    }
-
-    if let Some(last_event) = today_events.last() {
-        if last_event.event_type == EventType::Inserted {
-            wear_minutes += now
-                .signed_duration_since(last_event.occurred_at)
-                .num_minutes();
+            (
+                last_event.event_type,
+                last_event.occurred_at,
+                wear_minutes,
+                out_minutes,
+            )
         } else {
-            out_minutes += now
-                .signed_duration_since(last_event.occurred_at)
-                .num_minutes();
-        }
-    }
+            // No events at all today, state is whatever it was at midnight
+            let elapsed = now.signed_duration_since(today_start).num_minutes();
+
+            let (wear_minutes, out_minutes) = match default_state {
+                EventType::Inserted => (elapsed, 0),
+                EventType::Removed => (0, elapsed),
+            };
+
+            (default_state, today_start, wear_minutes, out_minutes)
+        };
 
     let is_on_track = out_minutes < 2 * 60;
 
