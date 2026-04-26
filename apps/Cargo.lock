@@ -1630,6 +1630,7 @@ dependencies = [
  "foundation-init",
  "foundation-shutdown",
  "foundation-templating",
+ "itertools",
  "serde",
  "sqlx",
  "tokio",

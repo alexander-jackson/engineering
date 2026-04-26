@@ -1,8 +1,9 @@
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use color_eyre::eyre::Result;
+use itertools::Itertools;
 use sqlx::PgPool;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, sqlx::Type)]
 pub enum EventType {
     Inserted,
     Removed,
@@ -25,7 +26,14 @@ pub struct DailyStats {
     pub out_minutes: i64,
     pub is_on_track: bool,
     pub current_state: EventType,
+    pub latest_event_time: DateTime<Utc>,
     pub seating_count: i32,
+}
+
+#[derive(Copy, Clone, Debug)]
+struct EventDetails {
+    event_type: EventType,
+    occurred_at: DateTime<Utc>,
 }
 
 #[tracing::instrument(skip(pool))]
@@ -35,9 +43,10 @@ pub async fn get_daily_stats(
     now: DateTime<Utc>,
 ) -> Result<DailyStats> {
     // Get state just before today (to know if retainer was in/out at midnight)
-    let prev_event_type = sqlx::query_scalar!(
+    let previous_event = sqlx::query_as!(
+        EventDetails,
         r#"
-            SELECT ret.name
+            SELECT ret.name AS "event_type: EventType", re.occurred_at
             FROM retainer_event re
             JOIN retainer_event_type ret ON ret.id = re.event_type_id
             WHERE re.occurred_at < $1
@@ -50,9 +59,10 @@ pub async fn get_daily_stats(
     .await?;
 
     // Get all events today in chronological order
-    let today_events = sqlx::query!(
+    let mut today_events = sqlx::query_as!(
+        EventDetails,
         r#"
-            SELECT ret.name as event_type, re.occurred_at
+            SELECT ret.name AS "event_type: EventType", re.occurred_at
             FROM retainer_event re
             JOIN retainer_event_type ret ON ret.id = re.event_type_id
             WHERE re.occurred_at >= $1
@@ -64,50 +74,63 @@ pub async fn get_daily_stats(
     .await?;
 
     // Determine state at midnight
-    let midnight_state = prev_event_type
-        .as_deref()
-        .map(EventType::try_from)
-        .transpose()?;
-    let was_inserted_at_midnight = midnight_state == Some(EventType::Inserted);
+    let was_inserted_at_midnight = previous_event
+        .map(|e| e.event_type == EventType::Inserted)
+        .unwrap_or(false);
 
-    let mut last_insert_time: Option<DateTime<Utc>> = if was_inserted_at_midnight {
-        Some(today_start)
-    } else {
-        None
-    };
+    // insert a synthetic event at midnight to simplify wear time calculation logic
+    today_events.insert(
+        0,
+        EventDetails {
+            event_type: if was_inserted_at_midnight {
+                EventType::Inserted
+            } else {
+                EventType::Removed
+            },
+            occurred_at: today_start,
+        },
+    );
 
     let mut wear_minutes: i64 = 0;
-    let mut current_state = if was_inserted_at_midnight {
-        EventType::Inserted
+    let mut out_minutes: i64 = 0;
+
+    let (current_state, latest_event_time) = if let Some(last_event) = today_events.last() {
+        (last_event.event_type, last_event.occurred_at)
     } else {
-        EventType::Removed
+        // No events at all today, state is whatever it was at midnight
+        (
+            if was_inserted_at_midnight {
+                EventType::Inserted
+            } else {
+                EventType::Removed
+            },
+            today_start,
+        )
     };
 
-    for event in &today_events {
-        match EventType::try_from(event.event_type.as_str())? {
-            EventType::Inserted => {
-                last_insert_time = Some(event.occurred_at);
-                current_state = EventType::Inserted;
-            }
-            EventType::Removed => {
-                if let Some(insert_time) = last_insert_time.take() {
-                    wear_minutes += event
-                        .occurred_at
-                        .signed_duration_since(insert_time)
-                        .num_minutes();
-                }
-                current_state = EventType::Removed;
-            }
+    for (before, after) in today_events.iter().tuple_windows() {
+        let duration = after
+            .occurred_at
+            .signed_duration_since(before.occurred_at)
+            .num_minutes();
+
+        match before.event_type {
+            EventType::Inserted => wear_minutes += duration,
+            EventType::Removed => out_minutes += duration,
         }
     }
 
-    // If currently inserted, add elapsed time since last insert
-    if let Some(insert_time) = last_insert_time {
-        wear_minutes += now.signed_duration_since(insert_time).num_minutes();
+    if let Some(last_event) = today_events.last() {
+        if last_event.event_type == EventType::Inserted {
+            wear_minutes += now
+                .signed_duration_since(last_event.occurred_at)
+                .num_minutes();
+        } else {
+            out_minutes += now
+                .signed_duration_since(last_event.occurred_at)
+                .num_minutes();
+        }
     }
-
-    let elapsed_minutes = now.signed_duration_since(today_start).num_minutes();
-    let out_minutes = (elapsed_minutes - wear_minutes).max(0);
 
     let is_on_track = out_minutes < 2 * 60;
 
@@ -125,6 +148,7 @@ pub async fn get_daily_stats(
         out_minutes,
         is_on_track,
         current_state,
+        latest_event_time,
         seating_count,
     })
 }
