@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::Serialize;
 
 use crate::persistence::{DailyStats, DayHistory, EventType};
@@ -6,7 +6,7 @@ use crate::persistence::{DailyStats, DayHistory, EventType};
 #[derive(Serialize)]
 pub struct IndexContext {
     pub is_inserted: bool,
-    pub latest_event_time: String,
+    pub latest_event_time: DateTime<Utc>,
     pub wear_time_display: String,
     pub out_time_display: String,
     pub target_display: String,
@@ -20,7 +20,7 @@ pub struct IndexContext {
 impl From<DailyStats> for IndexContext {
     fn from(stats: DailyStats) -> Self {
         let is_inserted = stats.current_state == EventType::Inserted;
-        let latest_event_time = stats.latest_event_time.format("%H:%M").to_string();
+        let latest_event_time = stats.latest_event_time;
 
         let wear_time_display = format_minutes(stats.wear_minutes);
         let out_time_display = format_minutes(stats.out_minutes);

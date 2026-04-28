@@ -1,5 +1,5 @@
 use chrono::{DateTime, Duration, NaiveDate, Utc};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, eyre};
 use itertools::Itertools;
 use sqlx::PgPool;
 
@@ -16,7 +16,7 @@ impl TryFrom<&str> for EventType {
         match s {
             "Inserted" => Ok(Self::Inserted),
             "Removed" => Ok(Self::Removed),
-            other => Err(color_eyre::eyre::eyre!("unknown event type: {other}")),
+            other => Err(eyre!("unknown event type: {other}")),
         }
     }
 }
