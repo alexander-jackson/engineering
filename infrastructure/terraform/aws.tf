@@ -455,7 +455,7 @@ module "rds_postgres" {
 
   allowed_security_group_ids = [module.primary.security_group_id]
 
-  engine_version    = "15.14"
+  engine_version    = "18.3"
   instance_class    = "db.t4g.micro"
   allocated_storage = 20
   password          = var.db_password
