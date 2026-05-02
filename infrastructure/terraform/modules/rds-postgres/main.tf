@@ -44,4 +44,6 @@ resource "aws_db_instance" "this" {
   backup_retention_period   = 1
   skip_final_snapshot       = false
   final_snapshot_identifier = format("%s-final-snapshot", var.name)
+
+  allow_major_version_upgrade = var.allow_major_version_upgrade
 }
