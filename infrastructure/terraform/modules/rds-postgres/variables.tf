@@ -46,3 +46,9 @@ variable "password" {
   sensitive   = true
   description = "Master password for the postgres user"
 }
+
+variable "allow_major_version_upgrade" {
+  type        = bool
+  default     = false
+  description = "Whether major version upgrades are allowed"
+}
