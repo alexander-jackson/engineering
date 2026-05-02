@@ -52,3 +52,9 @@ variable "allow_major_version_upgrade" {
   default     = false
   description = "Whether major version upgrades are allowed"
 }
+
+variable "apply_immediately" {
+  type        = bool
+  default     = true
+  description = "Whether to apply changes immediately or during the next maintenance window"
+}

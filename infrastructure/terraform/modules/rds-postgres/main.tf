@@ -46,4 +46,5 @@ resource "aws_db_instance" "this" {
   final_snapshot_identifier = format("%s-final-snapshot", var.name)
 
   allow_major_version_upgrade = var.allow_major_version_upgrade
+  apply_immediately           = var.apply_immediately
 }
