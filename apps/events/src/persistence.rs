@@ -80,13 +80,12 @@ pub async fn get_daily_stats(
     };
 
     // insert a synthetic event at midnight to simplify wear time calculation logic
-    today_events.insert(
-        0,
-        EventDetails {
-            event_type: default_state,
-            occurred_at: today_start,
-        },
-    );
+    let precursor_event = previous_event.unwrap_or(EventDetails {
+        event_type: default_state,
+        occurred_at: today_start,
+    });
+
+    today_events.insert(0, precursor_event);
 
     let (current_state, latest_event_time, wear_minutes, out_minutes) =
         if let Some(last_event) = today_events.last() {
@@ -95,7 +94,7 @@ pub async fn get_daily_stats(
                 |(wear_acc, out_acc), (before, after)| {
                     let duration = after
                         .occurred_at
-                        .signed_duration_since(before.occurred_at)
+                        .signed_duration_since(std::cmp::max(before.occurred_at, today_start))
                         .num_minutes();
 
                     match before.event_type {
@@ -107,11 +106,11 @@ pub async fn get_daily_stats(
 
             if last_event.event_type == EventType::Inserted {
                 wear_minutes += now
-                    .signed_duration_since(last_event.occurred_at)
+                    .signed_duration_since(std::cmp::max(last_event.occurred_at, today_start))
                     .num_minutes();
             } else {
                 out_minutes += now
-                    .signed_duration_since(last_event.occurred_at)
+                    .signed_duration_since(std::cmp::max(last_event.occurred_at, today_start))
                     .num_minutes();
             }
 
@@ -317,6 +316,37 @@ mod tests {
 
         assert_eq!(stats.current_state, EventType::Removed);
         assert_eq!(stats.wear_minutes, 0);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn most_recent_event_time_is_accurate(pool: PgPool) -> Result<()> {
+        let inserted_at = today_start() + chrono::Duration::hours(9);
+        let removed_at = today_start() + chrono::Duration::hours(10);
+
+        record_event(&pool, EventType::Inserted, inserted_at).await?;
+        record_event(&pool, EventType::Removed, removed_at).await?;
+
+        let now = today_start() + chrono::Duration::hours(11);
+        let stats = get_daily_stats(&pool, today_start(), now).await?;
+
+        assert_eq!(stats.current_state, EventType::Removed);
+        assert_eq!(stats.latest_event_time, removed_at);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn most_recent_event_time_includes_previous_days_if_required(pool: PgPool) -> Result<()> {
+        let removed_at = today_start() - chrono::Duration::hours(3);
+        record_event(&pool, EventType::Removed, removed_at).await?;
+
+        let now = today_start() + chrono::Duration::hours(10);
+        let stats = get_daily_stats(&pool, today_start(), now).await?;
+
+        assert_eq!(stats.current_state, EventType::Removed);
+        assert_eq!(stats.latest_event_time, removed_at);
 
         Ok(())
     }
