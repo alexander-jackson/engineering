@@ -301,12 +301,12 @@ resource "aws_key_pair" "main" {
   public_key = file("./keys/id_rsa.pub")
 }
 
-module "secondary" {
+module "primary" {
   source = "./modules/f2-instance"
-  name   = "secondary"
+  name   = "primary"
 
   instance = {
-    type      = "t4g.small"
+    type      = "t4g.micro"
     ami       = "ami-0b583f82e876e016c"
     vpc_id    = aws_vpc.main.id
     subnet_id = aws_subnet.main.id
@@ -352,7 +352,7 @@ module "dns2" {
   configuration = {
     bucket    = module.config_bucket.name
     key       = "dns-server/config.yaml"
-    image_tag = "lasecondary"
+    image_tag = "latest"
   }
 
   logging = {
@@ -413,7 +413,7 @@ resource "aws_route53_record" "records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.secondary.public_ip]
+  records = [module.primary.public_ip]
 }
 
 resource "aws_route53_record" "dns_server_record" {
@@ -433,7 +433,7 @@ resource "aws_route53_record" "forkup_records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.secondary.public_ip]
+  records = [module.primary.public_ip]
 }
 
 # Internal Route 53 definitions
@@ -462,13 +462,13 @@ module "rds_postgres" {
   apply_immediately           = true
 }
 
-resource "aws_security_group_rule" "secondary_to_postgres" {
-  description              = "Allow inbound PostgreSQL from secondary"
+resource "aws_security_group_rule" "primary_to_postgres" {
+  description              = "Allow inbound PostgreSQL from primary"
   type                     = "ingress"
   from_port                = 5432
   to_port                  = 5432
   protocol                 = "tcp"
-  source_security_group_id = module.secondary.security_group_id
+  source_security_group_id = module.primary.security_group_id
   security_group_id        = module.rds_postgres.security_group_id
 }
 
