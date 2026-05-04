@@ -4,18 +4,6 @@ resource "aws_security_group" "this" {
   vpc_id      = var.vpc_id
 }
 
-resource "aws_security_group_rule" "allow_inbound_postgres" {
-  for_each = toset(var.allowed_security_group_ids)
-
-  description              = format("Allow inbound PostgreSQL from %s", each.key)
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = each.key
-  security_group_id        = aws_security_group.this.id
-}
-
 resource "aws_db_subnet_group" "this" {
   name       = var.name
   subnet_ids = var.subnet_ids

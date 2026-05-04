@@ -18,11 +18,6 @@ variable "availability_zone" {
   description = "Availability zone for the single-AZ instance placement"
 }
 
-variable "allowed_security_group_ids" {
-  type        = list(string)
-  description = "Security group IDs permitted to connect on port 5432"
-}
-
 variable "engine_version" {
   type        = string
   default     = "15"

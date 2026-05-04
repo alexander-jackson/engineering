@@ -301,13 +301,13 @@ resource "aws_key_pair" "main" {
   public_key = file("./keys/id_rsa.pub")
 }
 
-module "primary" {
+module "secondary" {
   source = "./modules/f2-instance"
-  name   = "primary"
+  name   = "secondary"
 
   instance = {
-    type      = "t2.micro"
-    ami       = "ami-0ab14756db2442499"
+    type      = "t4g.small"
+    ami       = "ami-0b583f82e876e016c"
     vpc_id    = aws_vpc.main.id
     subnet_id = aws_subnet.main.id
   }
@@ -315,7 +315,7 @@ module "primary" {
   configuration = {
     bucket    = module.config_bucket.name
     key       = "f2/config.yaml"
-    image_tag = "20250829-1918"
+    image_tag = "20260504-1052"
   }
 
   logging = {
@@ -352,7 +352,7 @@ module "dns2" {
   configuration = {
     bucket    = module.config_bucket.name
     key       = "dns-server/config.yaml"
-    image_tag = "latest"
+    image_tag = "lasecondary"
   }
 
   logging = {
@@ -413,7 +413,7 @@ resource "aws_route53_record" "records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.primary.public_ip]
+  records = [module.secondary.public_ip]
 }
 
 resource "aws_route53_record" "dns_server_record" {
@@ -433,7 +433,7 @@ resource "aws_route53_record" "forkup_records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.primary.public_ip]
+  records = [module.secondary.public_ip]
 }
 
 # Internal Route 53 definitions
@@ -453,8 +453,6 @@ module "rds_postgres" {
   subnet_ids        = [aws_subnet.main.id, aws_subnet.rds.id]
   availability_zone = "eu-west-1a"
 
-  allowed_security_group_ids = [module.primary.security_group_id]
-
   engine_version    = "18.3"
   instance_class    = "db.t4g.micro"
   allocated_storage = 20
@@ -462,6 +460,16 @@ module "rds_postgres" {
 
   allow_major_version_upgrade = true
   apply_immediately           = true
+}
+
+resource "aws_security_group_rule" "secondary_to_postgres" {
+  description              = "Allow inbound PostgreSQL from secondary"
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = module.secondary.security_group_id
+  security_group_id        = module.rds_postgres.security_group_id
 }
 
 resource "aws_route53_record" "rds_postgres" {
