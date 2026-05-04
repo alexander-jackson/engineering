@@ -23,3 +23,7 @@ storage:
 acme:
   environment: production
   contact: alexanderjackson@protonmail.com
+
+notify:
+  url: https://certificates.opentracker.app
+  path: /certificates
