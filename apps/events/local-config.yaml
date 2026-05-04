@@ -4,6 +4,7 @@ server:
 
 application:
   seating_cutoff: 2026-04-23
+  timezone: Europe/London
 
 telemetry:
   enabled: false

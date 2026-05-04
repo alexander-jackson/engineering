@@ -111,5 +111,11 @@
         {% endif %}
       </main>
     </div>
+    <script>
+      try {
+        var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (tz) document.cookie = "tz=" + tz + "; path=/; SameSite=Strict";
+      } catch (e) {}
+    </script>
   </body>
 </html>

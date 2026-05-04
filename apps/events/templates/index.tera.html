@@ -213,6 +213,9 @@
         try {
           tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
         } catch (e) {}
+        if (tz) {
+          document.cookie = "tz=" + tz + "; path=/; SameSite=Strict";
+        }
         document.querySelectorAll("form").forEach(function (form) {
           form.addEventListener("submit", function () {
             var field = form.querySelector('input[name="timezone"]');
