@@ -4,6 +4,7 @@ server:
 
 application:
   seating_cutoff: 2026-04-15
+  timezone: Europe/London
 
 database:
   host: rds.mesh.internal
