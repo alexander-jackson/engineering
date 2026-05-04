@@ -14,7 +14,7 @@ foundation-init = { version = "0.1.0", path = "../foundation/init", features = [
 foundation-recurring-job = { version = "0.1.0", path = "../foundation/recurring-job" }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 humantime = "2.1.0"
-reqwest = { version = "0.12.9", default-features = false, features = ["rustls-tls", "rustls-tls-webpki-roots"] }
+reqwest.workspace = true
 serde = { version = "1.0.216", features = ["derive"] }
 sqlx = { version = "0.8.2", default-features = false, features = ["chrono", "macros", "migrate", "postgres", "runtime-tokio-rustls", "uuid"] }
 foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
