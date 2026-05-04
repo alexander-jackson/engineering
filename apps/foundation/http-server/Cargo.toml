@@ -14,4 +14,4 @@ tower-service = "0.3.3"
 tracing.workspace = true
 
 [dev-dependencies]
-reqwest = "0.12.23"
+reqwest.workspace = true
