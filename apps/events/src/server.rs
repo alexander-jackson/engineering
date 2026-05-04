@@ -1,11 +1,11 @@
 use axum::Router;
 use axum::body::Body;
 use axum::extract::{Form, State};
-use axum::http::StatusCode;
-use axum::http::header::LOCATION;
+use axum::http::header::{COOKIE, LOCATION};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, post};
-use chrono::{DateTime, Local, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use chrono_tz::Tz;
 use color_eyre::eyre::{Result, eyre};
 use foundation_http_server::Server;
@@ -107,18 +107,25 @@ pub fn build(
 #[tracing::instrument(skip(template_engine, pool))]
 async fn index(
     State(ApplicationState {
+        configuration,
         template_engine,
         pool,
-        ..
     }): State<ApplicationState>,
+    headers: HeaderMap,
 ) -> ServerResult<RenderedTemplate> {
-    let today_start = Local::now()
+    let tz = timezone_from_cookie(&headers, configuration.timezone);
+    let now = Utc::now();
+    let today_start = now
+        .with_timezone(&tz)
         .date_naive()
         .and_hms_opt(0, 0, 0)
         .unwrap()
-        .and_utc();
+        .and_local_timezone(tz)
+        .earliest()
+        .unwrap()
+        .to_utc();
 
-    let stats = crate::persistence::get_daily_stats(&pool, today_start, Utc::now()).await?;
+    let stats = crate::persistence::get_daily_stats(&pool, today_start, now).await?;
     let context = IndexContext::from(stats);
     let rendered = template_engine.render_serialized("index.tera.html", &context)?;
 
@@ -133,8 +140,10 @@ async fn history(
         pool,
         ..
     }): State<ApplicationState>,
+    headers: HeaderMap,
 ) -> ServerResult<RenderedTemplate> {
-    let days = crate::persistence::get_history(&pool, Utc::now()).await?;
+    let tz = timezone_from_cookie(&headers, configuration.timezone);
+    let days = crate::persistence::get_history(&pool, Utc::now(), tz).await?;
     let context = HistoryContext::from(days, configuration.seating_cutoff);
     let rendered = template_engine.render_serialized("history.tera.html", &context)?;
 
@@ -169,6 +178,18 @@ async fn seating(
     crate::persistence::record_seating(&pool, form.into_utc()?).await?;
     tracing::info!("recorded seating");
     Ok(redirect("/")?)
+}
+
+fn timezone_from_cookie(headers: &HeaderMap, fallback: Tz) -> Tz {
+    headers
+        .get(COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| {
+            s.split(';')
+                .find_map(|part| part.trim().strip_prefix("tz="))
+        })
+        .and_then(|tz_str| tz_str.parse().ok())
+        .unwrap_or(fallback)
 }
 
 fn redirect(path: &'static str) -> Result<Response> {

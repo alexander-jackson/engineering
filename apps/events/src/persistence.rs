@@ -1,4 +1,5 @@
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
+use chrono_tz::Tz;
 use color_eyre::eyre::{Result, eyre};
 use itertools::Itertools;
 use sqlx::PgPool;
@@ -162,7 +163,7 @@ pub struct DayHistory {
 }
 
 #[tracing::instrument(skip(pool))]
-pub async fn get_history(pool: &PgPool, now: DateTime<Utc>) -> Result<Vec<DayHistory>> {
+pub async fn get_history(pool: &PgPool, now: DateTime<Utc>, tz: Tz) -> Result<Vec<DayHistory>> {
     let all_events = sqlx::query!(
         r#"
             SELECT ret.name as event_type, re.occurred_at
@@ -183,8 +184,8 @@ pub async fn get_history(pool: &PgPool, now: DateTime<Utc>) -> Result<Vec<DayHis
             .fetch_all(pool)
             .await?;
 
-    let first_date = all_events[0].occurred_at.date_naive();
-    let today_date = now.date_naive();
+    let first_date = all_events[0].occurred_at.with_timezone(&tz).date_naive();
+    let today_date = now.with_timezone(&tz).date_naive();
 
     let mut results = Vec::new();
     let mut carry_inserted = false;
@@ -193,8 +194,22 @@ pub async fn get_history(pool: &PgPool, now: DateTime<Utc>) -> Result<Vec<DayHis
     let mut day = first_date;
 
     while day <= today_date {
-        let day_start = day.and_hms_opt(0, 0, 0).unwrap().and_utc();
-        let day_end = day_start + Duration::hours(24);
+        let day_start = day
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_local_timezone(tz)
+            .earliest()
+            .unwrap()
+            .to_utc();
+        let day_end = day
+            .succ_opt()
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_local_timezone(tz)
+            .earliest()
+            .unwrap()
+            .to_utc();
         let effective_end = if day == today_date { now } else { day_end };
 
         let mut wear_minutes: i64 = 0;
@@ -505,7 +520,7 @@ mod tests {
     #[sqlx::test]
     async fn no_events_returns_empty_history(pool: PgPool) -> Result<()> {
         let now = Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 0).unwrap();
-        let history = get_history(&pool, now).await?;
+        let history = get_history(&pool, now, chrono_tz::UTC).await?;
 
         assert!(history.is_empty());
 
@@ -531,7 +546,7 @@ mod tests {
 
         // now is day 2, so day 1 is a completed past day (effective_end = midnight)
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
-        let history = get_history(&pool, now).await?;
+        let history = get_history(&pool, now, chrono_tz::UTC).await?;
 
         // history[0] = Jan 2 (today), history[1] = Jan 1 (past)
         assert_eq!(history[1].wear_minutes, 12 * 60);
@@ -571,7 +586,7 @@ mod tests {
         .await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 22, 0, 0).unwrap();
-        let history = get_history(&pool, now).await?;
+        let history = get_history(&pool, now, chrono_tz::UTC).await?;
 
         assert_eq!(history.len(), 2);
         assert_eq!(
@@ -601,7 +616,7 @@ mod tests {
         record_event(&pool, EventType::Removed, day2 + chrono::Duration::hours(8)).await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
-        let history = get_history(&pool, now).await?;
+        let history = get_history(&pool, now, chrono_tz::UTC).await?;
 
         assert_eq!(history.len(), 2);
         // Day 1: wore from 9pm to midnight = 3h
@@ -643,7 +658,7 @@ mod tests {
         .await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 3, 22, 0, 0).unwrap();
-        let history = get_history(&pool, now).await?;
+        let history = get_history(&pool, now, chrono_tz::UTC).await?;
 
         assert_eq!(history.len(), 3);
         // history[0] = Jan 3, [1] = Jan 2, [2] = Jan 1
@@ -670,7 +685,7 @@ mod tests {
         .await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
-        let history = get_history(&pool, now).await?;
+        let history = get_history(&pool, now, chrono_tz::UTC).await?;
 
         assert!(history[1].is_on_track);
 
@@ -690,7 +705,7 @@ mod tests {
         .await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
-        let history = get_history(&pool, now).await?;
+        let history = get_history(&pool, now, chrono_tz::UTC).await?;
 
         assert!(!history[1].is_on_track);
 
@@ -761,7 +776,7 @@ mod tests {
         record_seating(&pool, day2 + chrono::Duration::hours(9)).await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
-        let history = get_history(&pool, now).await?;
+        let history = get_history(&pool, now, chrono_tz::UTC).await?;
 
         // history[0] = Jan 2, history[1] = Jan 1
         assert_eq!(history[1].seating_count, 2);
