@@ -17,6 +17,7 @@ foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
 foundation-uid = { version = "0.1.0", path = "../foundation/uid" }
 instant-acme = "0.8.5"
+reqwest = { version = "0.13.3", default-features = false, features = ["rustls"] }
 rustls = "0.23.37"
 serde = { workspace = true, features = ["derive"] }
 sqlx = { version = "0.8.2", default-features = false, features = ["chrono", "macros", "migrate", "postgres", "runtime-tokio-rustls", "uuid"] }
