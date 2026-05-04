@@ -72,7 +72,7 @@ pub async fn select_latest_expiry_per_domain(pool: &PgPool) -> Result<Vec<Domain
                 ORDER BY expires_at DESC
                 LIMIT 1
             ) c ON true
-            ORDER BY c.expires_at ASC
+            ORDER BY d.name ASC
         "#
     )
     .fetch_all(pool)

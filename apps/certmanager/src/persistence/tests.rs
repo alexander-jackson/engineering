@@ -80,7 +80,7 @@ async fn certificates_expiries_are_returned_with_nearest_to_expiry_first(
 }
 
 #[sqlx::test]
-async fn can_handle_expiries_for_multiple_domains_and_sort_by_expiry(pool: PgPool) -> Result<()> {
+async fn can_handle_expiries_for_multiple_domains_and_sort_by_name(pool: PgPool) -> Result<()> {
     let mut tx = pool.begin().await?;
     let domain_uid1 = insert_domain(&mut tx, "example.com").await?;
     let domain_uid2 = insert_domain(&mut tx, "example.org").await?;
@@ -90,8 +90,8 @@ async fn can_handle_expiries_for_multiple_domains_and_sort_by_expiry(pool: PgPoo
     let expiry1 = created_at + Duration::from_hours(24 * 90);
     let expiry2 = created_at + Duration::from_hours(24 * 60);
 
-    insert_certificate(&mut tx, domain_uid1, created_at, expiry1).await?;
-    insert_certificate(&mut tx, domain_uid2, created_at, expiry2).await?;
+    insert_certificate(&mut tx, domain_uid1, created_at, expiry2).await?;
+    insert_certificate(&mut tx, domain_uid2, created_at, expiry1).await?;
 
     tx.commit().await?;
 
@@ -99,10 +99,10 @@ async fn can_handle_expiries_for_multiple_domains_and_sort_by_expiry(pool: PgPoo
 
     assert_eq!(certs.len(), 2);
 
-    assert_eq!(certs[0].domain, "example.org");
+    assert_eq!(certs[0].domain, "example.com");
     assert_timestamp_equality(&certs[0].expires_at, &expiry2);
 
-    assert_eq!(certs[1].domain, "example.com");
+    assert_eq!(certs[1].domain, "example.org");
     assert_timestamp_equality(&certs[1].expires_at, &expiry1);
 
     Ok(())

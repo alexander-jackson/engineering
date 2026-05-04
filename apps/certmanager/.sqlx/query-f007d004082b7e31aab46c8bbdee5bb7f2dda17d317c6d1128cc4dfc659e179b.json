@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT d.domain_uid, d.name AS domain, c.expires_at\n            FROM domain d\n            JOIN LATERAL (\n                SELECT expires_at\n                FROM certificate\n                WHERE domain_id = d.id\n                ORDER BY expires_at DESC\n                LIMIT 1\n            ) c ON true\n            ORDER BY c.expires_at ASC\n        ",
+  "query": "\n            SELECT d.domain_uid, d.name AS domain, c.expires_at\n            FROM domain d\n            JOIN LATERAL (\n                SELECT expires_at\n                FROM certificate\n                WHERE domain_id = d.id\n                ORDER BY expires_at DESC\n                LIMIT 1\n            ) c ON true\n            ORDER BY d.name ASC\n        ",
   "describe": {
     "columns": [
       {
@@ -28,5 +28,5 @@
       false
     ]
   },
-  "hash": "4d0651c6d3c401b4f46a903e8907523310984182e485851f2028f5d607353386"
+  "hash": "f007d004082b7e31aab46c8bbdee5bb7f2dda17d317c6d1128cc4dfc659e179b"
 }
