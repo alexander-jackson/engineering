@@ -10,6 +10,13 @@ pub struct Configuration {
     pub server: ServerConfiguration,
     pub storage: StorageConfiguration,
     pub acme: AcmeConfiguration,
+    pub notify: NotifyConfiguration,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct NotifyConfiguration {
+    pub url: String,
+    pub path: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

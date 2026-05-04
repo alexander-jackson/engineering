@@ -37,8 +37,15 @@ async fn main() -> Result<()> {
     let acme_client = AcmeClient::new(config.acme.environment, &config.acme.contact).await?;
     let dns_client = DnsClient::new(route53_client.clone());
     let cert_store = CertificateStore::new(s3_client.clone(), config.storage.clone());
+    let http_client = reqwest::Client::new();
 
-    let renewer = Renewer::new(acme_client.clone(), dns_client.clone(), cert_store.clone());
+    let renewer = Renewer::new(
+        acme_client.clone(),
+        dns_client.clone(),
+        cert_store.clone(),
+        http_client,
+        config.notify.clone(),
+    );
     let watcher = Watcher::new(renewer.clone(), pool.clone());
 
     let template_engine = TemplateEngine::new()?;
