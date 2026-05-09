@@ -70,16 +70,6 @@ resource "aws_security_group" "this" {
   vpc_id      = var.instance.vpc_id
 }
 
-resource "aws_security_group_rule" "allow_inbound_ssh" {
-  description       = "Allow inbound SSH from anywhere"
-  type              = "ingress"
-  from_port         = 22
-  to_port           = 22
-  protocol          = "tcp"
-  security_group_id = aws_security_group.this.id
-  cidr_blocks       = ["0.0.0.0/0"]
-}
-
 resource "aws_security_group_rule" "allow_inbound_dns_over_tls" {
   description       = "Allow inbound DNS over TLS from anywhere"
   type              = "ingress"
