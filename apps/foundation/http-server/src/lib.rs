@@ -8,8 +8,8 @@ use tokio::net::TcpListener;
 use tower_http::trace::{
     DefaultOnRequest, DefaultOnResponse, MakeSpan, OnRequest, OnResponse, TraceLayer,
 };
-use tracing::Span;
 use tracing::field::Empty;
+use tracing::{Level, Span};
 
 #[derive(Copy, Clone, Debug, Default)]
 struct SpanCreator;
@@ -22,6 +22,7 @@ impl<B> MakeSpan<B> for SpanCreator {
             uri = %request.uri(),
             version = ?request.version(),
             status = Empty,
+            latency = Empty,
         )
     }
 }
@@ -37,14 +38,23 @@ impl<B> OnRequest<B> for RequestTracingFilter {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 struct ResponseTracingFilter {
     inner: DefaultOnResponse,
+}
+
+impl Default for ResponseTracingFilter {
+    fn default() -> Self {
+        Self {
+            inner: DefaultOnResponse::new().level(Level::INFO),
+        }
+    }
 }
 
 impl<B> OnResponse<B> for ResponseTracingFilter {
     fn on_response(self, response: &Response<B>, latency: Duration, span: &Span) {
         span.record("status", response.status().as_u16());
+        span.record("latency", latency.as_millis());
 
         self.inner.on_response(response, latency, span);
     }
