@@ -25,7 +25,7 @@ pub fn router() -> Router<AppState> {
 }
 
 pub async fn get_workouts(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
     Query(range): Query<DateRange>,
 ) -> ServerResponse<Json<Vec<persistence::workouts::DatedWorkout>>> {
@@ -45,7 +45,7 @@ pub async fn get_workouts(
 }
 
 pub async fn get_workout(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
 ) -> ServerResponse<Json<Vec<forms::Exercise>>> {
@@ -59,7 +59,7 @@ pub async fn get_workout(
 }
 
 pub async fn delete_workout(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
 ) -> ServerResponse<()> {
@@ -72,7 +72,7 @@ pub async fn delete_workout(
 }
 
 pub async fn upload_workout(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
     Path(recorded): Path<forms::RecordedDate>,
     Json(data): Json<forms::Workout>,
@@ -100,7 +100,7 @@ pub struct WorkoutStatisticsQuery {
 
 #[axum_macros::debug_handler]
 pub async fn get_workout_statistics(
-    State(AppState { pool }): State<AppState>,
+    State(AppState { pool, .. }): State<AppState>,
     claims: Claims,
     Query(query): Query<WorkoutStatisticsQuery>,
 ) -> ServerResponse<Json<persistence::statistics::WorkoutStatistics>> {
