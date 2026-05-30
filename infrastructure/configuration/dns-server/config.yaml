@@ -30,5 +30,5 @@ cache:
   default_ttl_seconds: 300
 
 metrics:
-  endpoint: http://prometheus.mesh.internal:9090/api/v1/otlp/v1/metrics
+  endpoint: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics
   interval_seconds: 30

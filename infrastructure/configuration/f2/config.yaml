@@ -1,6 +1,7 @@
 alb:
   addr: 0.0.0.0
   ports:
+    http: 80
     https: 443
   reconciliation: /reconcile
   tls:

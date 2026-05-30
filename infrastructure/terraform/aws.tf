@@ -327,7 +327,8 @@ module "secondary" {
     bucket = module.hackathon_bucket.name
   }
 
-  key_name = aws_key_pair.main.key_name
+  key_name               = aws_key_pair.main.key_name
+  inbound_http_subnet_id = aws_subnet.main.id
 }
 
 resource "aws_eip" "dns_server" {
@@ -479,4 +480,12 @@ resource "aws_route53_record" "rds_postgres" {
   type    = "CNAME"
   ttl     = 300
   records = [module.rds_postgres.address]
+}
+
+resource "aws_route53_record" "prometheus" {
+  zone_id = aws_route53_zone.internal.id
+  name    = "prometheus"
+  type    = "A"
+  ttl     = 300
+  records = [module.secondary.private_ip]
 }
