@@ -7,7 +7,7 @@ edition = "2024"
 base64 = { version = "0.22.1", optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
 sqlx = { version = "0.8.6", default-features = false, optional = true }
-uuid = { version = "1.18.0", features = ["v4"] }
+uuid = { version = "1.23.2", features = ["v4"] }
 
 [features]
 serde = ["dep:serde", "uuid/serde"]
@@ -15,4 +15,4 @@ encoding = ["dep:base64", "serde"]
 sqlx = ["dep:sqlx"]
 
 [dev-dependencies]
-serde_json = "1.0.143"
+serde_json = "1.0.150"
