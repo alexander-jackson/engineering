@@ -1,0 +1,31 @@
+name: Scheduled lock-file update
+
+on:
+  schedule:
+    - cron: "0 7 * * 3" # Wednesdays 07:00 UTC
+  workflow_dispatch:
+
+jobs:
+  update-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run cargo update
+        working-directory: apps
+        run: cargo update
+
+      - name: Open PR if lock file changed
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore: cargo update (lock-file bump)"
+          title: "chore: weekly cargo update"
+          body: |
+            Automated lock-file update via `cargo update`.
+            Bumps patch/minor versions within existing semver ranges.
+            Does NOT change Cargo.toml version strings — that is Dependabot's job.
+          branch: automated/cargo-update
+          delete-branch: true
+          labels: dependencies
