@@ -344,7 +344,7 @@ module "secondary" {
   configuration = {
     bucket    = module.config_bucket.name
     key       = "f2/config.yaml"
-    image_tag = "20260530-0647"
+    image_tag = "20260530-1116"
   }
 
   logging = {
@@ -443,7 +443,7 @@ resource "aws_route53_record" "records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.primary.public_ip]
+  records = [module.secondary.public_ip]
 }
 
 resource "aws_route53_record" "dns_server_record" {
@@ -463,7 +463,7 @@ resource "aws_route53_record" "forkup_records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.primary.public_ip]
+  records = [module.secondary.public_ip]
 }
 
 # Internal Route 53 definitions
