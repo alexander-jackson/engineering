@@ -68,6 +68,15 @@ alb:
           location: s3
           bucket: configuration-68f6c7
           key: f2/certificates/certificates.opentracker.app/privkey.pem
+      grafana.opentracker.app:
+        cert_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/grafana.opentracker.app/fullchain.pem
+        key_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/grafana.opentracker.app/privkey.pem
       forkup.app:
         cert_file:
           location: s3
@@ -88,6 +97,7 @@ alb:
       - lockers.opentracker.app
       - events.opentracker.app
       - certificates.opentracker.app
+      - grafana.opentracker.app
 
 secrets:
   private_key:
@@ -254,3 +264,24 @@ services:
           bucket: configuration-68f6c7
           key: certmanager/config.yaml
         target: /app/config/certmanager.yaml
+
+  grafana:
+    image: grafana/grafana
+    tag: 13.0.1
+    routes:
+      - host: grafana.opentracker.app
+        port: 3000
+    replicas: 1
+    environment:
+      GF_SECURITY_DISABLE_LOGIN_FORM: "true"
+
+    prometheus:
+      image: prom/prometheus
+      tag: v3.12.0
+      routes:
+        - host: prometheus.mesh.internal
+          port: 9090
+      replicas: 1
+      args:
+        - --config.file=/etc/prometheus/prometheus.yml
+        - --web.enable-otlp-receiver
