@@ -5,6 +5,7 @@ use std::time::Duration;
 use color_eyre::eyre::Result;
 use foundation_shutdown::{CancellationToken, GracefulTask};
 use hickory_server::ServerFuture;
+use opentelemetry::metrics::Counter;
 use tokio::net::TcpListener;
 
 use crate::blocklist::BlocklistManager;
@@ -26,8 +27,10 @@ impl DnsServer {
         cache: ResponseCache,
         config: &TlsConfig,
         certificate_resolver: CertificateResolver,
+        requests: Counter<u64>,
+        responses: Counter<u64>,
     ) -> Result<Self> {
-        let handler = DnsRequestHandler::new(upstream, blocklist, cache);
+        let handler = DnsRequestHandler::new(upstream, blocklist, cache, requests, responses);
         let mut server_future = ServerFuture::new(handler);
 
         register_tls_listener(&mut server_future, config, certificate_resolver).await?;
