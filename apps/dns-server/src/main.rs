@@ -37,11 +37,11 @@ async fn main() -> Result<()> {
     let exporter = MetricExporter::builder()
         .with_http()
         .with_http_client(Client::new())
-        .with_endpoint("http://localhost:9090/api/v1/otlp/v1/metrics")
+        .with_endpoint(config.metrics.endpoint.clone())
         .build()?;
 
     let reader = PeriodicReader::builder(exporter, runtime::Tokio)
-        .with_interval(Duration::from_secs(30))
+        .with_interval(Duration::from_secs(config.metrics.interval_seconds))
         .build();
     let provider = SdkMeterProvider::builder().with_reader(reader).build();
 

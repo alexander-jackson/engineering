@@ -28,3 +28,7 @@ blocklist:
 cache:
   max_entries: 10000
   default_ttl_seconds: 300
+
+metrics:
+  endpoint: http://localhost:9090/api/v1/otlp/v1/metrics
+  interval_seconds: 30
