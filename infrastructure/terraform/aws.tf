@@ -330,6 +330,35 @@ module "primary" {
   key_name = aws_key_pair.main.key_name
 }
 
+module "secondary" {
+  source = "./modules/f2-instance"
+  name   = "primsecondary"
+
+  instance = {
+    type      = "t4g.micro"
+    ami       = "ami-0b583f82e876e016c"
+    vpc_id    = aws_vpc.main.id
+    subnet_id = aws_subnet.main.id
+  }
+
+  configuration = {
+    bucket    = module.config_bucket.name
+    key       = "f2/config.yaml"
+    image_tag = "20260530-0647"
+  }
+
+  logging = {
+    bucket     = module.logging_bucket.name
+    vector_tag = "0.55.0-alpine"
+  }
+
+  hackathon = {
+    bucket = module.hackathon_bucket.name
+  }
+
+  key_name = aws_key_pair.main.key_name
+}
+
 resource "aws_eip" "dns_server" {
   domain = "vpc"
 
@@ -470,6 +499,16 @@ resource "aws_security_group_rule" "primary_to_postgres" {
   to_port                  = 5432
   protocol                 = "tcp"
   source_security_group_id = module.primary.security_group_id
+  security_group_id        = module.rds_postgres.security_group_id
+}
+
+resource "aws_security_group_rule" "secondary_to_postgres" {
+  description              = "Allow inbound PostgreSQL from secondary"
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = module.secondary.security_group_id
   security_group_id        = module.rds_postgres.security_group_id
 }
 
