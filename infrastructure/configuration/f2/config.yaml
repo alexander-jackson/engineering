@@ -275,13 +275,13 @@ services:
     environment:
       GF_SECURITY_DISABLE_LOGIN_FORM: "true"
 
-    prometheus:
-      image: prom/prometheus
-      tag: v3.12.0
-      routes:
-        - host: prometheus.mesh.internal
-          port: 9090
-      replicas: 1
-      args:
-        - --config.file=/etc/prometheus/prometheus.yml
-        - --web.enable-otlp-receiver
+  prometheus:
+    image: prom/prometheus
+    tag: v3.12.0
+    routes:
+      - host: prometheus.mesh.internal
+        port: 9090
+    replicas: 1
+    args:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-otlp-receiver
