@@ -303,7 +303,7 @@ resource "aws_key_pair" "main" {
 
 module "secondary" {
   source = "./modules/f2-instance"
-  name   = "primsecondary"
+  name   = "secondary"
 
   instance = {
     type      = "t4g.micro"
