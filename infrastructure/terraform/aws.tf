@@ -403,6 +403,7 @@ resource "aws_route53_record" "records" {
     "", // root record
     "certificates",
     "events",
+    "grafana",
     "lockers",
     "tags",
     "today",
