@@ -1,6 +1,8 @@
 use hickory_proto::op::{Message, MessageType, OpCode, ResponseCode};
 use hickory_server::authority::MessageResponseBuilder;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
+use opentelemetry::KeyValue;
+use opentelemetry::metrics::Counter;
 
 use crate::blocklist::BlocklistManager;
 use crate::cache::ResponseCache;
@@ -12,6 +14,8 @@ pub struct DnsRequestHandler {
     upstream: UpstreamResolver,
     blocklist: BlocklistManager,
     cache: ResponseCache,
+    requests: Counter<u64>,
+    responses: Counter<u64>,
 }
 
 impl DnsRequestHandler {
@@ -19,11 +23,15 @@ impl DnsRequestHandler {
         upstream: UpstreamResolver,
         blocklist: BlocklistManager,
         cache: ResponseCache,
+        requests: Counter<u64>,
+        responses: Counter<u64>,
     ) -> Self {
         Self {
             upstream,
             blocklist,
             cache,
+            requests,
+            responses,
         }
     }
 }
@@ -35,6 +43,8 @@ impl RequestHandler for DnsRequestHandler {
         request: &Request,
         mut response_handle: R,
     ) -> ResponseInfo {
+        self.requests.add(1, &[]);
+
         // Get request info to extract the query
         let request_info = match request.request_info() {
             Ok(info) => info,
@@ -71,6 +81,9 @@ impl RequestHandler for DnsRequestHandler {
                 "blocked domain query"
             );
 
+            self.responses
+                .add(1, &[KeyValue::new("type", "explicit-block")]);
+
             let response = MessageResponseBuilder::from_message_request(request)
                 .error_msg(&request.header().clone(), ResponseCode::Refused);
 
@@ -93,6 +106,9 @@ impl RequestHandler for DnsRequestHandler {
                 src = %request.src(),
                 "returning cached response"
             );
+
+            self.responses.add(1, &[KeyValue::new("type", "cache-hit")]);
+
             // Build response from cached message with correct ID
             let mut header = *cached_response.header();
             header.set_id(request.id()); // Use current request ID, not cached ID
@@ -130,6 +146,8 @@ impl RequestHandler for DnsRequestHandler {
                     "upstream resolution successful"
                 );
 
+                self.responses.add(1, &[KeyValue::new("type", "upstream")]);
+
                 // Cache the response with TTL from DNS records
                 let ttl = ResponseCache::extract_ttl(&response);
                 self.cache.insert(&cache_key, response.clone(), ttl).await;
@@ -138,6 +156,10 @@ impl RequestHandler for DnsRequestHandler {
             }
             Err(e) => {
                 tracing::warn!(error = ?e, src = %request.src(), "upstream resolution failed");
+
+                self.responses
+                    .add(1, &[KeyValue::new("type", "upstream-error")]);
+
                 // Build SERVFAIL response
                 let mut error_msg = Message::new();
                 error_msg.set_id(request_message.id());
