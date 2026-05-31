@@ -20,7 +20,18 @@ pub struct DnsServer {
 }
 
 impl DnsServer {
-    #[tracing::instrument(skip(upstream, blocklist, cache, config, certificate_resolver))]
+    #[tracing::instrument(skip(
+        upstream,
+        blocklist,
+        cache,
+        config,
+        certificate_resolver,
+        requests,
+        responses,
+        request_duration,
+        upstream_duration
+    ))]
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         upstream: UpstreamResolver,
         blocklist: BlocklistManager,
