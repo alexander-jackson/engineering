@@ -179,7 +179,6 @@ resource "aws_iam_user_policy" "configuration_deployer" {
         Resource = [
           format("%s/*/config.yaml", module.config_bucket.arn),
           format("%s/dns-server/blocklist.txt", module.config_bucket.arn),
-          format("%s/f2/telemetry.yaml", module.config_bucket.arn),
           format("%s/f2/anchor.pem", module.config_bucket.arn),
           format("%s/vector/vector.yaml", module.config_bucket.arn),
         ]
@@ -274,12 +273,6 @@ resource "aws_vpc" "main" {
 resource "aws_subnet" "main" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.0.0/24"
-  availability_zone = "eu-west-1a"
-}
-
-resource "aws_subnet" "telemetry" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.64.0/24"
   availability_zone = "eu-west-1a"
 }
 
@@ -382,11 +375,6 @@ resource "aws_route_table" "gateway" {
 
 resource "aws_route_table_association" "gateway" {
   subnet_id      = aws_subnet.main.id
-  route_table_id = aws_route_table.gateway.id
-}
-
-resource "aws_route_table_association" "telemetry_gateway" {
-  subnet_id      = aws_subnet.telemetry.id
   route_table_id = aws_route_table.gateway.id
 }
 
