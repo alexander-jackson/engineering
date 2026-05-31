@@ -1,14 +1,15 @@
+use std::time::Instant;
+
 use hickory_proto::op::{Message, MessageType, OpCode, ResponseCode};
 use hickory_server::authority::MessageResponseBuilder;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
 use opentelemetry::KeyValue;
-use opentelemetry::metrics::Counter;
+use opentelemetry::metrics::{Counter, Histogram};
 
 use crate::blocklist::BlocklistManager;
 use crate::cache::ResponseCache;
 use crate::upstream::UpstreamResolver;
 
-/// DNS request handler that forwards queries to upstream
 #[derive(Clone)]
 pub struct DnsRequestHandler {
     upstream: UpstreamResolver,
@@ -16,6 +17,8 @@ pub struct DnsRequestHandler {
     cache: ResponseCache,
     requests: Counter<u64>,
     responses: Counter<u64>,
+    request_duration: Histogram<f64>,
+    upstream_duration: Histogram<f64>,
 }
 
 impl DnsRequestHandler {
@@ -25,6 +28,8 @@ impl DnsRequestHandler {
         cache: ResponseCache,
         requests: Counter<u64>,
         responses: Counter<u64>,
+        request_duration: Histogram<f64>,
+        upstream_duration: Histogram<f64>,
     ) -> Self {
         Self {
             upstream,
@@ -32,6 +37,8 @@ impl DnsRequestHandler {
             cache,
             requests,
             responses,
+            request_duration,
+            upstream_duration,
         }
     }
 }
@@ -44,6 +51,7 @@ impl RequestHandler for DnsRequestHandler {
         mut response_handle: R,
     ) -> ResponseInfo {
         self.requests.add(1, &[]);
+        let start = Instant::now();
 
         // Get request info to extract the query
         let request_info = match request.request_info() {
@@ -54,13 +62,18 @@ impl RequestHandler for DnsRequestHandler {
                 let response = MessageResponseBuilder::from_message_request(request)
                     .error_msg(&request.header().clone(), ResponseCode::FormErr);
 
-                return match response_handle.send_response(response).await {
+                let result = match response_handle.send_response(response).await {
                     Ok(info) => info,
                     Err(e) => {
                         tracing::error!(error = ?e, "failed to send error response");
                         ResponseInfo::from(*request.header())
                     }
                 };
+                self.request_duration.record(
+                    start.elapsed().as_millis() as f64,
+                    &[KeyValue::new("type", "parse-error")],
+                );
+                return result;
             }
         };
 
@@ -81,19 +94,22 @@ impl RequestHandler for DnsRequestHandler {
                 "blocked domain query"
             );
 
-            self.responses
-                .add(1, &[KeyValue::new("type", "explicit-block")]);
+            let attrs = [KeyValue::new("type", "explicit-block")];
+            self.responses.add(1, &attrs);
 
             let response = MessageResponseBuilder::from_message_request(request)
                 .error_msg(&request.header().clone(), ResponseCode::Refused);
 
-            return match response_handle.send_response(response).await {
+            let result = match response_handle.send_response(response).await {
                 Ok(info) => info,
                 Err(e) => {
                     tracing::error!(error = ?e, "failed to send blocked response");
                     ResponseInfo::from(*request.header())
                 }
             };
+            self.request_duration
+                .record(start.elapsed().as_millis() as f64, &attrs);
+            return result;
         }
 
         // Build cache key
@@ -107,7 +123,8 @@ impl RequestHandler for DnsRequestHandler {
                 "returning cached response"
             );
 
-            self.responses.add(1, &[KeyValue::new("type", "cache-hit")]);
+            let attrs = [KeyValue::new("type", "cache-hit")];
+            self.responses.add(1, &attrs);
 
             // Build response from cached message with correct ID
             let mut header = *cached_response.header();
@@ -120,13 +137,16 @@ impl RequestHandler for DnsRequestHandler {
                 &[],
                 cached_response.additionals().iter(),
             );
-            return match response_handle.send_response(response).await {
+            let result = match response_handle.send_response(response).await {
                 Ok(info) => info,
                 Err(e) => {
                     tracing::error!(error = ?e, "failed to send cached response");
                     ResponseInfo::from(*request.header())
                 }
             };
+            self.request_duration
+                .record(start.elapsed().as_millis() as f64, &attrs);
+            return result;
         }
 
         // Build a query message to forward to upstream
@@ -138,7 +158,9 @@ impl RequestHandler for DnsRequestHandler {
         request_message.add_query(request_info.query.original().clone());
 
         // Forward to upstream
-        let response_message = match self.upstream.resolve(&request_message).await {
+        let upstream_start = Instant::now();
+        let (response_message, response_type) = match self.upstream.resolve(&request_message).await
+        {
             Ok(response) => {
                 tracing::debug!(
                     src = %request.src(),
@@ -146,19 +168,14 @@ impl RequestHandler for DnsRequestHandler {
                     "upstream resolution successful"
                 );
 
-                self.responses.add(1, &[KeyValue::new("type", "upstream")]);
-
                 // Cache the response with TTL from DNS records
                 let ttl = ResponseCache::extract_ttl(&response);
                 self.cache.insert(&cache_key, response.clone(), ttl).await;
 
-                response
+                (response, "upstream")
             }
             Err(e) => {
                 tracing::warn!(error = ?e, src = %request.src(), "upstream resolution failed");
-
-                self.responses
-                    .add(1, &[KeyValue::new("type", "upstream-error")]);
 
                 // Build SERVFAIL response
                 let mut error_msg = Message::new();
@@ -167,9 +184,13 @@ impl RequestHandler for DnsRequestHandler {
                 error_msg.set_op_code(OpCode::Query);
                 error_msg.set_response_code(ResponseCode::ServFail);
                 error_msg.add_query(request_info.query.original().clone());
-                error_msg
+                (error_msg, "upstream-error")
             }
         };
+        self.upstream_duration
+            .record(upstream_start.elapsed().as_millis() as f64, &[]);
+        let attrs = [KeyValue::new("type", response_type)];
+        self.responses.add(1, &attrs);
 
         let response = MessageResponseBuilder::from_message_request(request).build(
             *response_message.header(),
@@ -179,12 +200,15 @@ impl RequestHandler for DnsRequestHandler {
             response_message.additionals().iter(),
         );
 
-        match response_handle.send_response(response).await {
+        let result = match response_handle.send_response(response).await {
             Ok(info) => info,
             Err(e) => {
                 tracing::error!(error = ?e, "failed to send response");
                 ResponseInfo::from(*request.header())
             }
-        }
+        };
+        self.request_duration
+            .record(start.elapsed().as_millis() as f64, &attrs);
+        result
     }
 }

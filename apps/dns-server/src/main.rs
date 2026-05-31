@@ -67,6 +67,16 @@ async fn main() -> Result<()> {
         .with_description("Total number of DNS responses sent")
         .build();
 
+    let request_duration = meter
+        .f64_histogram("dns_request_duration_ms")
+        .with_description("End-to-end latency of DNS request handling in milliseconds")
+        .build();
+
+    let upstream_duration = meter
+        .f64_histogram("dns_upstream_duration_ms")
+        .with_description("Latency of upstream DNS resolution in milliseconds")
+        .build();
+
     let dns_server = DnsServer::new(
         upstream,
         blocklist.clone(),
@@ -75,6 +85,8 @@ async fn main() -> Result<()> {
         certificate_resolver.clone(),
         requests,
         responses,
+        request_duration,
+        upstream_duration,
     )
     .await?;
 
