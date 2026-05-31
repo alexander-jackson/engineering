@@ -20,7 +20,7 @@ mod upstream;
 use crate::blocklist::BlocklistManager;
 use crate::cache::ResponseCache;
 use crate::config::Configuration;
-use crate::server::DnsServer;
+use crate::server::{DnsServer, DnsServerMetrics};
 use crate::tls::CertificateResolver;
 use crate::upstream::UpstreamResolver;
 
@@ -56,26 +56,7 @@ async fn main() -> Result<()> {
     let certificate_resolver = CertificateResolver::new(tls_config.clone()).await?;
 
     let meter = opentelemetry::global::meter("dns-server");
-
-    let requests = meter
-        .u64_counter("dns_requests_total")
-        .with_description("Total number of DNS requests received")
-        .build();
-
-    let responses = meter
-        .u64_counter("dns_responses_total")
-        .with_description("Total number of DNS responses sent")
-        .build();
-
-    let request_duration = meter
-        .f64_histogram("dns_request_duration_ms")
-        .with_description("End-to-end latency of DNS request handling in milliseconds")
-        .build();
-
-    let upstream_duration = meter
-        .f64_histogram("dns_upstream_duration_ms")
-        .with_description("Latency of upstream DNS resolution in milliseconds")
-        .build();
+    let metrics = DnsServerMetrics::new(&meter);
 
     let dns_server = DnsServer::new(
         upstream,
@@ -83,10 +64,7 @@ async fn main() -> Result<()> {
         cache,
         tls_config,
         certificate_resolver.clone(),
-        requests,
-        responses,
-        request_duration,
-        upstream_duration,
+        metrics,
     )
     .await?;
 

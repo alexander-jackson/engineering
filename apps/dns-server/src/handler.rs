@@ -4,10 +4,10 @@ use hickory_proto::op::{Message, MessageType, OpCode, ResponseCode};
 use hickory_server::authority::MessageResponseBuilder;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
 use opentelemetry::KeyValue;
-use opentelemetry::metrics::{Counter, Histogram};
 
 use crate::blocklist::BlocklistManager;
 use crate::cache::ResponseCache;
+use crate::server::DnsServerMetrics;
 use crate::upstream::UpstreamResolver;
 
 #[derive(Clone)]
@@ -15,10 +15,7 @@ pub struct DnsRequestHandler {
     upstream: UpstreamResolver,
     blocklist: BlocklistManager,
     cache: ResponseCache,
-    requests: Counter<u64>,
-    responses: Counter<u64>,
-    request_duration: Histogram<f64>,
-    upstream_duration: Histogram<f64>,
+    metrics: DnsServerMetrics,
 }
 
 impl DnsRequestHandler {
@@ -26,19 +23,13 @@ impl DnsRequestHandler {
         upstream: UpstreamResolver,
         blocklist: BlocklistManager,
         cache: ResponseCache,
-        requests: Counter<u64>,
-        responses: Counter<u64>,
-        request_duration: Histogram<f64>,
-        upstream_duration: Histogram<f64>,
+        metrics: DnsServerMetrics,
     ) -> Self {
         Self {
             upstream,
             blocklist,
             cache,
-            requests,
-            responses,
-            request_duration,
-            upstream_duration,
+            metrics,
         }
     }
 }
@@ -50,7 +41,7 @@ impl RequestHandler for DnsRequestHandler {
         request: &Request,
         mut response_handle: R,
     ) -> ResponseInfo {
-        self.requests.add(1, &[]);
+        self.metrics.requests.add(1, &[]);
         let start = Instant::now();
 
         // Get request info to extract the query
@@ -69,7 +60,7 @@ impl RequestHandler for DnsRequestHandler {
                         ResponseInfo::from(*request.header())
                     }
                 };
-                self.request_duration.record(
+                self.metrics.request_duration.record(
                     start.elapsed().as_millis() as f64,
                     &[KeyValue::new("type", "parse-error")],
                 );
@@ -95,7 +86,7 @@ impl RequestHandler for DnsRequestHandler {
             );
 
             let attrs = [KeyValue::new("type", "explicit-block")];
-            self.responses.add(1, &attrs);
+            self.metrics.responses.add(1, &attrs);
 
             let response = MessageResponseBuilder::from_message_request(request)
                 .error_msg(&request.header().clone(), ResponseCode::Refused);
@@ -107,7 +98,8 @@ impl RequestHandler for DnsRequestHandler {
                     ResponseInfo::from(*request.header())
                 }
             };
-            self.request_duration
+            self.metrics
+                .request_duration
                 .record(start.elapsed().as_millis() as f64, &attrs);
             return result;
         }
@@ -124,7 +116,7 @@ impl RequestHandler for DnsRequestHandler {
             );
 
             let attrs = [KeyValue::new("type", "cache-hit")];
-            self.responses.add(1, &attrs);
+            self.metrics.responses.add(1, &attrs);
 
             // Build response from cached message with correct ID
             let mut header = *cached_response.header();
@@ -144,7 +136,8 @@ impl RequestHandler for DnsRequestHandler {
                     ResponseInfo::from(*request.header())
                 }
             };
-            self.request_duration
+            self.metrics
+                .request_duration
                 .record(start.elapsed().as_millis() as f64, &attrs);
             return result;
         }
@@ -187,10 +180,11 @@ impl RequestHandler for DnsRequestHandler {
                 (error_msg, "upstream-error")
             }
         };
-        self.upstream_duration
+        self.metrics
+            .upstream_duration
             .record(upstream_start.elapsed().as_millis() as f64, &[]);
         let attrs = [KeyValue::new("type", response_type)];
-        self.responses.add(1, &attrs);
+        self.metrics.responses.add(1, &attrs);
 
         let response = MessageResponseBuilder::from_message_request(request).build(
             *response_message.header(),
@@ -207,7 +201,8 @@ impl RequestHandler for DnsRequestHandler {
                 ResponseInfo::from(*request.header())
             }
         };
-        self.request_duration
+        self.metrics
+            .request_duration
             .record(start.elapsed().as_millis() as f64, &attrs);
         result
     }

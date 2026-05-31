@@ -5,7 +5,7 @@ use std::time::Duration;
 use color_eyre::eyre::Result;
 use foundation_shutdown::{CancellationToken, GracefulTask};
 use hickory_server::ServerFuture;
-use opentelemetry::metrics::{Counter, Histogram};
+use opentelemetry::metrics::{Counter, Histogram, Meter};
 use tokio::net::TcpListener;
 
 use crate::blocklist::BlocklistManager;
@@ -15,43 +15,52 @@ use crate::handler::DnsRequestHandler;
 use crate::tls::CertificateResolver;
 use crate::upstream::UpstreamResolver;
 
+#[derive(Clone)]
+pub struct DnsServerMetrics {
+    pub(crate) requests: Counter<u64>,
+    pub(crate) responses: Counter<u64>,
+    pub(crate) request_duration: Histogram<f64>,
+    pub(crate) upstream_duration: Histogram<f64>,
+}
+
+impl DnsServerMetrics {
+    pub fn new(meter: &Meter) -> Self {
+        Self {
+            requests: meter
+                .u64_counter("dns_requests_total")
+                .with_description("Total number of DNS requests received")
+                .build(),
+            responses: meter
+                .u64_counter("dns_responses_total")
+                .with_description("Total number of DNS responses sent")
+                .build(),
+            request_duration: meter
+                .f64_histogram("dns_request_duration_ms")
+                .with_description("End-to-end latency of DNS request handling in milliseconds")
+                .build(),
+            upstream_duration: meter
+                .f64_histogram("dns_upstream_duration_ms")
+                .with_description("Latency of upstream DNS resolution in milliseconds")
+                .build(),
+        }
+    }
+}
+
 pub struct DnsServer {
     server_future: ServerFuture<DnsRequestHandler>,
 }
 
 impl DnsServer {
-    #[tracing::instrument(skip(
-        upstream,
-        blocklist,
-        cache,
-        config,
-        certificate_resolver,
-        requests,
-        responses,
-        request_duration,
-        upstream_duration
-    ))]
-    #[allow(clippy::too_many_arguments)]
+    #[tracing::instrument(skip(upstream, blocklist, cache, config, certificate_resolver, metrics))]
     pub async fn new(
         upstream: UpstreamResolver,
         blocklist: BlocklistManager,
         cache: ResponseCache,
         config: &TlsConfig,
         certificate_resolver: CertificateResolver,
-        requests: Counter<u64>,
-        responses: Counter<u64>,
-        request_duration: Histogram<f64>,
-        upstream_duration: Histogram<f64>,
+        metrics: DnsServerMetrics,
     ) -> Result<Self> {
-        let handler = DnsRequestHandler::new(
-            upstream,
-            blocklist,
-            cache,
-            requests,
-            responses,
-            request_duration,
-            upstream_duration,
-        );
+        let handler = DnsRequestHandler::new(upstream, blocklist, cache, metrics);
         let mut server_future = ServerFuture::new(handler);
 
         register_tls_listener(&mut server_future, config, certificate_resolver).await?;
