@@ -5,24 +5,24 @@ edition = "2024"
 
 [dependencies]
 axum.workspace = true
-chrono = { version = "0.4.38", default-features = false, features = ["now"] }
+chrono = { version = "0.4.45", default-features = false, features = ["now"] }
 color-eyre = "0.6.3"
 dotenvy = "0.15.7"
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
 foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 foundation-uid = { version = "0.1.0", path = "../foundation/uid" }
-moka = { version = "0.12.8", features = ["future"] }
+moka = { version = "0.12.15", features = ["future"] }
 pico-args = "0.5.0"
-pulldown-cmark = "0.12.2"
+pulldown-cmark = "0.13.4"
 serde = { workspace = true, features = ["derive"] }
 sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
 foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
 tokio = { version = "1.39.3", features = ["rt-multi-thread", "macros"] }
 tower = { version = "0.5.0", features = ["tracing"] }
-tower-http = { version = "0.5.2", features = ["fs", "trace", "util"] }
+tower-http = { version = "0.6.8", features = ["fs", "trace", "util"] }
 tracing.workspace = true
-uuid = { version = "1.10.0", features = ["serde", "v4"] }
+uuid = { version = "1.23.2", features = ["serde", "v4"] }
 
 [dev-dependencies]
 http-body-util = "0.1.2"
