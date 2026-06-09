@@ -321,7 +321,7 @@ module "primary" {
   }
 
   extra_ebs_volume = {
-    size_gb     = 8
+    size_gb     = 2
     device_name = "/dev/sdf"
   }
 
@@ -356,7 +356,7 @@ module "secondary" {
   }
 
   extra_ebs_volume = {
-    size_gb     = 8
+    size_gb     = 2
     device_name = "/dev/sdf"
   }
 
