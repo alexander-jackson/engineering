@@ -277,6 +277,12 @@ services:
       GF_SECURITY_DISABLE_LOGIN_FORM: "true"
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      data:
+        source:
+          location: filesystem
+          path: /mnt/data/grafana
+        target: /var/lib/grafana
 
   prometheus:
     image: prom/prometheus
@@ -288,3 +294,9 @@ services:
     args:
       - --config.file=/etc/prometheus/prometheus.yml
       - --web.enable-otlp-receiver
+    volumes:
+      data:
+        source:
+          location: filesystem
+          path: /mnt/data/prometheus
+        target: /prometheus
