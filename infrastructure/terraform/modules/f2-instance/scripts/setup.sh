@@ -56,6 +56,10 @@ if [ -n "${extra_volume_device}" ]; then
         sudo chown ubuntu:ubuntu /mnt/data
         sudo chmod 755 /mnt/data
 
+        sudo mkdir -p /mnt/data/prometheus /mnt/data/grafana
+        sudo chmod o+w /mnt/data/prometheus
+        sudo chmod 777 /mnt/data/grafana
+
         echo "Extra EBS volume configured and mounted directly at /mnt/data"
     else
         echo "Warning: No suitable EBS volume found"
