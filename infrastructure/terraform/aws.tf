@@ -443,7 +443,7 @@ resource "aws_route53_record" "records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.secondary.public_ip]
+  records = [module.primary.public_ip]
 }
 
 resource "aws_route53_record" "dns_server_record" {
@@ -463,7 +463,7 @@ resource "aws_route53_record" "forkup_records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.secondary.public_ip]
+  records = [module.primary.public_ip]
 }
 
 # Internal Route 53 definitions
@@ -525,5 +525,5 @@ resource "aws_route53_record" "prometheus" {
   name    = "prometheus"
   type    = "A"
   ttl     = 300
-  records = [module.secondary.private_ip]
+  records = [module.primary.private_ip]
 }
