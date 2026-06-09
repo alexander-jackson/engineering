@@ -268,7 +268,7 @@ services:
 
   grafana:
     image: grafana/grafana
-    tag: 13.0.1
+    tag: 10.4.19
     routes:
       - host: grafana.opentracker.app
         port: 3000
