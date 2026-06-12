@@ -190,7 +190,7 @@ services:
 
   lockers:
     image: alexanderjackson/lockers
-    tag: 20260530-0606
+    tag: 20260612-1855
     routes:
       - host: lockers.opentracker.app
         port: 8000
