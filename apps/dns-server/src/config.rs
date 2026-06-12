@@ -1,7 +1,7 @@
 use std::net::Ipv4Addr;
 
 use foundation_configuration::ExternalBytes;
-use hickory_proto::xfer::Protocol;
+use hickory_net::xfer::Protocol;
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -64,7 +64,7 @@ mod tests {
 
     use color_eyre::eyre::Result;
     use foundation_configuration::ExternalBytes;
-    use hickory_proto::xfer::Protocol;
+    use hickory_net::xfer::Protocol;
 
     use crate::config::{
         BlocklistConfig, CacheConfig, Configuration, MetricsConfig, ProtocolsConfig, ServerConfig,

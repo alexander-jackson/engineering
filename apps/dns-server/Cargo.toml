@@ -12,6 +12,7 @@ foundation-init = { version = "0.1.0", path = "../foundation/init" }
 foundation-recurring-job = { version = "0.1.0", path = "../foundation/recurring-job" }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 hickory-dns = { version = "0.26.1", default-features = false, features = ["resolver"] }
+hickory-net = { version = "0.26.1", features = ["serde"] }
 hickory-proto = "0.26.1"
 hickory-resolver = { version = "0.26.1", features = ["https-ring", "webpki-roots"] }
 hickory-server = { version = "0.26.1", features = ["tls-ring"] }

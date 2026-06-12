@@ -1,8 +1,9 @@
 use std::time::Instant;
 
-use hickory_proto::op::{Message, MessageType, OpCode, ResponseCode};
-use hickory_server::authority::MessageResponseBuilder;
+use hickory_proto::op::{Header, HeaderCounts, Message, MessageType, OpCode, ResponseCode};
+use hickory_server::net::runtime::Time;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
+use hickory_server::zone_handler::MessageResponseBuilder;
 use opentelemetry::KeyValue;
 
 use crate::blocklist::BlocklistManager;
@@ -34,9 +35,16 @@ impl DnsRequestHandler {
     }
 }
 
+fn make_response_info(request: &Request) -> ResponseInfo {
+    ResponseInfo::from(Header {
+        metadata: request.metadata,
+        counts: HeaderCounts::default(),
+    })
+}
+
 #[async_trait::async_trait]
 impl RequestHandler for DnsRequestHandler {
-    async fn handle_request<R: ResponseHandler>(
+    async fn handle_request<R: ResponseHandler, T: Time>(
         &self,
         request: &Request,
         mut response_handle: R,
@@ -44,20 +52,19 @@ impl RequestHandler for DnsRequestHandler {
         self.metrics.requests.add(1, &[]);
         let start = Instant::now();
 
-        // Get request info to extract the query
         let request_info = match request.request_info() {
             Ok(info) => info,
             Err(e) => {
                 tracing::error!(error = ?e, "failed to parse request");
 
                 let response = MessageResponseBuilder::from_message_request(request)
-                    .error_msg(&request.header().clone(), ResponseCode::FormErr);
+                    .error_msg(&request.metadata, ResponseCode::FormErr);
 
                 let result = match response_handle.send_response(response).await {
                     Ok(info) => info,
                     Err(e) => {
                         tracing::error!(error = ?e, "failed to send error response");
-                        ResponseInfo::from(*request.header())
+                        make_response_info(request)
                     }
                 };
                 self.metrics.request_duration.record(
@@ -68,7 +75,6 @@ impl RequestHandler for DnsRequestHandler {
             }
         };
 
-        // Log the query
         let domain_name = request_info.query.name().to_string();
         tracing::info!(
             name = %domain_name,
@@ -77,7 +83,6 @@ impl RequestHandler for DnsRequestHandler {
             "received DNS query"
         );
 
-        // Check blocklist
         if self.blocklist.is_blocked(&domain_name).await {
             tracing::info!(
                 name = %domain_name,
@@ -89,13 +94,13 @@ impl RequestHandler for DnsRequestHandler {
             self.metrics.responses.add(1, &attrs);
 
             let response = MessageResponseBuilder::from_message_request(request)
-                .error_msg(&request.header().clone(), ResponseCode::Refused);
+                .error_msg(&request.metadata, ResponseCode::Refused);
 
             let result = match response_handle.send_response(response).await {
                 Ok(info) => info,
                 Err(e) => {
                     tracing::error!(error = ?e, "failed to send blocked response");
-                    ResponseInfo::from(*request.header())
+                    make_response_info(request)
                 }
             };
             self.metrics
@@ -104,10 +109,8 @@ impl RequestHandler for DnsRequestHandler {
             return result;
         }
 
-        // Build cache key
         let cache_key = format!("{}:{:?}", domain_name, request_info.query.query_type());
 
-        // Check cache
         if let Some(cached_response) = self.cache.get(&cache_key).await {
             tracing::debug!(
                 name = %domain_name,
@@ -118,22 +121,21 @@ impl RequestHandler for DnsRequestHandler {
             let attrs = [KeyValue::new("type", "cache-hit")];
             self.metrics.responses.add(1, &attrs);
 
-            // Build response from cached message with correct ID
-            let mut header = *cached_response.header();
-            header.set_id(request.id()); // Use current request ID, not cached ID
+            let mut metadata = cached_response.metadata;
+            metadata.id = request.metadata.id;
 
             let response = MessageResponseBuilder::from_message_request(request).build(
-                header,
-                cached_response.answers().iter(),
-                cached_response.name_servers().iter(),
+                metadata,
+                cached_response.answers.iter(),
+                cached_response.authorities.iter(),
                 &[],
-                cached_response.additionals().iter(),
+                cached_response.additionals.iter(),
             );
             let result = match response_handle.send_response(response).await {
                 Ok(info) => info,
                 Err(e) => {
                     tracing::error!(error = ?e, "failed to send cached response");
-                    ResponseInfo::from(*request.header())
+                    make_response_info(request)
                 }
             };
             self.metrics
@@ -142,26 +144,24 @@ impl RequestHandler for DnsRequestHandler {
             return result;
         }
 
-        // Build a query message to forward to upstream
-        let mut request_message = Message::new();
-        request_message.set_id(request.id());
-        request_message.set_message_type(MessageType::Query);
-        request_message.set_op_code(request.op_code());
-        request_message.set_recursion_desired(request.recursion_desired());
+        let mut request_message = Message::new(
+            request.metadata.id,
+            MessageType::Query,
+            request.metadata.op_code,
+        );
+        request_message.metadata.recursion_desired = request.metadata.recursion_desired;
         request_message.add_query(request_info.query.original().clone());
 
-        // Forward to upstream
         let upstream_start = Instant::now();
         let (response_message, response_type) = match self.upstream.resolve(&request_message).await
         {
             Ok(response) => {
                 tracing::debug!(
                     src = %request.src(),
-                    answer_count = response.answer_count(),
+                    answer_count = response.answers.len(),
                     "upstream resolution successful"
                 );
 
-                // Cache the response with TTL from DNS records
                 let ttl = ResponseCache::extract_ttl(&response);
                 self.cache.insert(&cache_key, response.clone(), ttl).await;
 
@@ -170,12 +170,12 @@ impl RequestHandler for DnsRequestHandler {
             Err(e) => {
                 tracing::warn!(error = ?e, src = %request.src(), "upstream resolution failed");
 
-                // Build SERVFAIL response
-                let mut error_msg = Message::new();
-                error_msg.set_id(request_message.id());
-                error_msg.set_message_type(MessageType::Response);
-                error_msg.set_op_code(OpCode::Query);
-                error_msg.set_response_code(ResponseCode::ServFail);
+                let mut error_msg = Message::new(
+                    request_message.metadata.id,
+                    MessageType::Response,
+                    OpCode::Query,
+                );
+                error_msg.metadata.response_code = ResponseCode::ServFail;
                 error_msg.add_query(request_info.query.original().clone());
                 (error_msg, "upstream-error")
             }
@@ -187,18 +187,18 @@ impl RequestHandler for DnsRequestHandler {
         self.metrics.responses.add(1, &attrs);
 
         let response = MessageResponseBuilder::from_message_request(request).build(
-            *response_message.header(),
-            response_message.answers().iter(),
-            response_message.name_servers().iter(),
+            response_message.metadata,
+            response_message.answers.iter(),
+            response_message.authorities.iter(),
             &[],
-            response_message.additionals().iter(),
+            response_message.additionals.iter(),
         );
 
         let result = match response_handle.send_response(response).await {
             Ok(info) => info,
             Err(e) => {
                 tracing::error!(error = ?e, "failed to send response");
-                ResponseInfo::from(*request.header())
+                make_response_info(request)
             }
         };
         self.metrics

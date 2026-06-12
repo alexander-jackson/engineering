@@ -1,24 +1,25 @@
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, eyre};
+use hickory_net::xfer::Protocol;
 use hickory_proto::op::{Message, MessageType, OpCode};
-use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
-use hickory_resolver::name_server::TokioConnectionProvider;
-use hickory_resolver::{ResolveError, Resolver};
+use hickory_resolver::Resolver;
+use hickory_resolver::config::{ConnectionConfig, NameServerConfig, ResolverConfig, ResolverOpts};
+use hickory_resolver::net::NetError;
+use hickory_resolver::net::runtime::TokioRuntimeProvider;
 
 use crate::config::UpstreamConfig;
 
 #[derive(Clone)]
 pub struct UpstreamResolver {
-    resolver: Arc<Resolver<TokioConnectionProvider>>,
+    resolver: Arc<Resolver<TokioRuntimeProvider>>,
 }
 
 impl UpstreamResolver {
     #[tracing::instrument(skip(config))]
     pub async fn new(config: &UpstreamConfig) -> Result<Self> {
-        let upstream_addrs: Vec<SocketAddr> =
+        let upstream_addrs: Vec<std::net::SocketAddr> =
             tokio::net::lookup_host(format!("{}:{}", config.resolver, config.port))
                 .await
                 .wrap_err_with(|| {
@@ -37,24 +38,32 @@ impl UpstreamResolver {
             "resolved upstream DNS server"
         );
 
-        let mut nameserver = NameServerConfig::new(upstream_addr, config.protocol);
-        nameserver.tls_dns_name = Some(config.resolver.clone());
+        let server_name: Arc<str> = Arc::from(config.resolver.as_str());
+        let mut connection = match config.protocol {
+            Protocol::Udp => ConnectionConfig::udp(),
+            Protocol::Tcp => ConnectionConfig::tcp(),
+            Protocol::Tls => ConnectionConfig::tls(server_name),
+            Protocol::Https => ConnectionConfig::https(server_name, None),
+            p => return Err(eyre!("unsupported upstream protocol: {:?}", p)),
+        };
+        connection.port = config.port;
 
-        let mut resolver_config = ResolverConfig::new();
-        resolver_config.add_name_server(nameserver);
+        let nameserver = NameServerConfig::new(upstream_addr.ip(), true, vec![connection]);
+
+        let resolver_config = ResolverConfig::from_parts(None, vec![], vec![nameserver]);
 
         let mut opts = ResolverOpts::default();
         opts.timeout = Duration::from_secs(config.timeout_seconds);
 
-        let provider = TokioConnectionProvider::default();
+        let provider = TokioRuntimeProvider::default();
 
         let resolver = Resolver::builder_with_config(resolver_config, provider)
             .with_options(opts)
-            .build();
+            .build()
+            .wrap_err("failed to build upstream resolver")?;
 
         tracing::info!(
             upstream = %config.resolver,
-            protocol = "HTTPS",
             timeout_seconds = config.timeout_seconds,
             "initialized upstream DNS resolver"
         );
@@ -65,8 +74,8 @@ impl UpstreamResolver {
     }
 
     #[tracing::instrument(skip(self, query))]
-    pub async fn resolve(&self, query: &Message) -> Result<Message, ResolveError> {
-        let question = &query.queries()[0];
+    pub async fn resolve(&self, query: &Message) -> Result<Message, NetError> {
+        let question = &query.queries[0];
         let name = question.name();
         let query_type = question.query_type();
 
@@ -78,24 +87,19 @@ impl UpstreamResolver {
 
         let lookup = self.resolver.lookup(name.clone(), query_type).await?;
 
-        let mut response = Message::new();
-        response.set_id(query.id());
-        response.set_message_type(MessageType::Response);
-        response.set_op_code(OpCode::Query);
-        response.set_recursion_desired(query.recursion_desired());
-        response.set_recursion_available(true);
+        let mut response = Message::new(query.metadata.id, MessageType::Response, OpCode::Query);
+        response.metadata.recursion_desired = query.metadata.recursion_desired;
+        response.metadata.recursion_available = true;
 
-        // Add the question
         response.add_query(question.clone());
 
-        // Add answer records
-        for record in lookup.records() {
+        for record in lookup.answers() {
             response.add_answer(record.clone());
         }
 
         tracing::debug!(
             name = %name,
-            answer_count = response.answer_count(),
+            answer_count = response.answers.len(),
             "received upstream response"
         );
 
@@ -110,11 +114,9 @@ mod tests {
 
     use color_eyre::eyre::Result;
     use dns_mock_server::Server;
-    use hickory_proto::op::{Message, Query};
-    use hickory_proto::rr::DNSClass;
-    use hickory_proto::rr::record_type::RecordType;
-    use hickory_proto::xfer::Protocol;
-    use hickory_resolver::Name;
+    use hickory_net::xfer::Protocol;
+    use hickory_proto::op::{Message, MessageType, OpCode, Query};
+    use hickory_proto::rr::{DNSClass, Name, RData, RecordType};
     use tokio::net::UdpSocket;
 
     use crate::config::UpstreamConfig;
@@ -152,15 +154,18 @@ mod tests {
         query.set_query_type(query_type);
         query.set_query_class(query_class);
 
-        let mut message = Message::new();
+        let mut message = Message::new(0, MessageType::Query, OpCode::Query);
         message.add_query(query);
 
         let resolved = resolver.resolve(&message).await?;
 
         let answers: Vec<_> = resolved
-            .answers()
+            .answers
             .iter()
-            .filter_map(|record| record.clone().into_data().into_a().ok().map(|a| a.0))
+            .filter_map(|record| match &record.data {
+                RData::A(a) => Some(a.0),
+                _ => None,
+            })
             .collect();
 
         assert_eq!(answers, vec![upstream_addr]);
