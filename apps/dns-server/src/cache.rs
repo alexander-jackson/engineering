@@ -80,10 +80,10 @@ impl ResponseCache {
 
     pub fn extract_ttl(message: &Message) -> Option<Duration> {
         message
-            .answers()
+            .answers
             .iter()
             .fold(None, |min_ttl, record| {
-                let ttl = record.ttl();
+                let ttl = record.ttl;
 
                 Some(min_ttl.map_or(ttl, |current: u32| current.min(ttl)))
             })
@@ -97,7 +97,7 @@ mod tests {
     use std::str::FromStr;
     use std::time::Duration;
 
-    use hickory_proto::op::Message;
+    use hickory_proto::op::{Message, MessageType, OpCode};
     use hickory_proto::rr::{Name, RData, Record};
 
     use crate::cache::ResponseCache;
@@ -110,14 +110,14 @@ mod tests {
 
     #[test]
     fn default_messages_have_no_time_to_live() {
-        let message = Message::new();
+        let message = Message::new(0, MessageType::Query, OpCode::Query);
 
         assert_eq!(ResponseCache::extract_ttl(&message), None);
     }
 
     #[test]
     fn can_extract_ttl_for_single_record_messages() {
-        let mut message = Message::new();
+        let mut message = Message::new(0, MessageType::Query, OpCode::Query);
         let name = Name::from_str("example.com.").unwrap();
 
         message.add_answer(some_record_with_ttl(&name, 300));
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn can_extract_minimum_ttl_for_multiple_record_messages() {
-        let mut message = Message::new();
+        let mut message = Message::new(0, MessageType::Query, OpCode::Query);
         let name = Name::from_str("example.com.").unwrap();
 
         message.add_answer(some_record_with_ttl(&name, 300));

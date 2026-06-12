@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "4.5.46", features = ["derive"] }
+clap = { version = "4.6.1", features = ["derive"] }
 color-eyre = "0.6.5"
 foundation-logging = { version = "0.1.0", path = "../../foundation/logging" }
-git2 = { version = "0.20.2", default-features = false }
+git2 = { version = "0.21.0", default-features = false }
 tracing.workspace = true

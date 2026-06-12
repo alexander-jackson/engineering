@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use color_eyre::eyre::Result;
 use foundation_shutdown::{CancellationToken, GracefulTask};
-use hickory_server::ServerFuture;
+use hickory_server::Server;
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 use tokio::net::TcpListener;
 
@@ -47,7 +47,7 @@ impl DnsServerMetrics {
 }
 
 pub struct DnsServer {
-    server_future: ServerFuture<DnsRequestHandler>,
+    server_future: Server<DnsRequestHandler>,
 }
 
 impl DnsServer {
@@ -61,7 +61,7 @@ impl DnsServer {
         metrics: DnsServerMetrics,
     ) -> Result<Self> {
         let handler = DnsRequestHandler::new(upstream, blocklist, cache, metrics);
-        let mut server_future = ServerFuture::new(handler);
+        let mut server_future = Server::new(handler);
 
         register_tls_listener(&mut server_future, config, certificate_resolver).await?;
 
@@ -86,7 +86,7 @@ impl GracefulTask for DnsServer {
 }
 
 async fn register_tls_listener(
-    server_future: &mut ServerFuture<DnsRequestHandler>,
+    server_future: &mut Server<DnsRequestHandler>,
     config: &TlsConfig,
     certificate_resolver: CertificateResolver,
 ) -> Result<()> {
