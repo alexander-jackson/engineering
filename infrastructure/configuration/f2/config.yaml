@@ -160,7 +160,7 @@ services:
 
   tag-updater:
     image: alexanderjackson/tag-updater
-    tag: 20260530-0606
+    tag: 20260612-1855
     routes:
       - host: tags.opentracker.app
         port: 4025
