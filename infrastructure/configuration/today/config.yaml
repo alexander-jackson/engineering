@@ -15,3 +15,7 @@ database:
     username: "todayblue"
     password: {{ fFalHq733TmgACKeryFW2TzppYtn7H5FDquPx4Z7Dh76Mgq5Zz4DS+iOmSzWIhC4RDC8+U7b2NKUGnWzEAEM3ltF1v5I029Wlv6nOHo5pGHWEPseaPmvrk3mfupyK+FDsDnVyXJ35QNBvJEgEIJHAzNd79hGTcdHU5WlXsIrIP9FPH4dw72ATAkdaNP1zgKriUx5luYYONlM+H81zmWCt1XX9gRG3Y8eSMwAgIZQcfFvvGZ4+CNJJfQRrPMX1mQfGTjtSQ10p9YqdEuNrJvxxsoMXgrsxJRE5Qr8sc+QYBn1f5CKFXw23QoupBFUR6Dggoi+Z1xUoVOE2Ly8zI1kRQ== }}
     database: "today"
+
+metrics:
+  endpoint: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics
+  interval_seconds: 30

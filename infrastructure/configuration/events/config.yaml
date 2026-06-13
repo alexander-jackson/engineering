@@ -19,3 +19,7 @@ database:
     username: eventsblue
     password: {{ Xo1Tyv2L+SJ9kF5sR/JGMa/HeO7XHPP7i2l9ugkGnTdQ5M8M2K6Vs8nx7Fwr89AFrbm+ECv3uBBw68xF/keLkHgdpdAHbKxlyFrbj1WDPSgdKTys5pWsyoi7gYYfFXI7Vdtrx4owEtoTR1ZGWBeL7Zvz560nExD6H1/dTbRv6yI2koLzX/M1GctxPyiVFYAZc2BERvWOmaQG4TGRcLWwW/BKvzD0VEFP47mS+VdmdQ8vYu7MisJBuybaqDjsu7/HEbqPKN1rgvvtuhkFo2cM18812xWey1V4BrlGMJrw9QJ/HrwVRELOXIjHkRZC98RgcFuJtvvJFvU1ccM4PcWeBA== }}
     database: events
+
+metrics:
+  endpoint: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics
+  interval_seconds: 30

@@ -8,8 +8,8 @@ axum.workspace = true
 chrono = { version = "0.4.45", default-features = false, features = ["now"] }
 color-eyre = "0.6.3"
 dotenvy = "0.15.7"
-foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
-foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
+foundation-http-server = { version = "0.1.0", path = "../foundation/http-server", features = ["metrics"] }
+foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database", "metrics"] }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 foundation-uid = { version = "0.1.0", path = "../foundation/uid" }
 moka = { version = "0.12.15", features = ["future"] }

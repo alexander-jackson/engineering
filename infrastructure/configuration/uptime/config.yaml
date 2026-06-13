@@ -17,3 +17,7 @@ database:
 
 routing:
   sns_topic: arn:aws:sns:eu-west-1:558855412466:outages
+
+metrics:
+  endpoint: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics
+  interval_seconds: 30

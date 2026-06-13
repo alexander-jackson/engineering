@@ -77,12 +77,17 @@ impl GracefulTask for Server {
             shutdown.cancelled().await;
         };
 
+        let router = self.router;
+
+        #[cfg(feature = "metrics")]
+        let router = router.route_layer(foundation_metrics::http_layer());
+
         let trace_layer = TraceLayer::new_for_http()
             .make_span_with(SpanCreator)
             .on_request(RequestTracingFilter::default())
             .on_response(ResponseTracingFilter::default());
 
-        let router = self.router.layer(trace_layer);
+        let router = router.layer(trace_layer);
 
         let addr = self.listener.local_addr()?;
         tracing::info!(%addr, "listening for incoming requests");

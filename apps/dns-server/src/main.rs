@@ -1,13 +1,6 @@
-use std::time::Duration;
-
 use color_eyre::eyre::Result;
 use foundation_recurring_job::RecurringJob;
 use foundation_shutdown::ShutdownCoordinator;
-use opentelemetry_otlp::{MetricExporter, WithExportConfig, WithHttpConfig};
-use opentelemetry_sdk::metrics::SdkMeterProvider;
-use opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader;
-use opentelemetry_sdk::runtime;
-use reqwest::Client;
 
 mod blocklist;
 mod cache;
@@ -33,19 +26,6 @@ async fn main() -> Result<()> {
         upstream = %config.upstream.resolver,
         "dns server initialized"
     );
-
-    let exporter = MetricExporter::builder()
-        .with_http()
-        .with_http_client(Client::new())
-        .with_endpoint(config.metrics.endpoint.clone())
-        .build()?;
-
-    let reader = PeriodicReader::builder(exporter, runtime::Tokio)
-        .with_interval(Duration::from_secs(config.metrics.interval_seconds))
-        .build();
-    let provider = SdkMeterProvider::builder().with_reader(reader).build();
-
-    opentelemetry::global::set_meter_provider(provider);
 
     let blocklist = BlocklistManager::new(config.blocklist.clone()).await?;
     let upstream = UpstreamResolver::new(&config.upstream).await?;

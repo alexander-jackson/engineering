@@ -1,0 +1,16 @@
+[package]
+name = "foundation-metrics"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { workspace = true }
+color-eyre = "0.6.3"
+opentelemetry = { workspace = true }
+opentelemetry-otlp = { workspace = true, features = ["metrics", "http-proto", "reqwest-client"] }
+opentelemetry_sdk = { workspace = true, features = ["metrics", "rt-tokio", "experimental_metrics_periodicreader_with_async_runtime"] }
+pin-project-lite = "0.2"
+reqwest = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tower-layer = "0.3.3"
+tower-service = "0.3.3"

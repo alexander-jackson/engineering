@@ -8,6 +8,7 @@ color-eyre = "0.6.5"
 foundation-args = { version = "0.1.0", path = "../args" }
 foundation-configuration = { version = "0.1.0", path = "../configuration" }
 foundation-database-bootstrap = { version = "0.1.0", path = "../database-bootstrap", optional = true }
+foundation-metrics = { version = "0.1.0", path = "../metrics", optional = true }
 foundation-logging = { version = "0.1.0", path = "../logging" }
 foundation-telemetry = { version = "0.1.0", path = "../telemetry" }
 serde = { workspace = true, features = ["derive"] }
@@ -16,3 +17,4 @@ tracing-subscriber = "0.3.23"
 
 [features]
 database = ["dep:foundation-database-bootstrap"]
+metrics = ["dep:foundation-metrics"]

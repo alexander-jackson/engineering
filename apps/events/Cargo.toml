@@ -12,8 +12,8 @@ axum.workspace = true
 chrono = { version = "0.4.45", default-features = false, features = ["now", "serde"] }
 chrono-tz = { version = "0.10.4", features = ["serde"] }
 color-eyre = "0.6.3"
-foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
-foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
+foundation-http-server = { version = "0.1.0", path = "../foundation/http-server", features = ["metrics"] }
+foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database", "metrics"] }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
 itertools = "0.14.0"
