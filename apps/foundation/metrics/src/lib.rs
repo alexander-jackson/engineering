@@ -62,7 +62,7 @@ impl HttpMetricsLayer {
     fn new() -> Self {
         let meter = opentelemetry::global::meter("http");
         let counter = meter
-            .u64_counter("http_requests_total")
+            .u64_counter("http_responses_total")
             .with_description("Total HTTP responses by path and status code")
             .build();
         Self { counter }
