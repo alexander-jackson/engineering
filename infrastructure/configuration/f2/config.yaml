@@ -219,7 +219,7 @@ services:
 
   uptime:
     image: alexanderjackson/uptime
-    tag: 20260612-1855
+    tag: 20260613-0608
     routes:
       - host: uptime.opentracker.app
         port: 8000
