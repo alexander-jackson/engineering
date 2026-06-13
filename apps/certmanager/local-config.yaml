@@ -23,3 +23,7 @@ storage:
 acme:
   environment: staging
   contact: alexanderjackson@protonmail.com
+
+metrics:
+  endpoint: "http://localhost:9090/api/v1/otlp/v1/metrics"
+  interval_seconds: 15

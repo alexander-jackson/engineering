@@ -17,6 +17,8 @@ pub struct Configuration<T> {
     #[cfg(feature = "database")]
     pub database: DatabaseConfiguration,
     pub telemetry: Option<TelemetryConfig>,
+    #[cfg(feature = "metrics")]
+    pub metrics: Option<foundation_metrics::MetricsConfig>,
 }
 
 impl<T> Deref for Configuration<T> {
@@ -54,6 +56,11 @@ where
             foundation_telemetry::get_trace_layer(application_name.clone(), &telemetry.endpoint)?;
 
         telemetry_reload_handle.reload(Some(layer))?;
+    }
+
+    #[cfg(feature = "metrics")]
+    if let Some(metrics) = &config.metrics {
+        foundation_metrics::init(&application_name, metrics)?;
     }
 
     tracing::info!(name = %application_name, "initialised application");

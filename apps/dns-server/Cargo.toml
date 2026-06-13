@@ -8,7 +8,7 @@ async-trait = "0.1.89"
 bytes = "1.11.0"
 color-eyre = "0.6.5"
 foundation-configuration = { version = "0.1.0", path = "../foundation/configuration", features = ["external-bytes"] }
-foundation-init = { version = "0.1.0", path = "../foundation/init" }
+foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["metrics"] }
 foundation-recurring-job = { version = "0.1.0", path = "../foundation/recurring-job" }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 hickory-dns = { version = "0.26.1", default-features = false, features = ["resolver"] }
@@ -22,10 +22,7 @@ tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread", "net", "t
 tracing.workspace = true
 rustls-pemfile = "2.0"
 rustls = { version = "0.23", features = ["ring"] }
-opentelemetry_sdk = { version = "0.32.0", features = ["metrics", "rt-tokio", "experimental_metrics_periodicreader_with_async_runtime"] }
-opentelemetry-otlp = { version = "0.32.0", features = ["metrics", "http-proto", "reqwest-client"] }
-opentelemetry = "0.32.0"
-reqwest.workspace = true
+opentelemetry = { workspace = true }
 
 [dev-dependencies]
 dns-mock-server = "0.1.6"

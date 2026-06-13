@@ -9,8 +9,8 @@ axum.workspace = true
 chrono = { version = "0.4.45", features = ["serde"] }
 color-eyre = "0.6.3"
 dotenvy = "0.15.7"
-foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
-foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database"] }
+foundation-http-server = { version = "0.1.0", path = "../foundation/http-server", features = ["metrics"] }
+foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database", "metrics"] }
 foundation-recurring-job = { version = "0.1.0", path = "../foundation/recurring-job" }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 humantime = "2.1.0"

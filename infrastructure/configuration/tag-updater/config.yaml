@@ -11,3 +11,7 @@ private_key:
   location: s3
   bucket: configuration-68f6c7
   key: tag-updater/id_rsa
+
+metrics:
+  endpoint: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics
+  interval_seconds: 30

@@ -10,7 +10,6 @@ pub struct Configuration {
     pub upstream: UpstreamConfig,
     pub blocklist: BlocklistConfig,
     pub cache: CacheConfig,
-    pub metrics: MetricsConfig,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -52,12 +51,6 @@ pub struct CacheConfig {
     pub default_ttl_seconds: u64,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
-pub struct MetricsConfig {
-    pub endpoint: String,
-    pub interval_seconds: u64,
-}
-
 #[cfg(test)]
 mod tests {
     use std::net::Ipv4Addr;
@@ -67,8 +60,8 @@ mod tests {
     use hickory_net::xfer::Protocol;
 
     use crate::config::{
-        BlocklistConfig, CacheConfig, Configuration, MetricsConfig, ProtocolsConfig, ServerConfig,
-        TlsConfig, UpstreamConfig,
+        BlocklistConfig, CacheConfig, Configuration, ProtocolsConfig, ServerConfig, TlsConfig,
+        UpstreamConfig,
     };
 
     #[test]
@@ -108,10 +101,6 @@ mod tests {
             cache: CacheConfig {
                 max_entries: 10000,
                 default_ttl_seconds: 300,
-            },
-            metrics: MetricsConfig {
-                endpoint: "http://localhost:9090/api/v1/otlp/v1/metrics".to_string(),
-                interval_seconds: 30,
             },
         };
 

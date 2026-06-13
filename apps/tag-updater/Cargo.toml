@@ -10,8 +10,8 @@ axum.workspace = true
 axum-extra = { version = "0.12.6", features = ["typed-header"] }
 color-eyre = { version = "0.6.5", default-features = false }
 foundation-configuration = { path = "../foundation/configuration", features = ["external-bytes"] }
-foundation-http-server = { version = "0.1.0", path = "../foundation/http-server" }
-foundation-init = { version = "0.1.0", path = "../foundation/init" }
+foundation-http-server = { version = "0.1.0", path = "../foundation/http-server", features = ["metrics"] }
+foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["metrics"] }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 foundation-telemetry = { version = "0.1.0", path = "../foundation/telemetry" }
 git2 = { version = "0.21.0", default-features = false, features = ["ssh"] }

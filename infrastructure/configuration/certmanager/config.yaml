@@ -27,3 +27,7 @@ acme:
 notify:
   url: https://certificates.opentracker.app
   path: /certificates
+
+metrics:
+  endpoint: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics
+  interval_seconds: 30

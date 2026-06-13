@@ -1454,9 +1454,6 @@ dependencies = [
  "hickory-server 0.26.1",
  "moka",
  "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry_sdk",
- "reqwest",
  "rustls 0.23.40",
  "rustls-pemfile",
  "serde",
@@ -1762,6 +1759,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "color-eyre",
+ "foundation-metrics",
  "foundation-shutdown",
  "reqwest",
  "tokio",
@@ -1780,6 +1778,7 @@ dependencies = [
  "foundation-configuration",
  "foundation-database-bootstrap",
  "foundation-logging",
+ "foundation-metrics",
  "foundation-telemetry",
  "serde",
  "tracing",
@@ -1793,6 +1792,22 @@ dependencies = [
  "tracing",
  "tracing-error",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "foundation-metrics"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "color-eyre",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "pin-project-lite",
+ "reqwest",
+ "serde",
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]

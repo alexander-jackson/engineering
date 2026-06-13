@@ -3,9 +3,13 @@ name = "foundation-http-server"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+metrics = ["dep:foundation-metrics"]
+
 [dependencies]
 axum = "0.8.9"
 color-eyre = "0.6.5"
+foundation-metrics = { version = "0.1.0", path = "../metrics", optional = true }
 foundation-shutdown = { version = "0.1.0", path = "../shutdown" }
 tokio = { version = "1.47.1", default-features = false, features = ["net"] }
 tower-http = { version = "0.6.8", features = ["trace"] }
