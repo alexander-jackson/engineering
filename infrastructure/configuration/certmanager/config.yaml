@@ -25,7 +25,7 @@ acme:
   contact: alexanderjackson@protonmail.com
 
 notify:
-  url: https://certificates.opentracker.app
+  url: https://opentracker.app
   path: /certificates
 
 metrics:
