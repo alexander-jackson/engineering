@@ -11,6 +11,11 @@ use hickory_resolver::net::runtime::TokioRuntimeProvider;
 
 use crate::config::UpstreamConfig;
 
+#[async_trait::async_trait]
+pub trait Upstream: Send + Sync + Unpin {
+    async fn resolve(&self, query: &Message) -> Result<Message>;
+}
+
 #[derive(Clone)]
 pub struct UpstreamResolver {
     resolver: Arc<Resolver<TokioRuntimeProvider>>,
@@ -104,6 +109,13 @@ impl UpstreamResolver {
         );
 
         Ok(response)
+    }
+}
+
+#[async_trait::async_trait]
+impl Upstream for UpstreamResolver {
+    async fn resolve(&self, query: &Message) -> Result<Message> {
+        self.resolve(query).await.map_err(Into::into)
     }
 }
 
