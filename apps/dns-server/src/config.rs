@@ -49,6 +49,7 @@ pub struct BlocklistConfig {
 pub struct CacheConfig {
     pub max_entries: u64,
     pub default_ttl_seconds: u64,
+    pub error_ttl_seconds: u64,
 }
 
 #[cfg(test)]
@@ -101,6 +102,7 @@ mod tests {
             cache: CacheConfig {
                 max_entries: 10000,
                 default_ttl_seconds: 300,
+                error_ttl_seconds: 60,
             },
         };
 

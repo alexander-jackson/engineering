@@ -112,13 +112,20 @@ impl RequestHandler for DnsRequestHandler {
         let cache_key = format!("{}:{:?}", domain_name, request_info.query.query_type());
 
         if let Some(cached_response) = self.cache.get(&cache_key).await {
+            let is_negative = cached_response.metadata.response_code == ResponseCode::ServFail;
+            let type_label = if is_negative {
+                "negative-cache-hit"
+            } else {
+                "cache-hit"
+            };
             tracing::debug!(
                 name = %domain_name,
                 src = %request.src(),
+                negative = is_negative,
                 "returning cached response"
             );
 
-            let attrs = [KeyValue::new("type", "cache-hit")];
+            let attrs = [KeyValue::new("type", type_label)];
             self.metrics.responses.add(1, &attrs);
 
             let mut metadata = cached_response.metadata;
@@ -177,6 +184,9 @@ impl RequestHandler for DnsRequestHandler {
                 );
                 error_msg.metadata.response_code = ResponseCode::ServFail;
                 error_msg.add_query(request_info.query.original().clone());
+                self.cache
+                    .insert(&cache_key, error_msg.clone(), Some(self.cache.error_ttl()))
+                    .await;
                 (error_msg, "upstream-error")
             }
         };
