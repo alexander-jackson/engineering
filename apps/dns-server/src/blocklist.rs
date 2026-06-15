@@ -8,6 +8,11 @@ use tokio::sync::RwLock;
 
 use crate::config::BlocklistConfig;
 
+#[async_trait::async_trait]
+pub trait BlocklistSource: Send + Sync + Unpin {
+    async fn is_blocked(&self, domain: &str) -> bool;
+}
+
 #[derive(Clone, Debug, Default)]
 struct Blocklist {
     domains: HashSet<String>,
@@ -123,6 +128,13 @@ impl BlocklistManager {
     #[tracing::instrument(skip(self))]
     pub async fn is_blocked(&self, domain: &str) -> bool {
         self.blocklist.read().await.is_blocked(domain)
+    }
+}
+
+#[async_trait::async_trait]
+impl BlocklistSource for BlocklistManager {
+    async fn is_blocked(&self, domain: &str) -> bool {
+        self.is_blocked(domain).await
     }
 }
 

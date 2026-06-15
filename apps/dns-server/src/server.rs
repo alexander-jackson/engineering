@@ -15,6 +15,8 @@ use crate::handler::DnsRequestHandler;
 use crate::tls::CertificateResolver;
 use crate::upstream::UpstreamResolver;
 
+type ConcreteHandler = DnsRequestHandler<UpstreamResolver, BlocklistManager>;
+
 #[derive(Clone)]
 pub struct DnsServerMetrics {
     pub(crate) requests: Counter<u64>,
@@ -47,7 +49,7 @@ impl DnsServerMetrics {
 }
 
 pub struct DnsServer {
-    server_future: Server<DnsRequestHandler>,
+    server_future: Server<ConcreteHandler>,
 }
 
 impl DnsServer {
@@ -86,7 +88,7 @@ impl GracefulTask for DnsServer {
 }
 
 async fn register_tls_listener(
-    server_future: &mut Server<DnsRequestHandler>,
+    server_future: &mut Server<ConcreteHandler>,
     config: &TlsConfig,
     certificate_resolver: CertificateResolver,
 ) -> Result<()> {

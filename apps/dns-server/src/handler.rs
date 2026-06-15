@@ -6,26 +6,21 @@ use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseI
 use hickory_server::zone_handler::MessageResponseBuilder;
 use opentelemetry::KeyValue;
 
-use crate::blocklist::BlocklistManager;
+use crate::blocklist::BlocklistSource;
 use crate::cache::ResponseCache;
 use crate::server::DnsServerMetrics;
-use crate::upstream::UpstreamResolver;
+use crate::upstream::Upstream;
 
 #[derive(Clone)]
-pub struct DnsRequestHandler {
-    upstream: UpstreamResolver,
-    blocklist: BlocklistManager,
+pub struct DnsRequestHandler<U, B> {
+    upstream: U,
+    blocklist: B,
     cache: ResponseCache,
     metrics: DnsServerMetrics,
 }
 
-impl DnsRequestHandler {
-    pub fn new(
-        upstream: UpstreamResolver,
-        blocklist: BlocklistManager,
-        cache: ResponseCache,
-        metrics: DnsServerMetrics,
-    ) -> Self {
+impl<U: Upstream, B: BlocklistSource> DnsRequestHandler<U, B> {
+    pub fn new(upstream: U, blocklist: B, cache: ResponseCache, metrics: DnsServerMetrics) -> Self {
         Self {
             upstream,
             blocklist,
@@ -43,7 +38,11 @@ fn make_response_info(request: &Request) -> ResponseInfo {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler for DnsRequestHandler {
+impl<U, B> RequestHandler for DnsRequestHandler<U, B>
+where
+    U: Upstream + 'static,
+    B: BlocklistSource + 'static,
+{
     async fn handle_request<R: ResponseHandler, T: Time>(
         &self,
         request: &Request,
@@ -215,5 +214,258 @@ impl RequestHandler for DnsRequestHandler {
             .request_duration
             .record(start.elapsed().as_millis() as f64, &attrs);
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::Ipv4Addr;
+    use std::str::FromStr;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use hickory_net::xfer::Protocol;
+    use hickory_proto::op::{
+        Header, HeaderCounts, Message, MessageType, OpCode, Query, ResponseCode,
+    };
+    use hickory_proto::rr::{DNSClass, Name, RData, Record, RecordType};
+    use hickory_proto::serialize::binary::BinEncodable;
+    use hickory_server::net::NetError;
+    use hickory_server::net::runtime::TokioTime;
+    use hickory_server::server::{Request, RequestHandler, ResponseInfo};
+    use hickory_server::zone_handler::MessageResponse;
+
+    use crate::blocklist::BlocklistSource;
+    use crate::cache::ResponseCache;
+    use crate::config::CacheConfig;
+    use crate::server::DnsServerMetrics;
+    use crate::upstream::Upstream;
+
+    use super::DnsRequestHandler;
+
+    fn test_metrics() -> DnsServerMetrics {
+        DnsServerMetrics::new(&opentelemetry::global::meter("test"))
+    }
+
+    fn test_cache() -> ResponseCache {
+        ResponseCache::new(&CacheConfig {
+            max_entries: 100,
+            default_ttl_seconds: 60,
+            error_ttl_seconds: 10,
+        })
+    }
+
+    fn make_test_request(name: &str) -> Request {
+        let name = Name::from_str(name).unwrap();
+        let mut query = Query::new();
+        query.set_name(name);
+        query.set_query_type(RecordType::A);
+        query.set_query_class(DNSClass::IN);
+
+        let mut message = Message::new(1, MessageType::Query, OpCode::Query);
+        message.add_query(query);
+
+        let bytes = message.to_bytes().unwrap();
+        Request::from_bytes(bytes, "127.0.0.1:1234".parse().unwrap(), Protocol::Udp).unwrap()
+    }
+
+    fn make_success_message() -> Message {
+        let name = Name::from_str("example.com.").unwrap();
+        let rdata = RData::A(Ipv4Addr::new(93, 184, 216, 34).into());
+        let record = Record::from_rdata(name, 300, rdata);
+
+        let mut msg = Message::new(1, MessageType::Response, OpCode::Query);
+        msg.add_answer(record);
+        msg
+    }
+
+    fn make_servfail_message() -> Message {
+        let mut msg = Message::new(1, MessageType::Response, OpCode::Query);
+        msg.metadata.response_code = ResponseCode::ServFail;
+        msg
+    }
+
+    #[derive(Clone)]
+    struct AlwaysBlocked;
+
+    #[async_trait::async_trait]
+    impl BlocklistSource for AlwaysBlocked {
+        async fn is_blocked(&self, _: &str) -> bool {
+            true
+        }
+    }
+
+    #[derive(Clone)]
+    struct NeverBlocked;
+
+    #[async_trait::async_trait]
+    impl BlocklistSource for NeverBlocked {
+        async fn is_blocked(&self, _: &str) -> bool {
+            false
+        }
+    }
+
+    #[derive(Clone)]
+    struct SuccessUpstream(Message);
+
+    #[async_trait::async_trait]
+    impl Upstream for SuccessUpstream {
+        async fn resolve(&self, _: &Message) -> color_eyre::eyre::Result<Message> {
+            Ok(self.0.clone())
+        }
+    }
+
+    #[derive(Clone)]
+    struct FailingUpstream(Arc<AtomicUsize>);
+
+    #[async_trait::async_trait]
+    impl Upstream for FailingUpstream {
+        async fn resolve(&self, _: &Message) -> color_eyre::eyre::Result<Message> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Err(color_eyre::eyre::eyre!("upstream error"))
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct CapturingResponseHandler;
+
+    #[async_trait::async_trait]
+    impl hickory_server::server::ResponseHandler for CapturingResponseHandler {
+        async fn send_response<'a>(
+            &mut self,
+            response: MessageResponse<
+                '_,
+                'a,
+                impl Iterator<Item = &'a Record> + Send + 'a,
+                impl Iterator<Item = &'a Record> + Send + 'a,
+                impl Iterator<Item = &'a Record> + Send + 'a,
+                impl Iterator<Item = &'a Record> + Send + 'a,
+            >,
+        ) -> Result<ResponseInfo, NetError> {
+            let metadata = *response.metadata();
+            Ok(ResponseInfo::from(Header {
+                metadata,
+                counts: HeaderCounts::default(),
+            }))
+        }
+    }
+
+    #[tokio::test]
+    async fn blocked_domain_returns_refused() {
+        let handler = DnsRequestHandler::new(
+            SuccessUpstream(make_success_message()),
+            AlwaysBlocked,
+            test_cache(),
+            test_metrics(),
+        );
+        let request = make_test_request("blocked.com.");
+
+        let info = handler
+            .handle_request::<_, TokioTime>(&request, CapturingResponseHandler)
+            .await;
+
+        assert_eq!(info.response_code, ResponseCode::Refused);
+    }
+
+    #[tokio::test]
+    async fn cache_hit_skips_upstream() {
+        let cache = test_cache();
+        let call_count = Arc::new(AtomicUsize::new(0));
+
+        cache
+            .insert("example.com.:A", make_success_message(), None)
+            .await;
+
+        let handler = DnsRequestHandler::new(
+            FailingUpstream(call_count.clone()),
+            NeverBlocked,
+            cache,
+            test_metrics(),
+        );
+        let request = make_test_request("example.com.");
+
+        let info = handler
+            .handle_request::<_, TokioTime>(&request, CapturingResponseHandler)
+            .await;
+
+        assert_eq!(info.response_code, ResponseCode::NoError);
+        assert_eq!(
+            call_count.load(Ordering::SeqCst),
+            0,
+            "upstream should not be called on cache hit"
+        );
+    }
+
+    #[tokio::test]
+    async fn negative_cache_hit_returns_servfail_without_calling_upstream() {
+        let cache = test_cache();
+
+        cache
+            .insert("example.com.:A", make_servfail_message(), None)
+            .await;
+
+        let handler = DnsRequestHandler::new(
+            SuccessUpstream(make_success_message()),
+            NeverBlocked,
+            cache,
+            test_metrics(),
+        );
+        let request = make_test_request("example.com.");
+
+        let info = handler
+            .handle_request::<_, TokioTime>(&request, CapturingResponseHandler)
+            .await;
+
+        assert_eq!(
+            info.response_code,
+            ResponseCode::ServFail,
+            "ServFail with a SuccessUpstream proves the cached error was served"
+        );
+    }
+
+    #[tokio::test]
+    async fn upstream_success_is_returned_and_cached() {
+        let cache = test_cache();
+        let handler = DnsRequestHandler::new(
+            SuccessUpstream(make_success_message()),
+            NeverBlocked,
+            cache.clone(),
+            test_metrics(),
+        );
+        let request = make_test_request("example.com.");
+
+        let info = handler
+            .handle_request::<_, TokioTime>(&request, CapturingResponseHandler)
+            .await;
+
+        assert_eq!(info.response_code, ResponseCode::NoError);
+        assert!(
+            cache.get("example.com.:A").await.is_some(),
+            "successful response should be cached"
+        );
+    }
+
+    #[tokio::test]
+    async fn upstream_error_returns_servfail_and_is_cached() {
+        let cache = test_cache();
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let handler = DnsRequestHandler::new(
+            FailingUpstream(call_count.clone()),
+            NeverBlocked,
+            cache.clone(),
+            test_metrics(),
+        );
+        let request = make_test_request("example.com.");
+
+        let info = handler
+            .handle_request::<_, TokioTime>(&request, CapturingResponseHandler)
+            .await;
+
+        assert_eq!(info.response_code, ResponseCode::ServFail);
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
+        assert!(
+            cache.get("example.com.:A").await.is_some(),
+            "upstream error should be cached for negative caching"
+        );
     }
 }
