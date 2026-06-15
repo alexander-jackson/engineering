@@ -28,6 +28,7 @@ blocklist:
 cache:
   max_entries: 10000
   default_ttl_seconds: 300
+  error_ttl_seconds: 60
 
 metrics:
   endpoint: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics

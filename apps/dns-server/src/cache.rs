@@ -30,6 +30,7 @@ impl Expiry<String, Arc<CachedResponse>> for DnsExpiry {
 pub struct ResponseCache {
     cache: Cache<String, Arc<CachedResponse>>,
     default_ttl: Duration,
+    error_ttl: Duration,
 }
 
 impl ResponseCache {
@@ -40,14 +41,20 @@ impl ResponseCache {
             .build();
 
         let default_ttl = Duration::from_secs(config.default_ttl_seconds);
+        let error_ttl = Duration::from_secs(config.error_ttl_seconds);
 
         tracing::info!(
             max_entries = config.max_entries,
             default_ttl_seconds = config.default_ttl_seconds,
+            error_ttl_seconds = config.error_ttl_seconds,
             "initialized DNS response cache"
         );
 
-        Self { cache, default_ttl }
+        Self {
+            cache,
+            default_ttl,
+            error_ttl,
+        }
     }
 
     #[tracing::instrument(skip(self))]
@@ -76,6 +83,10 @@ impl ResponseCache {
         );
 
         self.cache.insert(key.to_string(), cached).await;
+    }
+
+    pub fn error_ttl(&self) -> Duration {
+        self.error_ttl
     }
 
     pub fn extract_ttl(message: &Message) -> Option<Duration> {
