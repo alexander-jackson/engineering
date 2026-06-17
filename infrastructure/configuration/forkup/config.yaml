@@ -31,3 +31,7 @@ database:
 
 buckets:
   receipt_upload: "hackathon-90990b"
+
+metrics:
+  endpoint: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics
+  interval_seconds: 30
