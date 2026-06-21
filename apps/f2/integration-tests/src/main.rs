@@ -144,13 +144,23 @@ fn check_args_work() -> Result<()> {
     ];
 
     // without args: Dockerfile CMD is preserved, server responds with "default"
-    crate::docker::run("f2", "debug", &volumes, "/development/args-default-config.yaml")?;
+    crate::docker::run(
+        "f2",
+        "debug",
+        &volumes,
+        "/development/args-default-config.yaml",
+    )?;
     std::thread::sleep(Duration::from_secs(1));
     assert_response_equals("http://localhost:3000", "default")?;
     crate::docker::remove_running_containers()?;
 
     // with args: f2 overrides CMD, server responds with "overridden"
-    crate::docker::run("f2", "debug", &volumes, "/development/args-override-config.yaml")?;
+    crate::docker::run(
+        "f2",
+        "debug",
+        &volumes,
+        "/development/args-override-config.yaml",
+    )?;
     std::thread::sleep(Duration::from_secs(1));
     assert_response_equals("http://localhost:3000", "overridden")?;
     crate::docker::remove_running_containers()?;
