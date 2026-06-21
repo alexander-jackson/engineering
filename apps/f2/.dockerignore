@@ -1,0 +1,15 @@
+/target
+/servers
+/scripts
+Dockerfile
+Dockerfile.debug
+Justfile
+
+# Contains local development setup
+/development
+
+*.sh
+*.yaml
+*.conf
+.env
+.dockerignore

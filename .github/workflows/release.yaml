@@ -31,6 +31,7 @@ jobs:
             {"name":"certmanager",         "path":"certmanager"},
             {"name":"dns-server",          "path":"dns-server"},
             {"name":"events",              "path":"events"},
+            {"name":"f2",                  "path":"f2"},
             {"name":"lockers",             "path":"lockers"},
             {"name":"opentracker-backend", "path":"opentracker/backend"},
             {"name":"pgmanager",           "path":"pgmanager"},
