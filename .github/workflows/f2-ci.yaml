@@ -1,0 +1,43 @@
+on:
+  pull_request:
+    branches: ["master"]
+    paths:
+    - 'apps/Cargo.*'
+    - 'apps/foundation/**'
+    - 'apps/f2/**'
+    - '.github/workflows/f2-ci.yaml'
+
+name: f2 CI
+
+defaults:
+  run:
+    working-directory: ./apps/f2
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - name: Run tests
+        run: cargo nextest run
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup component add rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup component add clippy
+      - run: cargo clippy -- -D warnings

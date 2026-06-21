@@ -17,6 +17,8 @@ members = [
 	"foundation/telemetry",
 	"foundation/templating",
 	"foundation/uid",
+	"f2",
+	"f2/integration-tests",
 	"lockers",
 	"opentracker/backend",
 	"pgmanager",
