@@ -11,7 +11,7 @@ name: f2 CI
 
 defaults:
   run:
-    working-directory: ./apps/uptime
+    working-directory: ./apps/f2
 
 jobs:
   unit-tests:
