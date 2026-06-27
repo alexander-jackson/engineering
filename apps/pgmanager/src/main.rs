@@ -4,8 +4,11 @@ use std::time::Duration;
 use aws_sdk_s3::primitives::ByteStream;
 use chrono::Utc;
 use color_eyre::eyre::Result;
+use opentelemetry::KeyValue;
+use opentelemetry::metrics::Gauge;
 use rustls::ClientConfig;
 use tokio::time::Instant;
+use tokio_postgres::Client;
 use tokio_postgres::NoTls;
 use tokio_postgres_rustls::MakeRustlsConnect;
 
@@ -15,9 +18,32 @@ mod tls;
 mod utils;
 
 use crate::config::{BackupLocation, BackupSchedule, Configuration, TargetDatabaseConfiguration};
-use crate::databases::{discover, dump};
+use crate::databases::{discover, dump, table_sizes};
 use crate::tls::NoCertificateVerification;
 use crate::utils::{compress, get_initial_offset};
+
+struct PgManagerMetrics {
+    table_size_bytes: Gauge<u64>,
+    table_row_count: Gauge<u64>,
+}
+
+impl PgManagerMetrics {
+    fn new() -> Self {
+        let meter = opentelemetry::global::meter("pgmanager");
+
+        Self {
+            table_size_bytes: meter
+                .u64_gauge("pgmanager_table_size_bytes")
+                .with_description("Total size in bytes of each table (data + indexes + toast)")
+                .with_unit("By")
+                .build(),
+            table_row_count: meter
+                .u64_gauge("pgmanager_table_row_count")
+                .with_description("Estimated live row count per table (from pg_stat_user_tables)")
+                .build(),
+        }
+    }
+}
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
@@ -26,9 +52,17 @@ async fn main() -> Result<()> {
     let sdk_config = foundation_credentials::load().await?;
     let s3_client = aws_sdk_s3::Client::new(&sdk_config);
 
+    let metrics = PgManagerMetrics::new();
+
     match config.backup_schedule {
         BackupSchedule::Oneshot => {
-            take_backups(&s3_client, &config.backup_location, &config.target_database).await?
+            take_backups(
+                &s3_client,
+                &config.backup_location,
+                &config.target_database,
+                &metrics,
+            )
+            .await?
         }
         BackupSchedule::Daily { time } => {
             let offset = get_initial_offset(Utc::now().time(), time);
@@ -40,7 +74,13 @@ async fn main() -> Result<()> {
 
             loop {
                 interval.tick().await;
-                take_backups(&s3_client, &config.backup_location, &config.target_database).await?;
+                take_backups(
+                    &s3_client,
+                    &config.backup_location,
+                    &config.target_database,
+                    &metrics,
+                )
+                .await?;
             }
         }
     }
@@ -48,46 +88,56 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+async fn connect(database_config: &TargetDatabaseConfiguration, database: &str) -> Result<Client> {
+    let mut pg_config = tokio_postgres::Config::from(database_config);
+    pg_config.dbname(database);
+
+    if database_config.ssl {
+        let tls_config = ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(NoCertificateVerification))
+            .with_no_client_auth();
+
+        let (client, connection) = pg_config
+            .connect(MakeRustlsConnect::new(tls_config))
+            .await?;
+
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("connection error: {}", e);
+            }
+        });
+
+        Ok(client)
+    } else {
+        let (client, connection) = pg_config.connect(NoTls).await?;
+
+        tokio::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("connection error: {}", e);
+            }
+        });
+
+        Ok(client)
+    }
+}
+
 async fn take_backups(
     s3_client: &aws_sdk_s3::Client,
     backup_location: &BackupLocation,
     database_config: &TargetDatabaseConfiguration,
+    metrics: &PgManagerMetrics,
 ) -> Result<()> {
     let date = Utc::now().format("%Y-%m-%d");
 
     let span = tracing::info_span!("backup", %date);
     let _guard = span.enter();
 
-    let client = if database_config.ssl {
-        let tls_config = ClientConfig::builder()
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(NoCertificateVerification))
-            .with_no_client_auth();
-        let (client, connection) = tokio_postgres::Config::from(database_config)
-            .connect(MakeRustlsConnect::new(tls_config))
-            .await?;
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
-            }
-        });
-        client
-    } else {
-        let (client, connection) = tokio_postgres::Config::from(database_config)
-            .connect(NoTls)
-            .await?;
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
-            }
-        });
-        client
-    };
-
+    let client = connect(database_config, &database_config.database).await?;
     let databases = discover(&client).await?;
 
-    for database in databases {
-        let dump = dump(database_config, &database).await?;
+    for database in &databases {
+        let dump = dump(database_config, database).await?;
         let compressed = compress(&dump)?;
 
         let key = format!("{database}/{database}.{date}.sql.gz");
@@ -114,6 +164,19 @@ async fn take_backups(
         }
 
         tracing::info!(location = ?backup_location, %key, "persisted a backup");
+
+        let db_client = connect(database_config, database).await?;
+
+        for ts in table_sizes(&db_client).await? {
+            let attrs = [
+                KeyValue::new("database", database.clone()),
+                KeyValue::new("schema", ts.schema),
+                KeyValue::new("table", ts.table),
+            ];
+
+            metrics.table_size_bytes.record(ts.bytes, &attrs);
+            metrics.table_row_count.record(ts.row_count, &attrs);
+        }
     }
 
     Ok(())

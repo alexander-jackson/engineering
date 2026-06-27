@@ -1,3 +1,7 @@
+metrics:
+  endpoint: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics
+  interval_seconds: 60
+
 backup_location:
   type: s3
   bucket: postgres-backups-65ef5c
