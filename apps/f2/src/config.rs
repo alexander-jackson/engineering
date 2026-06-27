@@ -104,6 +104,7 @@ impl Config {
 pub enum Scheme {
     Http,
     Https,
+    Tls,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]

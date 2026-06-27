@@ -1788,6 +1788,7 @@ dependencies = [
  "serde_yaml",
  "tempfile",
  "tokio",
+ "tokio-rustls 0.26.4",
  "tracing",
  "tracing-subscriber",
  "urlencoding",
@@ -3040,6 +3041,10 @@ name = "integration-tests"
 version = "0.1.0"
 dependencies = [
  "color-eyre",
+ "rustls 0.23.40",
+ "rustls-pemfile",
+ "tokio",
+ "tokio-rustls 0.26.4",
  "ureq",
 ]
 
