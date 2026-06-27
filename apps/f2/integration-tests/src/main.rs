@@ -23,11 +23,12 @@ fn main() -> Result<()> {
     // (must run before check_rolls_work, whose reconciler prunes all unused images)
     check_args_work().wrap_err("Args did not work correctly")?;
 
+    // check that the TCP TLS proxy correctly forwards bytes after TLS termination
+    // (must run before check_rolls_work, whose reconciler prunes all unused images)
+    check_tls_tcp_proxy_works().wrap_err("TCP TLS proxy did not work correctly")?;
+
     // check that rolls work correctly
     check_rolls_work().wrap_err("Rolls did not work correctly")?;
-
-    // check that the TCP TLS proxy correctly forwards bytes after TLS termination
-    check_tls_tcp_proxy_works().wrap_err("TCP TLS proxy did not work correctly")?;
 
     Ok(())
 }
@@ -257,7 +258,7 @@ fn check_tls_tcp_proxy_works() -> Result<()> {
         "debug",
         &volumes,
         "/development/tcp-tls-config.yaml",
-        &[("3001", "3001")],
+        &[("4001", "4001")],
     )?;
 
     std::thread::sleep(Duration::from_secs(1));
@@ -272,7 +273,7 @@ fn check_tls_tcp_proxy_works() -> Result<()> {
                 .with_no_client_auth();
 
             let connector = TlsConnector::from(Arc::new(client_config));
-            let stream = TcpStream::connect("127.0.0.1:3001").await?;
+            let stream = TcpStream::connect("127.0.0.1:4001").await?;
             let domain = ServerName::try_from("old.example.com")?;
             let mut tls = connector.connect(domain, stream).await?;
 
