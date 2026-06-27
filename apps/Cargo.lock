@@ -3956,6 +3956,7 @@ dependencies = [
  "foundation-credentials",
  "foundation-init",
  "humansize",
+ "opentelemetry",
  "pico-args",
  "rustls 0.23.40",
  "serde",
