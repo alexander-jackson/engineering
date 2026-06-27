@@ -1,0 +1,23 @@
+alb:
+  addr: 0.0.0.0
+  ports:
+    tls: 3001
+  reconciliation: /reconcile
+  tls:
+    domains:
+      old.example.com:
+        cert_file:
+          location: filesystem
+          path: /resources/certificates/old.crt
+        key_file:
+          location: filesystem
+          path: /resources/certificates/old.key
+
+services:
+  tcp-echo:
+    image: tcp-echo
+    tag: latest
+    replicas: 1
+    routes:
+      - host: old.example.com
+        port: 8080

@@ -81,13 +81,20 @@ pub fn create_network_if_not_exists(network: &str) -> Result<()> {
 pub fn run(
     image: &str,
     version: &str,
-    volumes: &[(&'static str, &'static str)],
-    configuration_file: &'static str,
+    volumes: &[(&str, &str)],
+    configuration_file: &str,
+    ports: &[(&str, &str)],
 ) -> Result<String> {
     let tag = format!("{}:{}", image, version);
 
     let mut command = Command::new("docker");
-    command.arg("run").arg("-d").arg("-p").arg("3000:3000");
+    command.arg("run").arg("-d");
+
+    for (host_port, container_port) in ports {
+        command
+            .arg("-p")
+            .arg(format!("{}:{}", host_port, container_port));
+    }
 
     for (host_path, container_path) in volumes {
         command

@@ -18,10 +18,12 @@ use rand::prelude::SmallRng;
 use rustls::server::danger::ClientCertVerifier;
 use rustls::server::{NoClientAuth, WebPkiClientVerifier};
 use rustls::RootCertStore;
+use tcp::TcpTlsProxy;
 use tls::DynamicAuthenticationLevelResolver;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinSet;
+use tokio_rustls::TlsAcceptor;
 
 use crate::config::{Config, MtlsConfig, Scheme, TlsConfig};
 use crate::ipc::MessageBus;
@@ -29,6 +31,7 @@ use crate::load_balancer::tls::CertificateResolver;
 use crate::service_registry::ServiceRegistry;
 
 mod proxy;
+mod tcp;
 mod tls;
 
 #[derive(Debug)]
@@ -66,6 +69,12 @@ impl LoadBalancer {
     ) -> Result<()> {
         let reconciliation_path = Arc::from(self.config.load().alb.reconciliation.as_str());
         let message_bus = Arc::clone(&self.message_bus);
+
+        // Pre-clone Arcs needed after `service_factory` moves `self`
+        let service_registry = Arc::clone(&self.service_registry);
+        let rng = Arc::clone(&self.rng);
+        let self_config = Arc::clone(&self.config);
+        let self_message_bus = Arc::clone(&self.message_bus);
 
         let service_factory = move |_| {
             let service_registry = Arc::clone(&self.service_registry);
@@ -106,7 +115,7 @@ impl LoadBalancer {
         }
 
         if let Some(listener) = listeners.remove(&Scheme::Https) {
-            if let Some(tls) = tls {
+            if let Some(tls) = tls.as_ref() {
                 let client_cert_verifier: Arc<dyn ClientCertVerifier> = match &mtls {
                     Some(config) => {
                         let bytes = config.anchor.resolve().await?;
@@ -123,13 +132,13 @@ impl LoadBalancer {
                     None => Arc::new(NoClientAuth),
                 };
 
-                let config = Arc::new(tls.domains);
-                let message_bus = Arc::clone(&self.message_bus);
+                let config = Arc::new(tls.domains.clone());
 
-                let certificate_resolver =
-                    Arc::new(CertificateResolver::new(config, message_bus).await?);
+                let certificate_resolver = Arc::new(
+                    CertificateResolver::new(config, Arc::clone(&self_message_bus)).await?,
+                );
                 let authentication_level_resolver =
-                    DynamicAuthenticationLevelResolver::new(Arc::clone(&self.config));
+                    DynamicAuthenticationLevelResolver::new(Arc::clone(&self_config));
 
                 let server_configuration = ServerConfiguration::default();
                 let server = Server::new(
@@ -143,6 +152,27 @@ impl LoadBalancer {
                 tracing::info!("starting https server on {}", listener.local_addr()?);
 
                 tasks.spawn(server.run(listener));
+            }
+        }
+
+        if let Some(listener) = listeners.remove(&Scheme::Tls) {
+            if let Some(tls) = tls.as_ref() {
+                let config = Arc::new(tls.domains.clone());
+                let certificate_resolver = Arc::new(
+                    CertificateResolver::new(config, Arc::clone(&self_message_bus)).await?,
+                );
+
+                let server_config = rustls::ServerConfig::builder()
+                    .with_no_client_auth()
+                    .with_cert_resolver(certificate_resolver);
+
+                let acceptor = TlsAcceptor::from(Arc::new(server_config));
+                let proxy =
+                    TcpTlsProxy::new(Arc::clone(&service_registry), Arc::clone(&rng), acceptor);
+
+                tracing::info!("starting TCP TLS proxy on {}", listener.local_addr()?);
+
+                tasks.spawn(proxy.run(listener));
             }
         }
 
