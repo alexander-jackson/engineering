@@ -203,7 +203,7 @@ services:
 
   pgmanager:
     image: alexanderjackson/pgmanager
-    tag: 20260613-0608
+    tag: 20260627-1040
     replicas: 1
     environment:
       AWS_ROLE_ARN: arn:aws:iam::558855412466:role/pgmanager-role
