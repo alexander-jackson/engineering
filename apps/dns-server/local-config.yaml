@@ -1,18 +1,9 @@
 server:
-  protocols:
-    tls:
-      host: 127.0.0.1
-      port: 8853
-      cert:
-        location: filesystem
-        path: ./certificates/local-fullchain.pem
-      key:
-        location: filesystem
-        path: ./certificates/local-privkey.pem
-      refresh_interval_seconds: 86400
+  host: 127.0.0.1
+  port: 8853
 
 upstream:
-  resolver: all.dns.mullvad.net
+  resolver: cloudflare-dns.com
   port: 443
   protocol: https
   timeout_seconds: 5
@@ -26,6 +17,7 @@ blocklist:
 cache:
   max_entries: 10000
   default_ttl_seconds: 300
+  error_ttl_seconds: 60
 
 metrics:
   endpoint: http://localhost:9090/api/v1/otlp/v1/metrics

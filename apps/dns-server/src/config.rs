@@ -14,21 +14,8 @@ pub struct Configuration {
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 pub struct ServerConfig {
-    pub protocols: ProtocolsConfig,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
-pub struct ProtocolsConfig {
-    pub tls: TlsConfig,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
-pub struct TlsConfig {
     pub host: Ipv4Addr,
     pub port: u16,
-    pub cert: ExternalBytes,
-    pub key: ExternalBytes,
-    pub refresh_interval_seconds: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -61,8 +48,7 @@ mod tests {
     use hickory_net::xfer::Protocol;
 
     use crate::config::{
-        BlocklistConfig, CacheConfig, Configuration, ProtocolsConfig, ServerConfig, TlsConfig,
-        UpstreamConfig,
+        BlocklistConfig, CacheConfig, Configuration, ServerConfig, UpstreamConfig,
     };
 
     #[test]
@@ -71,21 +57,8 @@ mod tests {
 
         let expected = Configuration {
             server: ServerConfig {
-                protocols: ProtocolsConfig {
-                    tls: TlsConfig {
-                        host: Ipv4Addr::new(0, 0, 0, 0),
-                        port: 853,
-                        cert: ExternalBytes::S3 {
-                            bucket: "configuration".into(),
-                            key: "cert.pem".into(),
-                        },
-                        key: ExternalBytes::S3 {
-                            bucket: "configuration".into(),
-                            key: "key.pem".into(),
-                        },
-                        refresh_interval_seconds: 86400,
-                    },
-                },
+                host: Ipv4Addr::new(0, 0, 0, 0),
+                port: 853,
             },
             upstream: UpstreamConfig {
                 resolver: "all.dns.mullvad.net".to_string(),

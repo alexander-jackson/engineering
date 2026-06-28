@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
@@ -10,9 +8,7 @@ use tokio::net::TcpListener;
 
 use crate::blocklist::BlocklistManager;
 use crate::cache::ResponseCache;
-use crate::config::TlsConfig;
 use crate::handler::DnsRequestHandler;
-use crate::tls::CertificateResolver;
 use crate::upstream::UpstreamResolver;
 
 type ConcreteHandler = DnsRequestHandler<UpstreamResolver, BlocklistManager>;
@@ -53,19 +49,18 @@ pub struct DnsServer {
 }
 
 impl DnsServer {
-    #[tracing::instrument(skip(upstream, blocklist, cache, config, certificate_resolver, metrics))]
+    #[tracing::instrument(skip(listener, upstream, blocklist, cache, metrics))]
     pub async fn new(
+        listener: TcpListener,
         upstream: UpstreamResolver,
         blocklist: BlocklistManager,
         cache: ResponseCache,
-        config: &TlsConfig,
-        certificate_resolver: CertificateResolver,
         metrics: DnsServerMetrics,
     ) -> Result<Self> {
         let handler = DnsRequestHandler::new(upstream, blocklist, cache, metrics);
         let mut server_future = Server::new(handler);
 
-        register_tls_listener(&mut server_future, config, certificate_resolver).await?;
+        register_tcp_listener(&mut server_future, listener).await?;
 
         Ok(Self { server_future })
     }
@@ -87,18 +82,15 @@ impl GracefulTask for DnsServer {
     }
 }
 
-async fn register_tls_listener(
+async fn register_tcp_listener(
     server_future: &mut Server<ConcreteHandler>,
-    config: &TlsConfig,
-    certificate_resolver: CertificateResolver,
+    listener: TcpListener,
 ) -> Result<()> {
-    let addr = SocketAddr::new(config.host.into(), config.port);
-    let listener = TcpListener::bind(addr).await?;
-
-    tracing::info!(%addr, "bound TLS listener for DNS over TLS queries");
+    let addr = listener.local_addr()?;
+    tracing::info!(%addr, "bound TCP listener for DNS queries");
 
     let timeout = Duration::from_secs(300);
-    server_future.register_tls_listener(listener, timeout, Arc::new(certificate_resolver))?;
+    server_future.register_listener(listener, timeout, 1024);
 
     Ok(())
 }

@@ -1,20 +1,19 @@
 use color_eyre::eyre::Result;
 use foundation_recurring_job::RecurringJob;
 use foundation_shutdown::ShutdownCoordinator;
+use tokio::net::TcpListener;
 
 mod blocklist;
 mod cache;
 mod config;
 mod handler;
 mod server;
-mod tls;
 mod upstream;
 
 use crate::blocklist::BlocklistManager;
 use crate::cache::ResponseCache;
 use crate::config::Configuration;
 use crate::server::{DnsServer, DnsServerMetrics};
-use crate::tls::CertificateResolver;
 use crate::upstream::UpstreamResolver;
 
 #[tokio::main]
@@ -31,27 +30,18 @@ async fn main() -> Result<()> {
     let upstream = UpstreamResolver::new(&config.upstream).await?;
     let cache = ResponseCache::new(&config.cache);
 
-    let tls_config = &config.server.protocols.tls;
-
-    let certificate_resolver = CertificateResolver::new(tls_config.clone()).await?;
+    let host = config.server.host;
+    let port = config.server.port;
+    let listener = TcpListener::bind((host, port)).await?;
 
     let meter = opentelemetry::global::meter("dns-server");
     let metrics = DnsServerMetrics::new(&meter);
 
-    let dns_server = DnsServer::new(
-        upstream,
-        blocklist.clone(),
-        cache,
-        tls_config,
-        certificate_resolver.clone(),
-        metrics,
-    )
-    .await?;
+    let dns_server = DnsServer::new(listener, upstream, blocklist.clone(), cache, metrics).await?;
 
     ShutdownCoordinator::new()
         .with_task(dns_server)
         .with_task(RecurringJob::new(blocklist))
-        .with_task(RecurringJob::new(certificate_resolver))
         .run()
         .await?;
 
