@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use axum::body::Body;
 use axum::http::StatusCode;
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
@@ -13,7 +15,29 @@ pub struct TemplateEngine {
 
 impl TemplateEngine {
     pub fn new() -> Result<Self> {
-        let inner = Tera::new("templates/**.tera.html")?;
+        let mut inner = Tera::new();
+        let directory = Path::new("templates");
+
+        let templates = std::fs::read_dir(directory)?
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| {
+                let path = entry.path();
+
+                if !path.is_file() {
+                    return None;
+                }
+
+                if !path.as_os_str().as_encoded_bytes().ends_with(b".tera.html") {
+                    return None;
+                }
+
+                let filename = path.file_name()?.to_str()?.to_owned();
+
+                Some((path, Some(filename)))
+            })
+            .collect::<Vec<_>>();
+
+        inner.add_template_files(templates)?;
 
         Ok(Self { inner })
     }
