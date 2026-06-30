@@ -11,4 +11,4 @@ tokio = { version = "1", features = ["macros", "rt"] }
 axum = { version = "0.8.9", default-features = false }
 color-eyre = "0.6.3"
 serde.workspace = true
-tera = "1.20.0"
+tera = "2.0.0"
