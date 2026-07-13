@@ -78,6 +78,15 @@ alb:
           location: s3
           bucket: configuration-68f6c7
           key: f2/certificates/grafana.opentracker.app/privkey.pem
+      or.opentracker.app:
+        cert_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/or.opentracker.app/fullchain.pem
+        key_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/or.opentracker.app/privkey.pem
       forkup.app:
         cert_file:
           location: s3
@@ -281,6 +290,21 @@ services:
           location: filesystem
           path: /mnt/data/grafana
         target: /var/lib/grafana
+
+  openrouter-proxy:
+    image: nginx
+    tag: alpine
+    routes:
+      - host: or.opentracker.app
+        port: 80
+    replicas: 1
+    volumes:
+      config:
+        source:
+          location: s3
+          bucket: configuration-68f6c7
+          key: openrouter-proxy/nginx.conf
+        target: /etc/nginx/nginx.conf
 
   prometheus:
     image: prom/prometheus
