@@ -165,21 +165,6 @@ services:
           key: forkup/config.yaml
         target: /app/config/forkup.yaml
 
-  tag-updater:
-    image: alexanderjackson/tag-updater
-    tag: 20260630-1706
-    routes:
-      - host: tags.opentracker.app
-        port: 4025
-    replicas: 1
-    volumes:
-      config:
-        source:
-          location: s3
-          bucket: configuration-68f6c7
-          key: tag-updater/config.yaml
-        target: /app/config/tag-updater.yaml
-
   today:
     image: alexanderjackson/today
     tag: 20260630-1706
@@ -290,21 +275,6 @@ services:
           location: filesystem
           path: /mnt/data/grafana
         target: /var/lib/grafana
-
-  openrouter-proxy:
-    image: nginx
-    tag: alpine
-    routes:
-      - host: or.opentracker.app
-        port: 80
-    replicas: 1
-    volumes:
-      config:
-        source:
-          location: s3
-          bucket: configuration-68f6c7
-          key: openrouter-proxy/nginx.conf
-        target: /etc/nginx/nginx.conf
 
   prometheus:
     image: prom/prometheus
