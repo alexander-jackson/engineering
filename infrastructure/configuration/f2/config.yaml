@@ -292,3 +292,18 @@ services:
           location: filesystem
           path: /mnt/data/prometheus
         target: /prometheus
+
+  openrouter-proxy:
+    image: nginx
+    tag: alpine
+    routes:
+      - host: tags.opentracker.app
+        port: 80
+    replicas: 1
+    volumes:
+      config:
+        source:
+          location: s3
+          bucket: configuration-68f6c7
+          key: openrouter-proxy/nginx.conf
+        target: /etc/nginx/nginx.conf
