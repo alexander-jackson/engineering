@@ -180,6 +180,7 @@ resource "aws_iam_user_policy" "configuration_deployer" {
           format("%s/*/config.yaml", module.config_bucket.arn),
           format("%s/dns-server/blocklist.txt", module.config_bucket.arn),
           format("%s/f2/anchor.pem", module.config_bucket.arn),
+          format("%s/openrouter-proxy/nginx.conf", module.config_bucket.arn),
           format("%s/vector/vector.yaml", module.config_bucket.arn),
         ]
       },
