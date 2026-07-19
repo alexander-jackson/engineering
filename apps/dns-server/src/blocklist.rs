@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
-use foundation_recurring_job::Job;
+use foundation_recurring_job::{Job, Schedule};
 use tokio::sync::RwLock;
 
 use crate::config::BlocklistConfig;
@@ -92,8 +92,10 @@ impl BlocklistManager {
 impl Job for BlocklistManager {
     const NAME: &'static str = "blocklist-manager";
 
-    fn interval(&self) -> Duration {
-        Duration::from_secs(self.config.refresh_interval_seconds)
+    fn schedule(&self) -> Schedule {
+        let duration = Duration::from_secs(self.config.refresh_interval_seconds);
+
+        Schedule::interval(duration)
     }
 
     async fn run(&self) -> Result<()> {
