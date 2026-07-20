@@ -10,4 +10,4 @@ tokio = { version = "1.48.0", default-features = false, features = ["macros", "t
 tracing.workspace = true
 
 [dev-dependencies]
-tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "time"] }
+tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "test-util", "time"] }
