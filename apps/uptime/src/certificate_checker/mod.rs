@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use chrono::Utc;
 use color_eyre::eyre::Result;
-use foundation_recurring_job::Job;
+use foundation_recurring_job::{Job, Schedule};
 use reqwest::Client;
 use sqlx::PgPool;
 use tracing::{error, info};
@@ -25,8 +25,8 @@ impl CertificateChecker {
 impl Job for CertificateChecker {
     const NAME: &'static str = "Certificate Checker";
 
-    fn interval(&self) -> Duration {
-        Duration::from_hours(24)
+    fn schedule(&self) -> Schedule {
+        Schedule::Interval(Duration::from_hours(24))
     }
 
     async fn run(&self) -> Result<()> {

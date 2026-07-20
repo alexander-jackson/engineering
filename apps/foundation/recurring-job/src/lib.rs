@@ -4,11 +4,26 @@ use std::time::Duration;
 use color_eyre::eyre::Result;
 use foundation_shutdown::{CancellationToken, GracefulTask};
 
+pub enum Schedule {
+    Interval(Duration),
+    Daily { hour: u32, minute: u32 },
+}
+
+impl Schedule {
+    pub fn interval(duration: Duration) -> Self {
+        Schedule::Interval(duration)
+    }
+
+    pub fn daily(hour: u32, minute: u32) -> Self {
+        Schedule::Daily { hour, minute }
+    }
+}
+
 pub trait Job: Send + 'static {
     const NAME: &'static str;
 
     fn run(&self) -> impl Future<Output = Result<()>> + Send + '_;
-    fn interval(&self) -> Duration;
+    fn schedule(&self) -> Schedule;
 }
 
 pub struct RecurringJob<T>
@@ -26,7 +41,11 @@ impl<T: Job> RecurringJob<T> {
 
 impl<T: Job> GracefulTask for RecurringJob<T> {
     async fn run_until_shutdown(self, shutdown: CancellationToken) -> Result<()> {
-        let mut interval = tokio::time::interval(self.state.interval());
+        let Schedule::Interval(duration) = self.state.schedule() else {
+            unimplemented!("only interval scheduling is supported for now");
+        };
+
+        let mut interval = tokio::time::interval(duration);
         let job = T::NAME;
 
         loop {
@@ -59,7 +78,7 @@ mod tests {
     use tokio::sync::Mutex;
     use tokio::sync::mpsc::{Receiver, Sender};
 
-    use crate::{Job, RecurringJob};
+    use crate::{Job, RecurringJob, Schedule};
 
     struct TestJob {
         counter: Arc<AtomicUsize>,
@@ -70,8 +89,8 @@ mod tests {
     impl Job for TestJob {
         const NAME: &'static str = "test-job";
 
-        fn interval(&self) -> Duration {
-            Duration::from_millis(1)
+        fn schedule(&self) -> Schedule {
+            Schedule::Interval(Duration::from_millis(1))
         }
 
         fn run(&self) -> impl Future<Output = Result<()>> + Send + '_ {

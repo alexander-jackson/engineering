@@ -2,7 +2,7 @@ use std::fmt::{self, Display};
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
-use foundation_recurring_job::Job;
+use foundation_recurring_job::{Job, Schedule};
 use sqlx::PgPool;
 use sqlx::types::chrono::Utc;
 use uuid::Uuid;
@@ -298,8 +298,8 @@ impl<N: Notifier> Poller<N> {
 impl<N: Notifier + Send + Sync + 'static> Job for Poller<N> {
     const NAME: &'static str = "Origin Poller";
 
-    fn interval(&self) -> Duration {
-        Duration::from_secs(60)
+    fn schedule(&self) -> Schedule {
+        Schedule::interval(Duration::from_secs(60))
     }
 
     async fn run(&self) -> Result<()> {

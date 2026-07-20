@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
-use foundation_recurring_job::Job;
+use foundation_recurring_job::{Job, Schedule};
 use sqlx::PgPool;
 use sqlx::types::chrono::Utc;
 
@@ -21,8 +21,8 @@ impl Watcher {
 impl Job for Watcher {
     const NAME: &'static str = "Certificate Expiry Watcher";
 
-    fn interval(&self) -> Duration {
-        Duration::from_hours(1)
+    fn schedule(&self) -> Schedule {
+        Schedule::interval(Duration::from_hours(1))
     }
 
     async fn run(&self) -> Result<()> {
