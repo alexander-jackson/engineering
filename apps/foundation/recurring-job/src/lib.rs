@@ -4,6 +4,7 @@ use std::time::Duration;
 use color_eyre::eyre::Result;
 use foundation_shutdown::{CancellationToken, GracefulTask};
 
+#[derive(Copy, Clone, Debug)]
 pub enum Schedule {
     Interval(Duration),
     Daily { hour: u32, minute: u32 },
@@ -70,50 +71,45 @@ impl<T: Job> GracefulTask for RecurringJob<T> {
 mod tests {
     use std::future::Future;
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicU32, Ordering};
     use std::time::Duration;
 
     use color_eyre::eyre::Result;
     use foundation_shutdown::{CancellationToken, GracefulTask};
-    use tokio::sync::Mutex;
-    use tokio::sync::mpsc::{Receiver, Sender};
 
     use crate::{Job, RecurringJob, Schedule};
 
     struct TestJob {
-        counter: Arc<AtomicUsize>,
-        sender: Sender<()>,
-        receiver: Mutex<Receiver<()>>,
+        counter: Arc<AtomicU32>,
+        schedule: Schedule,
     }
 
     impl Job for TestJob {
         const NAME: &'static str = "test-job";
 
         fn schedule(&self) -> Schedule {
-            Schedule::Interval(Duration::from_millis(1))
+            self.schedule
         }
 
         fn run(&self) -> impl Future<Output = Result<()>> + Send + '_ {
             async move {
-                self.receiver.lock().await.recv().await;
                 self.counter.fetch_add(1, Ordering::SeqCst);
-                self.sender.send(()).await.unwrap();
 
                 Ok(())
             }
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn can_create_and_run_recurring_job() {
-        let counter = Arc::new(AtomicUsize::new(0));
-        let (test_sender, job_receiver) = tokio::sync::mpsc::channel(1);
-        let (job_sender, mut test_receiver) = tokio::sync::mpsc::channel(1);
+        let counter = Arc::new(AtomicU32::new(0));
+
+        let interval = Duration::from_millis(1);
+        let schedule = Schedule::interval(interval);
 
         let job = TestJob {
             counter: counter.clone(),
-            sender: job_sender,
-            receiver: Mutex::new(job_receiver),
+            schedule,
         };
 
         let job = RecurringJob::new(job);
@@ -125,12 +121,9 @@ mod tests {
             job.run_until_shutdown(job_token).await.unwrap();
         });
 
+        // advance time to allow the job to run a few times
         let iterations = 3;
-
-        for _ in 0..iterations {
-            test_sender.send(()).await.unwrap();
-            test_receiver.recv().await.unwrap();
-        }
+        tokio::time::sleep(interval * iterations).await;
 
         assert_eq!(counter.load(Ordering::SeqCst), iterations);
 
