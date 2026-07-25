@@ -51,8 +51,8 @@ jobs:
             echo "Changed files:"
             echo "$CHANGED"
 
-            if echo "$CHANGED" | grep -q '^apps/foundation/'; then
-              echo "Foundation changed — rebuilding all apps"
+            if echo "$CHANGED" | grep -qE '^apps/foundation/|^apps/Cargo\.lock$'; then
+              echo "Foundation or Cargo.lock changed — rebuilding all apps"
               APPS_JSON=$(echo "$ALL_APPS" | jq -c .)
             else
               APPS_JSON=$(echo "$ALL_APPS" | jq -c --arg changed "$CHANGED" '
