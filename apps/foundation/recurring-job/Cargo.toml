@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+chrono = "0.4.45"
 color-eyre = "0.6.5"
 foundation-shutdown = { path = "../shutdown" }
 tokio = { version = "1.48.0", default-features = false, features = ["macros", "time"] }
 tracing.workspace = true
 
 [dev-dependencies]
+test-case = "3.3.1"
 tokio = { version = "1.48.0", default-features = false, features = ["macros", "rt", "test-util", "time"] }
