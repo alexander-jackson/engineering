@@ -126,17 +126,11 @@ impl Job for BlocklistManager {
     }
 }
 
-impl BlocklistManager {
-    #[tracing::instrument(skip(self))]
-    pub async fn is_blocked(&self, domain: &str) -> bool {
-        self.blocklist.read().await.is_blocked(domain)
-    }
-}
-
 #[async_trait::async_trait]
 impl BlocklistSource for BlocklistManager {
+    #[tracing::instrument(skip(self))]
     async fn is_blocked(&self, domain: &str) -> bool {
-        self.is_blocked(domain).await
+        self.blocklist.read().await.is_blocked(domain)
     }
 }
 
