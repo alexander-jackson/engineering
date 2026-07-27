@@ -3,22 +3,21 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use foundation_configuration::ExternalBytes;
 use foundation_recurring_job::{Job, Schedule};
 use tokio::sync::RwLock;
 
-use crate::config::BlocklistConfig;
-
 #[async_trait::async_trait]
-pub trait BlocklistSource: Send + Sync + Unpin {
+pub trait Blocklist: Send + Sync + Unpin {
     async fn is_blocked(&self, domain: &str) -> bool;
 }
 
 #[derive(Clone, Debug, Default)]
-struct Blocklist {
+pub struct StaticBlocklist {
     domains: HashSet<String>,
 }
 
-impl Blocklist {
+impl StaticBlocklist {
     fn new(domains: HashSet<String>) -> Self {
         Self { domains }
     }
@@ -70,18 +69,51 @@ impl Blocklist {
     }
 }
 
-/// Manages domain blocklist loaded from external source
-#[derive(Clone)]
-pub struct BlocklistManager {
-    config: BlocklistConfig,
-    blocklist: Arc<RwLock<Blocklist>>,
+#[async_trait::async_trait]
+pub trait BlocklistResolver: Send + Sync + Unpin {
+    async fn resolve(&self) -> Result<StaticBlocklist>;
 }
 
-impl BlocklistManager {
+#[derive(Clone)]
+pub struct ExternalBytesBlocklistResolver {
+    source: ExternalBytes,
+}
+
+impl ExternalBytesBlocklistResolver {
+    pub fn new(source: ExternalBytes) -> Self {
+        Self { source }
+    }
+}
+
+#[async_trait::async_trait]
+impl BlocklistResolver for ExternalBytesBlocklistResolver {
+    async fn resolve(&self) -> Result<StaticBlocklist> {
+        let data = self
+            .source
+            .resolve()
+            .await
+            .wrap_err("failed to load blocklist")?;
+
+        let content = std::str::from_utf8(&data).wrap_err("blocklist is not valid UTF-8")?;
+
+        Ok(StaticBlocklist::parse(content))
+    }
+}
+
+/// Manages domain blocklist loaded from external source
+#[derive(Clone)]
+pub struct BlocklistManager<R: BlocklistResolver = ExternalBytesBlocklistResolver> {
+    interval: Duration,
+    resolver: R,
+    blocklist: Arc<RwLock<StaticBlocklist>>,
+}
+
+impl<R: BlocklistResolver> BlocklistManager<R> {
     /// Create a new blocklist manager
-    pub async fn new(config: BlocklistConfig) -> Result<Self> {
+    pub async fn new(interval: Duration, resolver: R) -> Result<Self> {
         let manager = Self {
-            config,
+            interval,
+            resolver,
             blocklist: Default::default(),
         };
 
@@ -93,28 +125,13 @@ impl Job for BlocklistManager {
     const NAME: &'static str = "blocklist-manager";
 
     fn schedule(&self) -> Schedule {
-        let duration = Duration::from_secs(self.config.refresh_interval_seconds);
-
-        Schedule::interval(duration)
+        Schedule::interval(self.interval)
     }
 
     async fn run(&self) -> Result<()> {
-        tracing::info!(
-            source = ?self.config.source,
-            "refreshing blocklist"
-        );
+        tracing::info!("refreshing blocklist");
 
-        // Load blocklist from external source
-        let data = self
-            .config
-            .source
-            .resolve()
-            .await
-            .wrap_err("failed to load blocklist")?;
-
-        let content = str::from_utf8(&data).wrap_err("blocklist is not valid UTF-8")?;
-
-        let blocklist = Blocklist::parse(content);
+        let blocklist = self.resolver.resolve().await?;
         let count = blocklist.domains.len();
 
         // Update the blocklist atomically
@@ -127,7 +144,7 @@ impl Job for BlocklistManager {
 }
 
 #[async_trait::async_trait]
-impl BlocklistSource for BlocklistManager {
+impl Blocklist for BlocklistManager {
     #[tracing::instrument(skip(self))]
     async fn is_blocked(&self, domain: &str) -> bool {
         self.blocklist.read().await.is_blocked(domain)
@@ -138,11 +155,11 @@ impl BlocklistSource for BlocklistManager {
 mod tests {
     use std::collections::HashSet;
 
-    use crate::blocklist::Blocklist;
+    use crate::blocklist::StaticBlocklist;
 
     #[test]
     fn empty_blocklist_allows_domains() {
-        let blocklist = Blocklist::default();
+        let blocklist = StaticBlocklist::default();
 
         assert!(!blocklist.is_blocked("example.com"));
         assert!(!blocklist.is_blocked("sub.example.com"));
@@ -153,7 +170,7 @@ mod tests {
         let mut domains = HashSet::new();
         domains.insert("example.com".to_string());
 
-        let blocklist = Blocklist::new(domains);
+        let blocklist = StaticBlocklist::new(domains);
 
         assert!(blocklist.is_blocked("example.com"));
     }
@@ -163,7 +180,7 @@ mod tests {
         let mut domains = HashSet::new();
         domains.insert("example.com".to_string());
 
-        let blocklist = Blocklist::new(domains);
+        let blocklist = StaticBlocklist::new(domains);
 
         assert!(blocklist.is_blocked("sub.example.com"));
         assert!(blocklist.is_blocked("deep.sub.example.com"));
@@ -174,7 +191,7 @@ mod tests {
         let mut domains = HashSet::new();
         domains.insert("example.com".to_string());
 
-        let blocklist = Blocklist::new(domains);
+        let blocklist = StaticBlocklist::new(domains);
 
         assert!(!blocklist.is_blocked("other.com"));
         assert!(!blocklist.is_blocked("example.org"));
@@ -194,7 +211,7 @@ mod tests {
             # google.com
         "#;
 
-        let blocklist = Blocklist::parse(content);
+        let blocklist = StaticBlocklist::parse(content);
 
         let expected = HashSet::from([
             "example.com".to_string(),
