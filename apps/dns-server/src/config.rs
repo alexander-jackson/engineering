@@ -1,6 +1,5 @@
 use std::net::Ipv4Addr;
 
-use foundation_configuration::ExternalBytes;
 use hickory_net::xfer::Protocol;
 use serde::Deserialize;
 
@@ -8,12 +7,17 @@ use serde::Deserialize;
 pub struct Configuration {
     pub server: ServerConfig,
     pub upstream: UpstreamConfig,
-    pub blocklist: BlocklistConfig,
     pub cache: CacheConfig,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 pub struct ServerConfig {
+    pub dns: ListenerConfig,
+    pub http: ListenerConfig,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+pub struct ListenerConfig {
     pub host: Ipv4Addr,
     pub port: u16,
 }
@@ -24,12 +28,6 @@ pub struct UpstreamConfig {
     pub port: u16,
     pub protocol: Protocol,
     pub timeout_seconds: u64,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
-pub struct BlocklistConfig {
-    pub source: ExternalBytes,
-    pub refresh_interval_seconds: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -44,12 +42,9 @@ mod tests {
     use std::net::Ipv4Addr;
 
     use color_eyre::eyre::Result;
-    use foundation_configuration::ExternalBytes;
     use hickory_net::xfer::Protocol;
 
-    use crate::config::{
-        BlocklistConfig, CacheConfig, Configuration, ServerConfig, UpstreamConfig,
-    };
+    use crate::config::{CacheConfig, Configuration, ListenerConfig, ServerConfig, UpstreamConfig};
 
     #[test]
     fn can_deserialize_sample_configuration() -> Result<()> {
@@ -57,20 +52,20 @@ mod tests {
 
         let expected = Configuration {
             server: ServerConfig {
-                host: Ipv4Addr::new(0, 0, 0, 0),
-                port: 853,
+                dns: ListenerConfig {
+                    host: Ipv4Addr::new(0, 0, 0, 0),
+                    port: 853,
+                },
+                http: ListenerConfig {
+                    host: Ipv4Addr::new(0, 0, 0, 0),
+                    port: 80,
+                },
             },
             upstream: UpstreamConfig {
                 resolver: "all.dns.mullvad.net".to_string(),
                 port: 443,
                 protocol: Protocol::Https,
                 timeout_seconds: 5,
-            },
-            blocklist: BlocklistConfig {
-                source: ExternalBytes::Filesystem {
-                    path: "/tmp/blocklist.txt".into(),
-                },
-                refresh_interval_seconds: 3600,
             },
             cache: CacheConfig {
                 max_entries: 10000,

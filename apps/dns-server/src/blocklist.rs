@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Duration;
 
-use color_eyre::eyre::{Context, Result};
-use foundation_configuration::ExternalBytes;
-use foundation_recurring_job::{Job, Schedule};
+use color_eyre::eyre::Result;
+use sqlx::PgPool;
 use tokio::sync::RwLock;
+
+use crate::persistence::DomainEventType;
 
 #[async_trait::async_trait]
 pub trait Blocklist: Send + Sync + Unpin {
@@ -20,23 +20,6 @@ pub struct StaticBlocklist {
 impl StaticBlocklist {
     fn new(domains: HashSet<String>) -> Self {
         Self { domains }
-    }
-
-    fn parse(content: &str) -> Self {
-        let domains = content
-            .lines()
-            .filter_map(|line| {
-                let sanitised = line.trim();
-
-                if sanitised.is_empty() || sanitised.starts_with('#') {
-                    None
-                } else {
-                    Some(sanitised.to_lowercase())
-                }
-            })
-            .collect();
-
-        Self::new(domains)
     }
 
     fn is_blocked(&self, domain: &str) -> bool {
@@ -70,81 +53,89 @@ impl StaticBlocklist {
 }
 
 #[async_trait::async_trait]
-pub trait BlocklistResolver: Send + Sync + Unpin {
-    async fn resolve(&self) -> Result<StaticBlocklist>;
+pub trait BlocklistBackend: Send + Sync + Unpin {
+    async fn read(&self) -> Result<HashSet<String>>;
+    async fn update(&self, domain: &str, state: DomainEventType) -> Result<()>;
 }
 
 #[derive(Clone)]
-pub struct ExternalBytesBlocklistResolver {
-    source: ExternalBytes,
+pub struct PostgresBlocklistBackend {
+    pool: PgPool,
 }
 
-impl ExternalBytesBlocklistResolver {
-    pub fn new(source: ExternalBytes) -> Self {
-        Self { source }
+impl PostgresBlocklistBackend {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
 }
 
 #[async_trait::async_trait]
-impl BlocklistResolver for ExternalBytesBlocklistResolver {
-    async fn resolve(&self) -> Result<StaticBlocklist> {
-        let data = self
-            .source
-            .resolve()
-            .await
-            .wrap_err("failed to load blocklist")?;
+impl BlocklistBackend for PostgresBlocklistBackend {
+    async fn read(&self) -> Result<HashSet<String>> {
+        let mut tx = self.pool.begin().await?;
 
-        let content = std::str::from_utf8(&data).wrap_err("blocklist is not valid UTF-8")?;
+        let domains = crate::persistence::select_blocked_domains(&mut tx).await?;
 
-        Ok(StaticBlocklist::parse(content))
+        tx.commit().await?;
+
+        Ok(domains)
+    }
+
+    async fn update(&self, domain: &str, state: DomainEventType) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        let domain_uid = crate::persistence::insert_domain(&mut tx, domain).await?;
+        crate::persistence::insert_domain_event(&mut tx, domain_uid, state).await?;
+
+        tx.commit().await?;
+
+        Ok(())
     }
 }
 
 /// Manages domain blocklist loaded from external source
 #[derive(Clone)]
-pub struct BlocklistManager<R: BlocklistResolver = ExternalBytesBlocklistResolver> {
-    interval: Duration,
-    resolver: R,
+pub struct BlocklistManager<B: BlocklistBackend = PostgresBlocklistBackend> {
+    backend: B,
     blocklist: Arc<RwLock<StaticBlocklist>>,
 }
 
-impl<R: BlocklistResolver> BlocklistManager<R> {
+impl<B: BlocklistBackend> BlocklistManager<B> {
     /// Create a new blocklist manager
-    pub async fn new(interval: Duration, resolver: R) -> Result<Self> {
+    pub async fn new(backend: B) -> Result<Self> {
+        let domains = backend.read().await?;
+        let blocklist = StaticBlocklist::new(domains);
+
         let manager = Self {
-            interval,
-            resolver,
-            blocklist: Default::default(),
+            backend,
+            blocklist: Arc::new(RwLock::new(blocklist)),
         };
 
         Ok(manager)
     }
-}
 
-impl Job for BlocklistManager {
-    const NAME: &'static str = "blocklist-manager";
-
-    fn schedule(&self) -> Schedule {
-        Schedule::interval(self.interval)
+    pub async fn read(&self) -> Result<HashSet<String>> {
+        self.backend.read().await
     }
 
-    async fn run(&self) -> Result<()> {
-        tracing::info!("refreshing blocklist");
+    pub async fn update(&self, domain: &str, state: DomainEventType) -> Result<()> {
+        self.backend.update(domain, state).await?;
 
-        let blocklist = self.resolver.resolve().await?;
-        let count = blocklist.domains.len();
-
-        // Update the blocklist atomically
-        *self.blocklist.write().await = blocklist;
+        // Refresh the blocklist after updating
+        let domains = self.backend.read().await?;
+        let count = domains.len();
 
         tracing::info!(count, "blocklist refreshed successfully");
+
+        // Update the blocklist atomically
+        *self.blocklist.write().await = StaticBlocklist::new(domains);
 
         Ok(())
     }
 }
 
 #[async_trait::async_trait]
-impl Blocklist for BlocklistManager {
+impl<B: BlocklistBackend> Blocklist for BlocklistManager<B> {
     #[tracing::instrument(skip(self))]
     async fn is_blocked(&self, domain: &str) -> bool {
         self.blocklist.read().await.is_blocked(domain)
@@ -195,30 +186,5 @@ mod tests {
 
         assert!(!blocklist.is_blocked("other.com"));
         assert!(!blocklist.is_blocked("example.org"));
-    }
-
-    #[test]
-    fn can_parse_blocklist_content() {
-        let content = r#"
-            # This is a comment
-            example.com
-            test.org
-
-            # Another comment
-            sub.domain.net
-
-            # Domain which we used to block
-            # google.com
-        "#;
-
-        let blocklist = StaticBlocklist::parse(content);
-
-        let expected = HashSet::from([
-            "example.com".to_string(),
-            "test.org".to_string(),
-            "sub.domain.net".to_string(),
-        ]);
-
-        assert_eq!(blocklist.domains, expected);
     }
 }

@@ -5,13 +5,9 @@ edition = "2024"
 
 [dependencies]
 async-trait = "0.1.89"
-bytes = "1.11.0"
 color-eyre = "0.6.5"
-foundation-configuration = { version = "0.1.0", path = "../foundation/configuration", features = ["external-bytes"] }
-foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["metrics"] }
-foundation-recurring-job = { version = "0.1.0", path = "../foundation/recurring-job" }
+foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database", "metrics"] }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
-hickory-dns = { version = "0.26.1", default-features = false, features = ["resolver"] }
 hickory-net = { version = "0.26.1", features = ["serde"] }
 hickory-proto = "0.26.1"
 hickory-resolver = { version = "0.26.1", features = ["https-ring", "webpki-roots"] }
@@ -20,9 +16,10 @@ moka = { version = "0.12.15", features = ["future"] }
 serde = { workspace = true, features = ["derive"] }
 tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread", "net", "time", "sync"] }
 tracing.workspace = true
-rustls-pemfile = "2.0"
-rustls = { version = "0.23", features = ["ring"] }
 opentelemetry = { workspace = true }
+sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
+foundation-http-server = { version = "0.1.0", path = "../foundation/http-server", features = ["metrics"] }
+axum.workspace = true
 
 [dev-dependencies]
 dns-mock-server = "0.2.0"
