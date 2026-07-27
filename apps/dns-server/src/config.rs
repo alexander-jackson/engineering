@@ -14,6 +14,12 @@ pub struct Configuration {
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 pub struct ServerConfig {
+    pub dns: ListenerConfig,
+    pub http: ListenerConfig,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+pub struct ListenerConfig {
     pub host: Ipv4Addr,
     pub port: u16,
 }
@@ -48,7 +54,7 @@ mod tests {
     use hickory_net::xfer::Protocol;
 
     use crate::config::{
-        BlocklistConfig, CacheConfig, Configuration, ServerConfig, UpstreamConfig,
+        BlocklistConfig, CacheConfig, Configuration, ListenerConfig, ServerConfig, UpstreamConfig,
     };
 
     #[test]
@@ -57,8 +63,14 @@ mod tests {
 
         let expected = Configuration {
             server: ServerConfig {
-                host: Ipv4Addr::new(0, 0, 0, 0),
-                port: 853,
+                dns: ListenerConfig {
+                    host: Ipv4Addr::new(0, 0, 0, 0),
+                    port: 853,
+                },
+                http: ListenerConfig {
+                    host: Ipv4Addr::new(0, 0, 0, 0),
+                    port: 80,
+                },
             },
             upstream: UpstreamConfig {
                 resolver: "all.dns.mullvad.net".to_string(),

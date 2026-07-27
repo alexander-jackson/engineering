@@ -8,7 +8,7 @@ async-trait = "0.1.89"
 bytes = "1.11.0"
 color-eyre = "0.6.5"
 foundation-configuration = { version = "0.1.0", path = "../foundation/configuration", features = ["external-bytes"] }
-foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["metrics"] }
+foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["database", "metrics"] }
 foundation-recurring-job = { version = "0.1.0", path = "../foundation/recurring-job" }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 hickory-dns = { version = "0.26.1", default-features = false, features = ["resolver"] }
@@ -23,6 +23,9 @@ tracing.workspace = true
 rustls-pemfile = "2.0"
 rustls = { version = "0.23", features = ["ring"] }
 opentelemetry = { workspace = true }
+sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
+foundation-http-server = { version = "0.1.0", path = "../foundation/http-server", features = ["metrics"] }
+axum.workspace = true
 
 [dev-dependencies]
 dns-mock-server = "0.2.0"
