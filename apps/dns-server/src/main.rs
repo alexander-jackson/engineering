@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use color_eyre::eyre::Result;
 use foundation_recurring_job::RecurringJob;
 use foundation_shutdown::ShutdownCoordinator;
@@ -10,7 +12,7 @@ mod handler;
 mod server;
 mod upstream;
 
-use crate::blocklist::BlocklistManager;
+use crate::blocklist::{BlocklistManager, ExternalBytesBlocklistResolver};
 use crate::cache::ResponseCache;
 use crate::config::Configuration;
 use crate::server::{DnsServer, DnsServerMetrics};
@@ -26,7 +28,10 @@ async fn main() -> Result<()> {
         "dns server initialized"
     );
 
-    let blocklist = BlocklistManager::new(config.blocklist.clone()).await?;
+    let interval = Duration::from_secs(config.blocklist.refresh_interval_seconds);
+    let resolver = ExternalBytesBlocklistResolver::new(config.blocklist.source.clone());
+
+    let blocklist = BlocklistManager::new(interval, resolver).await?;
     let upstream = UpstreamResolver::new(&config.upstream).await?;
     let cache = ResponseCache::new(&config.cache);
 
