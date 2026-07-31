@@ -33,7 +33,7 @@ async fn main() -> Result<()> {
     let interval = Duration::from_secs(config.blocklist.refresh_interval_seconds);
     let resolver = PostgresBlocklistResolver::new(pool.clone());
 
-    let blocklist = BlocklistManager::new(interval, resolver).await?;
+    let blocklist_manager = BlocklistManager::new(interval, resolver).await?;
     let upstream = UpstreamResolver::new(&config.upstream).await?;
     let cache = ResponseCache::new(&config.cache);
 
@@ -46,14 +46,21 @@ async fn main() -> Result<()> {
     let meter = opentelemetry::global::meter("dns-server");
     let metrics = DnsServerMetrics::new(&meter);
 
-    let dns_server =
-        DnsServer::new(dns_listener, upstream, blocklist.clone(), cache, metrics).await?;
-    let http_server = crate::http_server::build(pool.clone(), http_listener);
+    let dns_server = DnsServer::new(
+        dns_listener,
+        upstream,
+        blocklist_manager.clone(),
+        cache,
+        metrics,
+    )
+    .await?;
+
+    let http_server = crate::http_server::build(blocklist_manager.clone(), http_listener);
 
     ShutdownCoordinator::new()
         .with_task(dns_server)
         .with_task(http_server)
-        .with_task(RecurringJob::new(blocklist))
+        .with_task(RecurringJob::new(blocklist_manager))
         .run()
         .await?;
 

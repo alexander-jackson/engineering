@@ -7,6 +7,8 @@ use foundation_recurring_job::{Job, Schedule};
 use sqlx::PgPool;
 use tokio::sync::RwLock;
 
+use crate::persistence::DomainEventType;
+
 #[async_trait::async_trait]
 pub trait Blocklist: Send + Sync + Unpin {
     async fn is_blocked(&self, domain: &str) -> bool;
@@ -78,6 +80,46 @@ impl BlocklistResolver for PostgresBlocklistResolver {
         tx.commit().await?;
 
         Ok(StaticBlocklist::new(domains))
+    }
+}
+
+#[async_trait::async_trait]
+pub trait BlocklistBackend: Send + Sync + Unpin {
+    async fn read(&self) -> Result<StaticBlocklist>;
+    async fn update(&self, domain: &str, state: DomainEventType) -> Result<()>;
+}
+
+pub struct PostgresBlocklistBackend {
+    pool: PgPool,
+}
+
+impl PostgresBlocklistBackend {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait::async_trait]
+impl BlocklistBackend for PostgresBlocklistBackend {
+    async fn read(&self) -> Result<StaticBlocklist> {
+        let mut tx = self.pool.begin().await?;
+
+        let domains = crate::persistence::select_blocked_domains(&mut tx).await?;
+
+        tx.commit().await?;
+
+        Ok(StaticBlocklist::new(domains))
+    }
+
+    async fn update(&self, domain: &str, state: DomainEventType) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        let domain_uid = crate::persistence::insert_domain(&mut tx, domain).await?;
+        crate::persistence::insert_domain_event(&mut tx, domain_uid, state).await?;
+
+        tx.commit().await?;
+
+        Ok(())
     }
 }
 

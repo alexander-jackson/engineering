@@ -9,19 +9,23 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use tokio::net::TcpListener;
 
+use crate::blocklist::{BlocklistBackend, BlocklistManager};
 use crate::persistence::DomainEventType;
 
 #[derive(Clone)]
 struct ApplicationState {
-    pool: PgPool,
+    blocklist_manager: BlocklistManager,
 }
 
-pub fn build(pool: PgPool, listener: TcpListener) -> Server {
-    let state = ApplicationState { pool };
+pub fn build(blocklist_manager: BlocklistManager, listener: TcpListener) -> Server {
+    let state = ApplicationState { blocklist_manager };
 
     let router = Router::new()
         .route("/health", axum::routing::get(health_check))
-        .route("/api/v1/blocklist", get(get_blocked_domains).put(add_blocked_domain))
+        .route(
+            "/api/v1/blocklist",
+            get(get_blocked_domains).put(add_blocked_domain),
+        )
         .with_state(state);
 
     Server::new(router, listener)
@@ -34,13 +38,9 @@ async fn health_check() -> &'static str {
 async fn get_blocked_domains(
     State(state): State<ApplicationState>,
 ) -> Result<Json<HashSet<String>>, StatusCode> {
-    let mut tx = state
-        .pool
-        .begin()
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let blocked_domains = crate::persistence::select_blocked_domains(&mut tx)
+    let blocked_domains = state
+        .blocklist_manager
+        .read()
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
