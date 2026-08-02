@@ -6,7 +6,7 @@ use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseI
 use hickory_server::zone_handler::MessageResponseBuilder;
 use opentelemetry::KeyValue;
 
-use crate::blocklist::BlocklistSource;
+use crate::blocklist::Blocklist;
 use crate::cache::ResponseCache;
 use crate::server::DnsServerMetrics;
 use crate::upstream::Upstream;
@@ -19,7 +19,7 @@ pub struct DnsRequestHandler<U, B> {
     metrics: DnsServerMetrics,
 }
 
-impl<U: Upstream, B: BlocklistSource> DnsRequestHandler<U, B> {
+impl<U: Upstream, B: Blocklist> DnsRequestHandler<U, B> {
     pub fn new(upstream: U, blocklist: B, cache: ResponseCache, metrics: DnsServerMetrics) -> Self {
         Self {
             upstream,
@@ -41,7 +41,7 @@ fn make_response_info(request: &Request) -> ResponseInfo {
 impl<U, B> RequestHandler for DnsRequestHandler<U, B>
 where
     U: Upstream + 'static,
-    B: BlocklistSource + 'static,
+    B: Blocklist + 'static,
 {
     async fn handle_request<R: ResponseHandler, T: Time>(
         &self,
@@ -235,7 +235,7 @@ mod tests {
     use hickory_server::server::{Request, RequestHandler, ResponseInfo};
     use hickory_server::zone_handler::MessageResponse;
 
-    use crate::blocklist::BlocklistSource;
+    use crate::blocklist::Blocklist;
     use crate::cache::ResponseCache;
     use crate::config::CacheConfig;
     use crate::server::DnsServerMetrics;
@@ -289,7 +289,7 @@ mod tests {
     struct AlwaysBlocked;
 
     #[async_trait::async_trait]
-    impl BlocklistSource for AlwaysBlocked {
+    impl Blocklist for AlwaysBlocked {
         async fn is_blocked(&self, _: &str) -> bool {
             true
         }
@@ -299,7 +299,7 @@ mod tests {
     struct NeverBlocked;
 
     #[async_trait::async_trait]
-    impl BlocklistSource for NeverBlocked {
+    impl Blocklist for NeverBlocked {
         async fn is_blocked(&self, _: &str) -> bool {
             false
         }
