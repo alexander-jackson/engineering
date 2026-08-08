@@ -6,12 +6,12 @@ use hickory_server::Server;
 use opentelemetry::metrics::{Counter, Histogram, Meter};
 use tokio::net::TcpListener;
 
-use crate::blocklist::BlocklistManager;
+use crate::blocklist::{BlocklistBackend, BlocklistManager};
 use crate::cache::ResponseCache;
 use crate::handler::DnsRequestHandler;
 use crate::upstream::UpstreamResolver;
 
-type ConcreteHandler = DnsRequestHandler<UpstreamResolver, BlocklistManager>;
+type ConcreteHandler<R> = DnsRequestHandler<UpstreamResolver, BlocklistManager<R>>;
 
 #[derive(Clone)]
 pub struct DnsServerMetrics {
@@ -44,16 +44,16 @@ impl DnsServerMetrics {
     }
 }
 
-pub struct DnsServer {
-    server_future: Server<ConcreteHandler>,
+pub struct DnsServer<B: BlocklistBackend + 'static> {
+    server_future: Server<ConcreteHandler<B>>,
 }
 
-impl DnsServer {
+impl<B: BlocklistBackend> DnsServer<B> {
     #[tracing::instrument(skip(listener, upstream, blocklist, cache, metrics))]
     pub async fn new(
         listener: TcpListener,
         upstream: UpstreamResolver,
-        blocklist: BlocklistManager,
+        blocklist: BlocklistManager<B>,
         cache: ResponseCache,
         metrics: DnsServerMetrics,
     ) -> Result<Self> {
@@ -66,7 +66,7 @@ impl DnsServer {
     }
 }
 
-impl GracefulTask for DnsServer {
+impl<B: BlocklistBackend> GracefulTask for DnsServer<B> {
     async fn run_until_shutdown(mut self, token: CancellationToken) -> Result<()> {
         tokio::select! {
             result = self.server_future.block_until_done() => {
@@ -82,8 +82,8 @@ impl GracefulTask for DnsServer {
     }
 }
 
-async fn register_tcp_listener(
-    server_future: &mut Server<ConcreteHandler>,
+async fn register_tcp_listener<B: BlocklistBackend + 'static>(
+    server_future: &mut Server<ConcreteHandler<B>>,
     listener: TcpListener,
 ) -> Result<()> {
     let addr = listener.local_addr()?;
