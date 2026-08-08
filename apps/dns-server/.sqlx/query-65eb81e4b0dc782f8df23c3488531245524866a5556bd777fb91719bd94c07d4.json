@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO domain (domain_uid, name)\n            VALUES ($1, $2)\n            ON CONFLICT (name) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "65eb81e4b0dc782f8df23c3488531245524866a5556bd777fb91719bd94c07d4"
+}
