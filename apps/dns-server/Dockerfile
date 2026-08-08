@@ -9,6 +9,7 @@ FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --package dns-server --recipe-path recipe.json
 COPY . .
+ENV SQLX_OFFLINE=true
 RUN cargo build --release --package dns-server
 
 FROM debian:bookworm-slim AS runtime
@@ -18,5 +19,6 @@ RUN apt-get update \
 RUN useradd -m -u 1000 appuser
 WORKDIR /app
 COPY --from=builder /app/target/release/dns-server ./dns-server
+COPY --from=builder /app/events/migrations ./migrations
 USER appuser
 CMD ["./dns-server", "--config", "/app/config/dns-server.yaml"]
