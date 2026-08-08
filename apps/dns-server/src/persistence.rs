@@ -18,10 +18,7 @@ impl DomainEventType {
     }
 }
 
-pub async fn insert_domain(
-    tx: &mut Transaction<'_, Postgres>,
-    domain: &str,
-) -> Result<Uuid> {
+pub async fn insert_domain(tx: &mut Transaction<'_, Postgres>, domain: &str) -> Result<Uuid> {
     let domain_uid = Uuid::new_v4();
 
     let query_result = sqlx::query!(
