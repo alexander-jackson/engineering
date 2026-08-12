@@ -19,4 +19,4 @@ RUN useradd -m -u 1000 appuser
 WORKDIR /app
 COPY --from=builder /app/target/release/f2 ./f2
 USER appuser
-CMD ["./f2"]
+ENTRYPOINT ["./f2"]
