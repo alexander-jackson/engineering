@@ -27,10 +27,10 @@ database:
 
   root:
     username: postgres
-    password: test
+    password: {{ go+t44TempS8H5wabTi5yhdk3i/6WsMXlALsz6tCndIfsi8EQqD91gHNWm9m4rOoMeGbB3KC1vnFZi4lQ+O3kFH1XACUjfhRPoivadvkS9Pkb0nuNeZP79xi9OCjW8RaQuliRv4aud5p2oB9OcGt1zZJXpWO0FXH86CDPN8XouDreDgREqL7sQHxIn1ZsnmqIr7gMWA+7xomiNj9n7qpRekh8PRGXYY5Vsbbgfte9b9/ZJQX9i3pQ8ICpkbe+4sdej+v1+E7KZNQEKS2kqJTOgZHEw3HrciTdeHg902MxMHsCyfcAThmFTy38jhoM4Pf4ysZSN0edvzCYp2ulYGwMA== }}
     database: postgres
 
   application:
     username: dnsserverblue
-    password: test
+    password: {{ f98B1k/7D5qZvHlt1nOM9lqO5/UPPf7eTxsvevhixHCwtrRd1QDOlvju8Sw4Ea3CT5PeUt/r+ggI42H6rUrCN1xl7Yi1q1EW74WSK9tyLInX2jMKIVdIeRxgz6KM9P3/GjiqvMOFsrASKzp52Kk4+OUatA605YUvLId4EUly/mlAbq/knOId9xUADeTLQGul+oQY2Hz4IzzKtvYmpPvSjJMynfdeetAwuZcmeGJFqlYaiZGAxrQIhe+ZYe6p4FqFVsBiY8XgTFhODRkuu1E6kgbDBoMF4b84LWTisNc7jp04Cbh+J/n2RUIz65v2R7B6gzA/mavmYHX/vZxMT/IWrQ== }}
     database: dnsserver
