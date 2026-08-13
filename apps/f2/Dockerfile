@@ -15,7 +15,9 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-RUN useradd -m -u 1000 appuser
+RUN useradd -m -u 1000 appuser \
+    && groupadd -g 999 docker \
+    && usermod -aG docker appuser
 WORKDIR /app
 COPY --from=builder /app/target/release/f2 ./f2
 USER appuser
