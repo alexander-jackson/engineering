@@ -37,3 +37,10 @@ services:
       - host: dns.opentracker.app
         port: 853
     replicas: 1
+    volumes:
+      config:
+        source:
+          location: s3
+          bucket: configuration-68f6c7
+          key: dns-server/config.yaml
+        target: /app/config/dns-server.yaml
