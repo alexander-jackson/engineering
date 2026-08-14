@@ -18,8 +18,8 @@ resource "aws_db_instance" "this" {
   allocated_storage = var.allocated_storage
   storage_type      = "gp2"
 
-  db_name                     = "postgres"
-  username                    = "postgres"
+  db_name  = "postgres"
+  username = "postgres"
   password = var.password
 
   db_subnet_group_name   = aws_db_subnet_group.this.name

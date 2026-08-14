@@ -58,3 +58,9 @@ variable "extra_ebs_volume" {
   description = "Configuration for an additional EBS volume"
   default     = null
 }
+
+variable "inbound_protocols" {
+  type        = set(string)
+  description = "Set of protocols to allow inbound traffic for"
+  default     = []
+}
