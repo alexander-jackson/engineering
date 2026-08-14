@@ -19,6 +19,6 @@ RUN apt-get update \
 RUN useradd -m -u 1000 appuser
 WORKDIR /app
 COPY --from=builder /app/target/release/dns-server ./dns-server
-COPY --from=builder /app/events/migrations ./migrations
+COPY --from=builder /app/dns-server/migrations ./migrations
 USER appuser
 CMD ["./dns-server", "--config", "/app/config/dns-server.yaml"]
