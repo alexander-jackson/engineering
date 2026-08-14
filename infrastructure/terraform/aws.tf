@@ -359,8 +359,9 @@ module "dns" {
     bucket = module.hackathon_bucket.name
   }
 
-  key_name               = aws_key_pair.main.key_name
-  inbound_http_subnet_id = aws_subnet.main.id
+  key_name                 = aws_key_pair.main.key_name
+  inbound_http_subnet_id   = aws_subnet.main.id
+  elastic_ip_allocation_id = aws_eip.dns_server.id
 
   inbound_protocols = ["ssh", "https", "dns-over-tls"]
 }
@@ -395,8 +396,7 @@ module "dns2" {
     vector_tag = "0.51.1-alpine"
   }
 
-  key_name                 = aws_key_pair.main.key_name
-  elastic_ip_allocation_id = aws_eip.dns_server.id
+  key_name = aws_key_pair.main.key_name
 }
 
 # Route table definitions
@@ -452,7 +452,7 @@ resource "aws_route53_record" "dns_server_record" {
   name    = "dns"
   type    = "A"
   ttl     = 300
-  records = [module.dns2.public_ip]
+  records = [module.dns.public_ip]
 }
 
 resource "aws_route53_record" "forkup_records" {

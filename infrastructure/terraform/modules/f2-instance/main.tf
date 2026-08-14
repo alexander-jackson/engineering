@@ -24,6 +24,12 @@ data "aws_iam_policy_document" "ec2_assume_role" {
   }
 }
 
+data "aws_eip" "this" {
+  count = var.elastic_ip_allocation_id != null ? 1 : 0
+
+  id = var.elastic_ip_allocation_id
+}
+
 resource "aws_iam_role" "this" {
   name               = format("%s-role", var.name)
   description        = format("Role for the %s instance", var.name)
@@ -227,8 +233,17 @@ resource "aws_instance" "this" {
 }
 
 resource "aws_eip" "this" {
+  count = var.elastic_ip_allocation_id == null ? 1 : 0
+
   instance = aws_instance.this.id
   domain   = "vpc"
+}
+
+resource "aws_eip_association" "external" {
+  count = var.elastic_ip_allocation_id != null ? 1 : 0
+
+  instance_id   = aws_instance.this.id
+  allocation_id = var.elastic_ip_allocation_id
 }
 
 # Additional EBS volume (optional)
