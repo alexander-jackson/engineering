@@ -1,3 +1,17 @@
+locals {
+  protocol_ports = {
+    "http"         = 80
+    "https"        = 443
+    "dns-over-tls" = 853
+  }
+
+  port_flags = join(" ", [
+    for p in var.inbound_protocols :
+    "-p ${local.protocol_ports[p]}:${local.protocol_ports[p]}"
+    if contains(keys(local.protocol_ports), p)
+  ])
+}
+
 # IAM policies and roles
 data "aws_iam_policy_document" "ec2_assume_role" {
   statement {
@@ -75,6 +89,8 @@ resource "aws_security_group" "this" {
 }
 
 resource "aws_security_group_rule" "allow_inbound_ssh" {
+  count = contains(var.inbound_protocols, "ssh") ? 1 : 0
+
   description       = "Allow inbound SSH from anywhere"
   type              = "ingress"
   from_port         = 22
@@ -102,10 +118,24 @@ resource "aws_security_group_rule" "allow_inbound_http" {
 }
 
 resource "aws_security_group_rule" "allow_inbound_https" {
+  count = contains(var.inbound_protocols, "https") ? 1 : 0
+
   description       = "Allow inbound HTTPS from anywhere"
   type              = "ingress"
   from_port         = 443
   to_port           = 443
+  protocol          = "tcp"
+  security_group_id = aws_security_group.this.id
+  cidr_blocks       = ["0.0.0.0/0"]
+}
+
+resource "aws_security_group_rule" "allow_inbound_dns_over_tls" {
+  count = contains(var.inbound_protocols, "dns-over-tls") ? 1 : 0
+
+  description       = "Allow inbound DNS over TLS from anywhere"
+  type              = "ingress"
+  from_port         = 853
+  to_port           = 853
   protocol          = "tcp"
   security_group_id = aws_security_group.this.id
   cidr_blocks       = ["0.0.0.0/0"]
@@ -177,6 +207,7 @@ resource "aws_instance" "this" {
     config_key          = var.configuration.key
     vector_tag          = var.logging.vector_tag
     extra_volume_device = var.extra_ebs_volume != null ? var.extra_ebs_volume.device_name : ""
+    port_flags          = local.port_flags
   })
 
   vpc_security_group_ids = [aws_security_group.this.id]
