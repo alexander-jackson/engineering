@@ -50,7 +50,7 @@ fn get_repository_or_clone(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = foundation_init::run::<Configuration>()?;
+    let config = foundation_init::run::<Configuration>().await?;
 
     let private_key_bytes = config.private_key.resolve().await?;
     let private_key = String::from_utf8(private_key_bytes)
