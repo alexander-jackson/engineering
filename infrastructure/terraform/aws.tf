@@ -333,6 +333,39 @@ module "primary" {
   inbound_protocols = ["ssh", "http", "https"]
 }
 
+module "dns" {
+  source = "./modules/f2-instance"
+  name   = "dns"
+
+  instance = {
+    type      = "t4g.nano"
+    ami       = "ami-0b583f82e876e016c"
+    vpc_id    = aws_vpc.main.id
+    subnet_id = aws_subnet.main.id
+  }
+
+  configuration = {
+    bucket    = module.config_bucket.name
+    key       = "f2/dns.yaml"
+    image_tag = "20260813-1927"
+  }
+
+  logging = {
+    bucket     = module.logging_bucket.name
+    vector_tag = "0.55.0-alpine"
+  }
+
+  hackathon = {
+    bucket = module.hackathon_bucket.name
+  }
+
+  key_name                 = aws_key_pair.main.key_name
+  inbound_http_subnet_id   = aws_subnet.main.id
+  elastic_ip_allocation_id = aws_eip.dns_server.id
+
+  inbound_protocols = ["ssh", "https", "dns-over-tls"]
+}
+
 resource "aws_eip" "dns_server" {
   domain = "vpc"
 
@@ -363,8 +396,7 @@ module "dns2" {
     vector_tag = "0.51.1-alpine"
   }
 
-  key_name                 = aws_key_pair.main.key_name
-  elastic_ip_allocation_id = aws_eip.dns_server.id
+  key_name = aws_key_pair.main.key_name
 }
 
 # Route table definitions
@@ -420,7 +452,7 @@ resource "aws_route53_record" "dns_server_record" {
   name    = "dns"
   type    = "A"
   ttl     = 300
-  records = [module.dns2.public_ip]
+  records = [module.dns.public_ip]
 }
 
 resource "aws_route53_record" "forkup_records" {
@@ -468,6 +500,16 @@ resource "aws_security_group_rule" "primary_to_postgres" {
   to_port                  = 5432
   protocol                 = "tcp"
   source_security_group_id = module.primary.security_group_id
+  security_group_id        = module.rds_postgres.security_group_id
+}
+
+resource "aws_security_group_rule" "dns_to_postgres" {
+  description              = "Allow inbound PostgreSQL from dns"
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = module.dns.security_group_id
   security_group_id        = module.rds_postgres.security_group_id
 }
 
