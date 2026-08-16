@@ -374,31 +374,6 @@ resource "aws_eip" "dns_server" {
   }
 }
 
-module "dns2" {
-  source = "./modules/dns-instance"
-  name   = "dns2"
-
-  instance = {
-    type      = "t4g.nano"
-    ami       = "ami-0a1b36900d715a3ad"
-    vpc_id    = aws_vpc.main.id
-    subnet_id = aws_subnet.main.id
-  }
-
-  configuration = {
-    bucket    = module.config_bucket.name
-    key       = "dns-server/config.yaml"
-    image_tag = "latest"
-  }
-
-  logging = {
-    bucket     = module.logging_bucket.name
-    vector_tag = "0.51.1-alpine"
-  }
-
-  key_name = aws_key_pair.main.key_name
-}
-
 # Route table definitions
 resource "aws_route_table" "gateway" {
   vpc_id = aws_vpc.main.id
