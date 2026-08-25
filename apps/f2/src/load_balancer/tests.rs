@@ -33,6 +33,7 @@ fn create_service<T: Into<Option<&'static str>>>(
             host: String::from(host),
             prefix: path_prefix.into().map(ToOwned::to_owned),
             port,
+            protocol: None,
         }]),
         ..Default::default()
     }
@@ -303,11 +304,13 @@ async fn can_proxy_to_different_ports_based_on_route_configuration() -> Result<(
                 host: String::from(internal_host),
                 prefix: None,
                 port: internal_addr.port(),
+                protocol: None,
             },
             Route {
                 host: String::from(external_host),
                 prefix: None,
                 port: external_addr.port(),
+                protocol: None,
             },
         ]),
         ..Default::default()

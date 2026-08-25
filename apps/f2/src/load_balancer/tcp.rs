@@ -9,6 +9,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Mutex, RwLock};
 use tokio_rustls::TlsAcceptor;
 
+use crate::config::Protocol;
 use crate::service_registry::ServiceRegistry;
 
 pub struct TcpTlsProxy {
@@ -72,13 +73,14 @@ async fn handle_connection(
 
     let read_lock = service_registry.read().await;
 
-    let Some((downstreams, port)) = read_lock.find_downstreams(&sni, "") else {
+    let Some((downstreams, port)) = read_lock.find_downstreams(&sni, "", Protocol::Tcp) else {
         return Err(eyre!("no downstream found for SNI hostname {sni}"));
     };
 
     let downstream_addr = {
         let mut rng = rng.lock().await;
         let idx = rng.next_u32() as usize % downstreams.len();
+
         downstreams
             .get_index(idx)
             .ok_or_else(|| eyre!("no downstream available for {sni}"))?

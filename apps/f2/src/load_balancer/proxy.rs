@@ -15,6 +15,7 @@ use rand::prelude::SmallRng;
 use rand::Rng;
 use tokio::sync::{Mutex, RwLock};
 
+use crate::config::Protocol;
 use crate::ipc::MessageBus;
 use crate::service_registry::ServiceRegistry;
 
@@ -61,7 +62,7 @@ where
     // Filter based on the host, then do path matching for longest length
     let read_lock = service_registry.read().await;
 
-    let Some((downstreams, port)) = read_lock.find_downstreams(host, uri.path()) else {
+    let Some((downstreams, port)) = read_lock.find_downstreams(host, uri.path(), Protocol::Http) else {
         tracing::debug!(%host, %uri, "no downstreams found for request");
 
         return Ok(Response::builder().status(404).body(empty())?);

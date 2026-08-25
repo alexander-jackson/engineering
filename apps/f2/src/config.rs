@@ -221,11 +221,20 @@ pub enum ShutdownMode {
     Forceful,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Protocol {
+    Http,
+    Tcp,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq, Hash, Deserialize)]
 pub struct Route {
     pub host: String,
     pub prefix: Option<String>,
     pub port: u16,
+    #[serde(default)]
+    pub protocol: Option<Protocol>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize)]

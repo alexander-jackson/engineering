@@ -4,7 +4,7 @@ use std::time::Duration;
 use color_eyre::eyre::{Context, Result, eyre};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
-use rustls::{DigitallySignedStruct, Error as TlsError, SignatureScheme};
+use rustls::{ClientConfig, DigitallySignedStruct, Error as TlsError, SignatureScheme};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
@@ -20,12 +20,13 @@ fn main() -> Result<()> {
     check_volumes_work().wrap_err("Volumes did not work correctly")?;
 
     // check that args are passed through and override the image CMD correctly
-    // (must run before check_rolls_work, whose reconciler prunes all unused images)
     check_args_work().wrap_err("Args did not work correctly")?;
 
     // check that the TCP TLS proxy correctly forwards bytes after TLS termination
-    // (must run before check_rolls_work, whose reconciler prunes all unused images)
     check_tls_tcp_proxy_works().wrap_err("TCP TLS proxy did not work correctly")?;
+
+    // check that the multimodal proxy can handle both HTTP and TCP traffic correctly
+    check_multimodal_proxy_works().wrap_err("Multimodal proxy did not work correctly")?;
 
     // check that rolls work correctly
     check_rolls_work().wrap_err("Rolls did not work correctly")?;
@@ -71,6 +72,13 @@ fn setup_dependencies() -> Result<()> {
         "development/servers/tcp-echo/Dockerfile",
         "development/servers/tcp-echo",
         "tcp-echo",
+        "latest",
+    )?;
+
+    crate::docker::build(
+        "development/servers/multimodal-echo/Dockerfile",
+        "development/servers/multimodal-echo",
+        "multimodal-echo",
         "latest",
     )?;
 
@@ -289,6 +297,59 @@ fn check_tls_tcp_proxy_works() -> Result<()> {
         })?;
 
     println!("✅ TCP TLS proxy forwarded bytes correctly");
+
+    crate::docker::remove_running_containers()?;
+
+    Ok(())
+}
+
+fn check_multimodal_proxy_works() -> Result<()> {
+    let volumes = vec![
+        ("./development", "/development"),
+        ("./resources", "/resources"),
+        ("/var/run/docker.sock", "/var/run/docker.sock"),
+    ];
+
+    crate::docker::run(
+        "f2",
+        "debug",
+        &volumes,
+        "/development/multimodal-config.yaml",
+        &[("8080", "8080"), ("8853", "8853")],
+    )?;
+
+    std::thread::sleep(Duration::from_secs(1));
+
+    // check the TCP proxying works
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?
+        .block_on(async {
+            let client_config = ClientConfig::builder()
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(AcceptAnyCert))
+                .with_no_client_auth();
+
+            let connector = TlsConnector::from(Arc::new(client_config));
+            let stream = TcpStream::connect("127.0.0.1:8853").await?;
+            let domain = ServerName::try_from("old.example.com")?;
+            let mut tls = connector.connect(domain, stream).await?;
+
+            tls.write_all(b"hello").await?;
+            tls.flush().await?;
+
+            let mut buf = [0u8; 5];
+            tls.read_exact(&mut buf).await?;
+
+            assert_eq!(&buf, b"hello", "TCP TLS proxy did not echo bytes correctly");
+
+            color_eyre::eyre::Ok(())
+        })?;
+
+    // check the HTTP proxying works
+    assert_response_equals("http://localhost:8080/foobar", "Echo foobar")?;
+
+    println!("✅ Multimodal proxy forwarded both HTTP and TCP traffic correctly");
 
     crate::docker::remove_running_containers()?;
 
