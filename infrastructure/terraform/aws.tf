@@ -179,7 +179,6 @@ resource "aws_iam_user_policy" "configuration_deployer" {
         Resource = [
           format("%s/*/config.yaml", module.config_bucket.arn),
           format("%s/f2/anchor.pem", module.config_bucket.arn),
-          format("%s/openrouter-proxy/nginx.conf", module.config_bucket.arn),
           format("%s/vector/vector.yaml", module.config_bucket.arn),
         ]
       },
