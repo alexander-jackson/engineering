@@ -277,7 +277,7 @@ services:
 
   dns-server:
     image: alexanderjackson/dns-server
-    tag: 20260814-0900
+    tag: 20260829-2000
     routes:
       - host: dns.opentracker.app
         port: 853
