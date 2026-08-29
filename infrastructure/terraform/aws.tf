@@ -397,8 +397,8 @@ module "dns" {
     bucket = module.hackathon_bucket.name
   }
 
-  key_name                 = aws_key_pair.main.key_name
-  inbound_http_subnet_id   = aws_subnet.main.id
+  key_name               = aws_key_pair.main.key_name
+  inbound_http_subnet_id = aws_subnet.main.id
 
   inbound_protocols = ["ssh", "https", "dns-over-tls"]
 }
