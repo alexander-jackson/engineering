@@ -178,9 +178,7 @@ resource "aws_iam_user_policy" "configuration_deployer" {
         Effect = "Allow"
         Resource = [
           format("%s/*/config.yaml", module.config_bucket.arn),
-          format("%s/dns-server/blocklist.txt", module.config_bucket.arn),
           format("%s/f2/anchor.pem", module.config_bucket.arn),
-          format("%s/f2/dns.yaml", module.config_bucket.arn),
           format("%s/openrouter-proxy/nginx.conf", module.config_bucket.arn),
           format("%s/vector/vector.yaml", module.config_bucket.arn),
         ]
@@ -296,43 +294,6 @@ resource "aws_key_pair" "main" {
   public_key = file("./keys/id_rsa.pub")
 }
 
-module "primary" {
-  source = "./modules/f2-instance"
-  name   = "primary"
-
-  instance = {
-    type      = "t4g.micro"
-    ami       = "ami-0b583f82e876e016c"
-    vpc_id    = aws_vpc.main.id
-    subnet_id = aws_subnet.main.id
-  }
-
-  configuration = {
-    bucket    = module.config_bucket.name
-    key       = "f2/config.yaml"
-    image_tag = "20260530-1116"
-  }
-
-  logging = {
-    bucket     = module.logging_bucket.name
-    vector_tag = "0.55.0-alpine"
-  }
-
-  hackathon = {
-    bucket = module.hackathon_bucket.name
-  }
-
-  extra_ebs_volume = {
-    size_gb     = 2
-    device_name = "/dev/sdf"
-  }
-
-  key_name               = aws_key_pair.main.key_name
-  inbound_http_subnet_id = aws_subnet.main.id
-
-  inbound_protocols = ["ssh", "http", "https"]
-}
-
 module "secondary" {
   source = "./modules/f2-instance"
   name   = "secondary"
@@ -369,38 +330,6 @@ module "secondary" {
   elastic_ip_allocation_id = aws_eip.dns_server.id
 
   inbound_protocols = ["ssh", "http", "https", "dns-over-tls"]
-}
-
-module "dns" {
-  source = "./modules/f2-instance"
-  name   = "dns"
-
-  instance = {
-    type      = "t4g.nano"
-    ami       = "ami-0b583f82e876e016c"
-    vpc_id    = aws_vpc.main.id
-    subnet_id = aws_subnet.main.id
-  }
-
-  configuration = {
-    bucket    = module.config_bucket.name
-    key       = "f2/dns.yaml"
-    image_tag = "20260813-1927"
-  }
-
-  logging = {
-    bucket     = module.logging_bucket.name
-    vector_tag = "0.55.0-alpine"
-  }
-
-  hackathon = {
-    bucket = module.hackathon_bucket.name
-  }
-
-  key_name               = aws_key_pair.main.key_name
-  inbound_http_subnet_id = aws_subnet.main.id
-
-  inbound_protocols = ["ssh", "https", "dns-over-tls"]
 }
 
 resource "aws_eip" "dns_server" {
@@ -505,16 +434,6 @@ module "rds_postgres" {
   apply_immediately           = true
 }
 
-resource "aws_security_group_rule" "primary_to_postgres" {
-  description              = "Allow inbound PostgreSQL from primary"
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = module.primary.security_group_id
-  security_group_id        = module.rds_postgres.security_group_id
-}
-
 resource "aws_security_group_rule" "secondary_to_postgres" {
   description              = "Allow inbound PostgreSQL from secondary"
   type                     = "ingress"
@@ -522,16 +441,6 @@ resource "aws_security_group_rule" "secondary_to_postgres" {
   to_port                  = 5432
   protocol                 = "tcp"
   source_security_group_id = module.secondary.security_group_id
-  security_group_id        = module.rds_postgres.security_group_id
-}
-
-resource "aws_security_group_rule" "dns_to_postgres" {
-  description              = "Allow inbound PostgreSQL from dns"
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = module.dns.security_group_id
   security_group_id        = module.rds_postgres.security_group_id
 }
 
