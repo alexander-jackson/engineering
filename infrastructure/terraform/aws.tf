@@ -364,8 +364,9 @@ module "secondary" {
     device_name = "/dev/sdf"
   }
 
-  key_name               = aws_key_pair.main.key_name
-  inbound_http_subnet_id = aws_subnet.main.id
+  key_name                 = aws_key_pair.main.key_name
+  inbound_http_subnet_id   = aws_subnet.main.id
+  elastic_ip_allocation_id = aws_eip.dns_server.id
 
   inbound_protocols = ["ssh", "http", "https", "dns-over-tls"]
 }
@@ -396,9 +397,8 @@ module "dns" {
     bucket = module.hackathon_bucket.name
   }
 
-  key_name                 = aws_key_pair.main.key_name
-  inbound_http_subnet_id   = aws_subnet.main.id
-  elastic_ip_allocation_id = aws_eip.dns_server.id
+  key_name               = aws_key_pair.main.key_name
+  inbound_http_subnet_id = aws_subnet.main.id
 
   inbound_protocols = ["ssh", "https", "dns-over-tls"]
 }
@@ -456,7 +456,7 @@ resource "aws_route53_record" "records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.primary.public_ip]
+  records = [module.secondary.public_ip]
 }
 
 resource "aws_route53_record" "dns_server_record" {
@@ -464,7 +464,7 @@ resource "aws_route53_record" "dns_server_record" {
   name    = "dns"
   type    = "A"
   ttl     = 300
-  records = [module.dns.public_ip]
+  records = [module.secondary.public_ip]
 }
 
 resource "aws_route53_record" "forkup_records" {
@@ -476,7 +476,7 @@ resource "aws_route53_record" "forkup_records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.primary.public_ip]
+  records = [module.secondary.public_ip]
 }
 
 # Internal Route 53 definitions
@@ -548,5 +548,5 @@ resource "aws_route53_record" "prometheus" {
   name    = "prometheus"
   type    = "A"
   ttl     = 300
-  records = [module.primary.private_ip]
+  records = [module.secondary.private_ip]
 }
