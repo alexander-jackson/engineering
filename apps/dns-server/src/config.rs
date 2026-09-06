@@ -62,7 +62,7 @@ mod tests {
                 },
             },
             upstream: UpstreamConfig {
-                resolver: "all.dns.mullvad.net".to_string(),
+                resolver: "family.cloudflare-dns.com".to_string(),
                 port: 443,
                 protocol: Protocol::Https,
                 timeout_seconds: 5,
