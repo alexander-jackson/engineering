@@ -7,7 +7,7 @@ server:
     port: 80
 
 upstream:
-  resolver: all.dns.mullvad.net
+  resolver: family.cloudflare-dns.com
   port: 443
   protocol: https
   timeout_seconds: 5
