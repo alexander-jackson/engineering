@@ -90,30 +90,30 @@ pub async fn get_daily_stats(
 
     let (current_state, latest_event_time, wear_minutes, out_minutes) =
         if let Some(last_event) = today_events.last() {
-            let (mut wear_minutes, mut out_minutes) = today_events.iter().tuple_windows().fold(
-                (0, 0),
-                |(wear_acc, out_acc), (before, after)| {
-                    let duration = after
-                        .occurred_at
-                        .signed_duration_since(std::cmp::max(before.occurred_at, today_start))
-                        .num_minutes();
+            let mut wear_minutes =
+                today_events
+                    .iter()
+                    .tuple_windows()
+                    .fold(0, |wear_acc, (before, after)| {
+                        let duration = after
+                            .occurred_at
+                            .signed_duration_since(std::cmp::max(before.occurred_at, today_start))
+                            .num_minutes();
 
-                    match before.event_type {
-                        EventType::Inserted => (wear_acc + duration, out_acc),
-                        EventType::Removed => (wear_acc, out_acc + duration),
-                    }
-                },
-            );
+                        match before.event_type {
+                            EventType::Inserted => wear_acc + duration,
+                            EventType::Removed => wear_acc,
+                        }
+                    });
 
             if last_event.event_type == EventType::Inserted {
                 wear_minutes += now
                     .signed_duration_since(std::cmp::max(last_event.occurred_at, today_start))
                     .num_minutes();
-            } else {
-                out_minutes += now
-                    .signed_duration_since(std::cmp::max(last_event.occurred_at, today_start))
-                    .num_minutes();
             }
+
+            let elapsed_minutes = now.signed_duration_since(today_start).num_minutes();
+            let out_minutes = (elapsed_minutes - wear_minutes).max(0);
 
             (
                 last_event.event_type,
@@ -314,7 +314,7 @@ pub async fn record_seating(pool: &PgPool, occurred_at: DateTime<Utc>) -> Result
 
 #[cfg(test)]
 mod tests {
-    use chrono::{NaiveDate, TimeZone, Utc};
+    use chrono::{Duration, NaiveDate, TimeZone, Utc};
     use color_eyre::eyre::Result;
     use sqlx::PgPool;
 
@@ -326,7 +326,7 @@ mod tests {
 
     #[sqlx::test]
     async fn no_events_defaults_to_removed_with_zero_wear_time(pool: PgPool) -> Result<()> {
-        let now = today_start() + chrono::Duration::hours(10);
+        let now = today_start() + Duration::hours(10);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.current_state, EventType::Removed);
@@ -337,13 +337,13 @@ mod tests {
 
     #[sqlx::test]
     async fn most_recent_event_time_is_accurate(pool: PgPool) -> Result<()> {
-        let inserted_at = today_start() + chrono::Duration::hours(9);
-        let removed_at = today_start() + chrono::Duration::hours(10);
+        let inserted_at = today_start() + Duration::hours(9);
+        let removed_at = today_start() + Duration::hours(10);
 
         record_event(&pool, EventType::Inserted, inserted_at).await?;
         record_event(&pool, EventType::Removed, removed_at).await?;
 
-        let now = today_start() + chrono::Duration::hours(11);
+        let now = today_start() + Duration::hours(11);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.current_state, EventType::Removed);
@@ -354,10 +354,10 @@ mod tests {
 
     #[sqlx::test]
     async fn most_recent_event_time_includes_previous_days_if_required(pool: PgPool) -> Result<()> {
-        let removed_at = today_start() - chrono::Duration::hours(3);
+        let removed_at = today_start() - Duration::hours(3);
         record_event(&pool, EventType::Removed, removed_at).await?;
 
-        let now = today_start() + chrono::Duration::hours(10);
+        let now = today_start() + Duration::hours(10);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.current_state, EventType::Removed);
@@ -368,10 +368,10 @@ mod tests {
 
     #[sqlx::test]
     async fn recording_insert_sets_inserted_state(pool: PgPool) -> Result<()> {
-        let t = today_start() + chrono::Duration::hours(8);
+        let t = today_start() + Duration::hours(8);
         record_event(&pool, EventType::Inserted, t).await?;
 
-        let now = t + chrono::Duration::minutes(1);
+        let now = t + Duration::minutes(1);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.current_state, EventType::Inserted);
@@ -381,11 +381,11 @@ mod tests {
 
     #[sqlx::test]
     async fn recording_remove_after_insert_sets_removed_state(pool: PgPool) -> Result<()> {
-        let t = today_start() + chrono::Duration::hours(8);
+        let t = today_start() + Duration::hours(8);
         record_event(&pool, EventType::Inserted, t).await?;
-        record_event(&pool, EventType::Removed, t + chrono::Duration::hours(1)).await?;
+        record_event(&pool, EventType::Removed, t + Duration::hours(1)).await?;
 
-        let now = t + chrono::Duration::hours(2);
+        let now = t + Duration::hours(2);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.current_state, EventType::Removed);
@@ -395,13 +395,13 @@ mod tests {
 
     #[sqlx::test]
     async fn wear_time_counts_completed_insert_remove_interval(pool: PgPool) -> Result<()> {
-        let insert_at = today_start() + chrono::Duration::hours(8);
-        let remove_at = insert_at + chrono::Duration::minutes(90);
+        let insert_at = today_start() + Duration::hours(8);
+        let remove_at = insert_at + Duration::minutes(90);
 
         record_event(&pool, EventType::Inserted, insert_at).await?;
         record_event(&pool, EventType::Removed, remove_at).await?;
 
-        let now = remove_at + chrono::Duration::hours(1);
+        let now = remove_at + Duration::hours(1);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.wear_minutes, 90);
@@ -411,10 +411,10 @@ mod tests {
 
     #[sqlx::test]
     async fn wear_time_includes_open_interval_since_last_insert(pool: PgPool) -> Result<()> {
-        let insert_at = today_start() + chrono::Duration::hours(8);
+        let insert_at = today_start() + Duration::hours(8);
         record_event(&pool, EventType::Inserted, insert_at).await?;
 
-        let now = insert_at + chrono::Duration::minutes(45);
+        let now = insert_at + Duration::minutes(45);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.wear_minutes, 45);
@@ -426,21 +426,56 @@ mod tests {
     async fn wear_time_sums_multiple_intervals(pool: PgPool) -> Result<()> {
         let t = today_start();
         // First session: 1 hour
-        record_event(&pool, EventType::Inserted, t + chrono::Duration::hours(8)).await?;
-        record_event(&pool, EventType::Removed, t + chrono::Duration::hours(9)).await?;
+        record_event(&pool, EventType::Inserted, t + Duration::hours(8)).await?;
+        record_event(&pool, EventType::Removed, t + Duration::hours(9)).await?;
         // Second session: 30 minutes
-        record_event(&pool, EventType::Inserted, t + chrono::Duration::hours(10)).await?;
-        record_event(
-            &pool,
-            EventType::Removed,
-            t + chrono::Duration::minutes(630),
-        )
-        .await?;
+        record_event(&pool, EventType::Inserted, t + Duration::hours(10)).await?;
+        record_event(&pool, EventType::Removed, t + Duration::minutes(630)).await?;
 
-        let now = t + chrono::Duration::hours(12);
+        let now = t + Duration::hours(12);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.wear_minutes, 90);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn out_time_is_not_undercounted_by_per_segment_truncation(pool: PgPool) -> Result<()> {
+        // Three out-segments of 30.5 minutes each (90 total minutes of sub-minute
+        // remainder), separated by two exact 10-minute wear segments. Summing
+        // `num_minutes()` on each out-segment independently truncates away the
+        // 0.5 minute remainder three times (losing 1.5 min), so out_minutes must
+        // instead be derived as elapsed - wear to match the history page.
+        let t = today_start();
+        let seg = |m: i64| Duration::minutes(m) + Duration::seconds(30);
+
+        record_event(&pool, EventType::Inserted, t + seg(30)).await?; // out 30.5m
+        record_event(
+            &pool,
+            EventType::Removed,
+            t + seg(30) + Duration::minutes(10),
+        )
+        .await?; // wear 10m
+        record_event(
+            &pool,
+            EventType::Inserted,
+            t + seg(30) + Duration::minutes(10) + seg(30),
+        )
+        .await?; // out 30.5m
+        record_event(
+            &pool,
+            EventType::Removed,
+            t + seg(30) + Duration::minutes(10) + seg(30) + Duration::minutes(10),
+        )
+        .await?; // wear 10m
+
+        let now = t + seg(30) + Duration::minutes(10) + seg(30) + Duration::minutes(10) + seg(30); // out 30.5m
+
+        let stats = get_daily_stats(&pool, today_start(), now).await?;
+
+        assert_eq!(stats.wear_minutes, 20);
+        assert_eq!(stats.out_minutes, 91);
 
         Ok(())
     }
@@ -450,11 +485,11 @@ mod tests {
         pool: PgPool,
     ) -> Result<()> {
         // Retainer was inserted yesterday evening
-        let yesterday_evening = today_start() - chrono::Duration::hours(2);
+        let yesterday_evening = today_start() - Duration::hours(2);
         record_event(&pool, EventType::Inserted, yesterday_evening).await?;
 
         // Two hours into today, still inserted
-        let now = today_start() + chrono::Duration::hours(2);
+        let now = today_start() + Duration::hours(2);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.current_state, EventType::Inserted);
@@ -466,11 +501,11 @@ mod tests {
     #[sqlx::test]
     async fn remove_event_before_today_gives_removed_state_at_midnight(pool: PgPool) -> Result<()> {
         // Inserted and removed yesterday
-        let t = today_start() - chrono::Duration::hours(5);
+        let t = today_start() - Duration::hours(5);
         record_event(&pool, EventType::Inserted, t).await?;
-        record_event(&pool, EventType::Removed, t + chrono::Duration::hours(1)).await?;
+        record_event(&pool, EventType::Removed, t + Duration::hours(1)).await?;
 
-        let now = today_start() + chrono::Duration::hours(2);
+        let now = today_start() + Duration::hours(2);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.current_state, EventType::Removed);
@@ -485,7 +520,7 @@ mod tests {
         let insert_at = today_start();
         record_event(&pool, EventType::Inserted, insert_at).await?;
 
-        let now = today_start() + chrono::Duration::hours(2);
+        let now = today_start() + Duration::hours(2);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert!(stats.is_on_track);
@@ -496,7 +531,7 @@ mod tests {
     #[sqlx::test]
     async fn not_on_track_when_out_time_exceeds_budget(pool: PgPool) -> Result<()> {
         // 3 hours out with no wear — exceeds 2 hour budget
-        let now = today_start() + chrono::Duration::hours(3);
+        let now = today_start() + Duration::hours(3);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert!(!stats.is_on_track);
@@ -507,7 +542,7 @@ mod tests {
     #[sqlx::test]
     async fn not_on_track_when_out_time_exactly_at_budget(pool: PgPool) -> Result<()> {
         // Exactly 2 hours out — threshold is strict (< 2h), so 2h exactly is not on track
-        let now = today_start() + chrono::Duration::hours(2);
+        let now = today_start() + Duration::hours(2);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert!(!stats.is_on_track);
@@ -531,18 +566,8 @@ mod tests {
     async fn past_day_computes_wear_and_out_time(pool: PgPool) -> Result<()> {
         // Insert at 8am, remove at 8pm — 12h wear, 12h out on a complete past day
         let day1 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
-        record_event(
-            &pool,
-            EventType::Inserted,
-            day1 + chrono::Duration::hours(8),
-        )
-        .await?;
-        record_event(
-            &pool,
-            EventType::Removed,
-            day1 + chrono::Duration::hours(20),
-        )
-        .await?;
+        record_event(&pool, EventType::Inserted, day1 + Duration::hours(8)).await?;
+        record_event(&pool, EventType::Removed, day1 + Duration::hours(20)).await?;
 
         // now is day 2, so day 1 is a completed past day (effective_end = midnight)
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
@@ -560,30 +585,10 @@ mod tests {
         let day1 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
         let day2 = Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap();
 
-        record_event(
-            &pool,
-            EventType::Inserted,
-            day1 + chrono::Duration::hours(8),
-        )
-        .await?;
-        record_event(
-            &pool,
-            EventType::Removed,
-            day1 + chrono::Duration::hours(20),
-        )
-        .await?;
-        record_event(
-            &pool,
-            EventType::Inserted,
-            day2 + chrono::Duration::hours(8),
-        )
-        .await?;
-        record_event(
-            &pool,
-            EventType::Removed,
-            day2 + chrono::Duration::hours(20),
-        )
-        .await?;
+        record_event(&pool, EventType::Inserted, day1 + Duration::hours(8)).await?;
+        record_event(&pool, EventType::Removed, day1 + Duration::hours(20)).await?;
+        record_event(&pool, EventType::Inserted, day2 + Duration::hours(8)).await?;
+        record_event(&pool, EventType::Removed, day2 + Duration::hours(20)).await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 22, 0, 0).unwrap();
         let history = get_history(&pool, now, chrono_tz::UTC).await?;
@@ -607,13 +612,8 @@ mod tests {
         let day2 = Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap();
 
         // Inserted at 9pm on day 1, removed at 8am on day 2
-        record_event(
-            &pool,
-            EventType::Inserted,
-            day1 + chrono::Duration::hours(21),
-        )
-        .await?;
-        record_event(&pool, EventType::Removed, day2 + chrono::Duration::hours(8)).await?;
+        record_event(&pool, EventType::Inserted, day1 + Duration::hours(21)).await?;
+        record_event(&pool, EventType::Removed, day2 + Duration::hours(8)).await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
         let history = get_history(&pool, now, chrono_tz::UTC).await?;
@@ -632,30 +632,10 @@ mod tests {
         let day1 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
         let day3 = Utc.with_ymd_and_hms(2026, 1, 3, 0, 0, 0).unwrap();
 
-        record_event(
-            &pool,
-            EventType::Inserted,
-            day1 + chrono::Duration::hours(8),
-        )
-        .await?;
-        record_event(
-            &pool,
-            EventType::Removed,
-            day1 + chrono::Duration::hours(20),
-        )
-        .await?;
-        record_event(
-            &pool,
-            EventType::Inserted,
-            day3 + chrono::Duration::hours(8),
-        )
-        .await?;
-        record_event(
-            &pool,
-            EventType::Removed,
-            day3 + chrono::Duration::hours(20),
-        )
-        .await?;
+        record_event(&pool, EventType::Inserted, day1 + Duration::hours(8)).await?;
+        record_event(&pool, EventType::Removed, day1 + Duration::hours(20)).await?;
+        record_event(&pool, EventType::Inserted, day3 + Duration::hours(8)).await?;
+        record_event(&pool, EventType::Removed, day3 + Duration::hours(20)).await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 3, 22, 0, 0).unwrap();
         let history = get_history(&pool, now, chrono_tz::UTC).await?;
@@ -677,12 +657,7 @@ mod tests {
         // 23 hours worn = 1 hour out, under the 2 hour budget
         let day1 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
         record_event(&pool, EventType::Inserted, day1).await?;
-        record_event(
-            &pool,
-            EventType::Removed,
-            day1 + chrono::Duration::hours(23),
-        )
-        .await?;
+        record_event(&pool, EventType::Removed, day1 + Duration::hours(23)).await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
         let history = get_history(&pool, now, chrono_tz::UTC).await?;
@@ -697,12 +672,7 @@ mod tests {
         // 20 hours worn = 4 hours out, exceeds the 2 hour budget
         let day1 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
         record_event(&pool, EventType::Inserted, day1).await?;
-        record_event(
-            &pool,
-            EventType::Removed,
-            day1 + chrono::Duration::hours(20),
-        )
-        .await?;
+        record_event(&pool, EventType::Removed, day1 + Duration::hours(20)).await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
         let history = get_history(&pool, now, chrono_tz::UTC).await?;
@@ -716,7 +686,7 @@ mod tests {
 
     #[sqlx::test]
     async fn no_seatings_gives_zero_count(pool: PgPool) -> Result<()> {
-        let now = today_start() + chrono::Duration::hours(10);
+        let now = today_start() + Duration::hours(10);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.seating_count, 0);
@@ -726,11 +696,11 @@ mod tests {
 
     #[sqlx::test]
     async fn recording_seatings_increments_count(pool: PgPool) -> Result<()> {
-        let t = today_start() + chrono::Duration::hours(8);
+        let t = today_start() + Duration::hours(8);
         record_seating(&pool, t).await?;
-        record_seating(&pool, t + chrono::Duration::hours(4)).await?;
+        record_seating(&pool, t + Duration::hours(4)).await?;
 
-        let now = today_start() + chrono::Duration::hours(14);
+        let now = today_start() + Duration::hours(14);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.seating_count, 2);
@@ -741,9 +711,9 @@ mod tests {
     #[sqlx::test]
     async fn seating_from_previous_day_not_counted_today(pool: PgPool) -> Result<()> {
         // Seating yesterday should not appear in today's count
-        record_seating(&pool, today_start() - chrono::Duration::hours(1)).await?;
+        record_seating(&pool, today_start() - Duration::hours(1)).await?;
 
-        let now = today_start() + chrono::Duration::hours(10);
+        let now = today_start() + Duration::hours(10);
         let stats = get_daily_stats(&pool, today_start(), now).await?;
 
         assert_eq!(stats.seating_count, 0);
@@ -757,23 +727,13 @@ mod tests {
         let day2 = Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap();
 
         // Anchor events so history spans two days
-        record_event(
-            &pool,
-            EventType::Inserted,
-            day1 + chrono::Duration::hours(8),
-        )
-        .await?;
-        record_event(
-            &pool,
-            EventType::Removed,
-            day1 + chrono::Duration::hours(20),
-        )
-        .await?;
+        record_event(&pool, EventType::Inserted, day1 + Duration::hours(8)).await?;
+        record_event(&pool, EventType::Removed, day1 + Duration::hours(20)).await?;
 
         // Two seatings on day 1, one on day 2
-        record_seating(&pool, day1 + chrono::Duration::hours(9)).await?;
-        record_seating(&pool, day1 + chrono::Duration::hours(18)).await?;
-        record_seating(&pool, day2 + chrono::Duration::hours(9)).await?;
+        record_seating(&pool, day1 + Duration::hours(9)).await?;
+        record_seating(&pool, day1 + Duration::hours(18)).await?;
+        record_seating(&pool, day2 + Duration::hours(9)).await?;
 
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
         let history = get_history(&pool, now, chrono_tz::UTC).await?;
