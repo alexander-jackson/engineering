@@ -180,7 +180,7 @@ impl<N: Notifier> Poller<N> {
         } = &self.configuration;
 
         // Check for certificate expiry
-        let certificate_expiry_threshold = chrono::Duration::days(30);
+        let certificate_expiry_threshold = chrono::Duration::days(6);
 
         let most_recent_check =
             crate::persistence::fetch_most_recent_certificate_check(&self.pool, origin_uid).await?;
