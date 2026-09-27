@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use color_eyre::eyre::Result;
 use foundation_shutdown::ShutdownCoordinator;
 use tokio::net::TcpListener;
@@ -8,6 +10,7 @@ mod config;
 mod handler;
 mod http_server;
 mod persistence;
+mod remote_blocklist;
 mod server;
 mod upstream;
 
@@ -28,7 +31,12 @@ async fn main() -> Result<()> {
 
     let backend = PostgresBlocklistBackend::new(pool.clone());
 
-    let blocklist_manager = BlocklistManager::new(backend.clone()).await?;
+    let remote_domains = match &config.remote_blocklist {
+        Some(remote_config) => remote_blocklist::fetch(&remote_config.url).await?,
+        None => HashSet::new(),
+    };
+
+    let blocklist_manager = BlocklistManager::new(backend.clone(), remote_domains).await?;
     let upstream = UpstreamResolver::new(&config.upstream).await?;
     let cache = ResponseCache::new(&config.cache);
 
