@@ -12,6 +12,9 @@ upstream:
   protocol: https
   timeout_seconds: 5
 
+remote_blocklist:
+  url: https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/wildcard/pro-onlydomains.txt
+
 cache:
   max_entries: 10000
   default_ttl_seconds: 300
