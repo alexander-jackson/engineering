@@ -7,17 +7,23 @@ use tokio::sync::RwLock;
 
 use crate::persistence::DomainEventType;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BlockSource {
+    Explicit,
+    Remote,
+}
+
 #[async_trait::async_trait]
 pub trait Blocklist: Send + Sync + Unpin {
-    async fn is_blocked(&self, domain: &str) -> bool;
+    async fn is_blocked(&self, domain: &str) -> Option<BlockSource>;
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct StaticBlocklist {
+pub struct DomainSet {
     domains: HashSet<String>,
 }
 
-impl StaticBlocklist {
+impl DomainSet {
     fn new(domains: HashSet<String>) -> Self {
         Self { domains }
     }
@@ -93,22 +99,27 @@ impl BlocklistBackend for PostgresBlocklistBackend {
     }
 }
 
-/// Manages domain blocklist loaded from external source
+/// Manages the explicit (user-managed) domain blocklist loaded from `backend`, alongside a
+/// remote blocklist (e.g. HaGeZi) that is fetched once at startup and does not change at runtime.
 #[derive(Clone)]
 pub struct BlocklistManager<B: BlocklistBackend = PostgresBlocklistBackend> {
     backend: B,
-    blocklist: Arc<RwLock<StaticBlocklist>>,
+    explicit: Arc<RwLock<DomainSet>>,
+    remote: Arc<DomainSet>,
 }
 
 impl<B: BlocklistBackend> BlocklistManager<B> {
-    /// Create a new blocklist manager
-    pub async fn new(backend: B) -> Result<Self> {
+    /// Create a new blocklist manager, backed by `backend` for the explicit blocklist and
+    /// `remote_domains` for the (static, pre-fetched) remote blocklist.
+    pub async fn new(backend: B, remote_domains: HashSet<String>) -> Result<Self> {
         let domains = backend.read().await?;
-        let blocklist = StaticBlocklist::new(domains);
+        let explicit = DomainSet::new(domains);
+        let remote = DomainSet::new(remote_domains);
 
         let manager = Self {
             backend,
-            blocklist: Arc::new(RwLock::new(blocklist)),
+            explicit: Arc::new(RwLock::new(explicit)),
+            remote: Arc::new(remote),
         };
 
         Ok(manager)
@@ -121,14 +132,14 @@ impl<B: BlocklistBackend> BlocklistManager<B> {
     pub async fn update(&self, domain: &str, state: DomainEventType) -> Result<()> {
         self.backend.update(domain, state).await?;
 
-        // Refresh the blocklist after updating
+        // Refresh the explicit blocklist after updating
         let domains = self.backend.read().await?;
         let count = domains.len();
 
-        tracing::info!(count, "blocklist refreshed successfully");
+        tracing::info!(count, "explicit blocklist refreshed successfully");
 
         // Update the blocklist atomically
-        *self.blocklist.write().await = StaticBlocklist::new(domains);
+        *self.explicit.write().await = DomainSet::new(domains);
 
         Ok(())
     }
@@ -137,8 +148,16 @@ impl<B: BlocklistBackend> BlocklistManager<B> {
 #[async_trait::async_trait]
 impl<B: BlocklistBackend> Blocklist for BlocklistManager<B> {
     #[tracing::instrument(skip(self))]
-    async fn is_blocked(&self, domain: &str) -> bool {
-        self.blocklist.read().await.is_blocked(domain)
+    async fn is_blocked(&self, domain: &str) -> Option<BlockSource> {
+        if self.explicit.read().await.is_blocked(domain) {
+            return Some(BlockSource::Explicit);
+        }
+
+        if self.remote.is_blocked(domain) {
+            return Some(BlockSource::Remote);
+        }
+
+        None
     }
 }
 
@@ -146,11 +165,52 @@ impl<B: BlocklistBackend> Blocklist for BlocklistManager<B> {
 mod tests {
     use std::collections::HashSet;
 
-    use crate::blocklist::StaticBlocklist;
+    use color_eyre::eyre::Result;
+
+    use crate::blocklist::{BlockSource, Blocklist, BlocklistBackend, BlocklistManager, DomainSet};
+    use crate::persistence::DomainEventType;
+
+    #[derive(Clone, Default)]
+    struct InMemoryBackend {
+        domains: HashSet<String>,
+    }
+
+    #[async_trait::async_trait]
+    impl BlocklistBackend for InMemoryBackend {
+        async fn read(&self) -> Result<HashSet<String>> {
+            Ok(self.domains.clone())
+        }
+
+        async fn update(&self, _: &str, _: DomainEventType) -> Result<()> {
+            unimplemented!("not exercised by these tests")
+        }
+    }
+
+    #[tokio::test]
+    async fn distinguishes_explicit_and_remote_block_sources() {
+        let backend = InMemoryBackend {
+            domains: HashSet::from(["explicit.com".to_string()]),
+        };
+        let remote_domains = HashSet::from(["remote.com".to_string()]);
+
+        let manager = BlocklistManager::new(backend, remote_domains)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            manager.is_blocked("explicit.com").await,
+            Some(BlockSource::Explicit)
+        );
+        assert_eq!(
+            manager.is_blocked("remote.com").await,
+            Some(BlockSource::Remote)
+        );
+        assert_eq!(manager.is_blocked("allowed.com").await, None);
+    }
 
     #[test]
     fn empty_blocklist_allows_domains() {
-        let blocklist = StaticBlocklist::default();
+        let blocklist = DomainSet::default();
 
         assert!(!blocklist.is_blocked("example.com"));
         assert!(!blocklist.is_blocked("sub.example.com"));
@@ -161,7 +221,7 @@ mod tests {
         let mut domains = HashSet::new();
         domains.insert("example.com".to_string());
 
-        let blocklist = StaticBlocklist::new(domains);
+        let blocklist = DomainSet::new(domains);
 
         assert!(blocklist.is_blocked("example.com"));
     }
@@ -171,7 +231,7 @@ mod tests {
         let mut domains = HashSet::new();
         domains.insert("example.com".to_string());
 
-        let blocklist = StaticBlocklist::new(domains);
+        let blocklist = DomainSet::new(domains);
 
         assert!(blocklist.is_blocked("sub.example.com"));
         assert!(blocklist.is_blocked("deep.sub.example.com"));
@@ -182,7 +242,7 @@ mod tests {
         let mut domains = HashSet::new();
         domains.insert("example.com".to_string());
 
-        let blocklist = StaticBlocklist::new(domains);
+        let blocklist = DomainSet::new(domains);
 
         assert!(!blocklist.is_blocked("other.com"));
         assert!(!blocklist.is_blocked("example.org"));

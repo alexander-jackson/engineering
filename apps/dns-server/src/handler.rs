@@ -6,7 +6,7 @@ use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseI
 use hickory_server::zone_handler::MessageResponseBuilder;
 use opentelemetry::KeyValue;
 
-use crate::blocklist::Blocklist;
+use crate::blocklist::{BlockSource, Blocklist};
 use crate::cache::ResponseCache;
 use crate::server::DnsServerMetrics;
 use crate::upstream::Upstream;
@@ -82,14 +82,20 @@ where
             "received DNS query"
         );
 
-        if self.blocklist.is_blocked(&domain_name).await {
+        if let Some(source) = self.blocklist.is_blocked(&domain_name).await {
+            let block_type = match source {
+                BlockSource::Explicit => "explicit-block",
+                BlockSource::Remote => "remote-block",
+            };
+
             tracing::info!(
                 name = %domain_name,
                 src = %request.src(),
+                block_type,
                 "blocked domain query"
             );
 
-            let attrs = [KeyValue::new("type", "explicit-block")];
+            let attrs = [KeyValue::new("type", block_type)];
             self.metrics.responses.add(1, &attrs);
 
             let response = MessageResponseBuilder::from_message_request(request)
@@ -224,6 +230,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use color_eyre::eyre::Result;
     use hickory_net::xfer::Protocol;
     use hickory_proto::op::{
         Header, HeaderCounts, Message, MessageType, OpCode, Query, ResponseCode,
@@ -235,7 +242,7 @@ mod tests {
     use hickory_server::server::{Request, RequestHandler, ResponseInfo};
     use hickory_server::zone_handler::MessageResponse;
 
-    use crate::blocklist::Blocklist;
+    use crate::blocklist::{BlockSource, Blocklist};
     use crate::cache::ResponseCache;
     use crate::config::CacheConfig;
     use crate::server::DnsServerMetrics;
@@ -290,8 +297,8 @@ mod tests {
 
     #[async_trait::async_trait]
     impl Blocklist for AlwaysBlocked {
-        async fn is_blocked(&self, _: &str) -> bool {
-            true
+        async fn is_blocked(&self, _: &str) -> Option<BlockSource> {
+            Some(BlockSource::Explicit)
         }
     }
 
@@ -300,8 +307,8 @@ mod tests {
 
     #[async_trait::async_trait]
     impl Blocklist for NeverBlocked {
-        async fn is_blocked(&self, _: &str) -> bool {
-            false
+        async fn is_blocked(&self, _: &str) -> Option<BlockSource> {
+            None
         }
     }
 
@@ -310,7 +317,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl Upstream for SuccessUpstream {
-        async fn resolve(&self, _: &Message) -> color_eyre::eyre::Result<Message> {
+        async fn resolve(&self, _: &Message) -> Result<Message> {
             Ok(self.0.clone())
         }
     }
@@ -320,7 +327,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl Upstream for FailingUpstream {
-        async fn resolve(&self, _: &Message) -> color_eyre::eyre::Result<Message> {
+        async fn resolve(&self, _: &Message) -> Result<Message> {
             self.0.fetch_add(1, Ordering::SeqCst);
             Err(color_eyre::eyre::eyre!("upstream error"))
         }

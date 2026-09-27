@@ -8,6 +8,7 @@ pub struct Configuration {
     pub server: ServerConfig,
     pub upstream: UpstreamConfig,
     pub cache: CacheConfig,
+    pub remote_blocklist: Option<RemoteBlocklistConfig>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -37,6 +38,11 @@ pub struct CacheConfig {
     pub error_ttl_seconds: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+pub struct RemoteBlocklistConfig {
+    pub url: String,
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::Ipv4Addr;
@@ -44,7 +50,10 @@ mod tests {
     use color_eyre::eyre::Result;
     use hickory_net::xfer::Protocol;
 
-    use crate::config::{CacheConfig, Configuration, ListenerConfig, ServerConfig, UpstreamConfig};
+    use crate::config::{
+        CacheConfig, Configuration, ListenerConfig, RemoteBlocklistConfig, ServerConfig,
+        UpstreamConfig,
+    };
 
     #[test]
     fn can_deserialize_sample_configuration() -> Result<()> {
@@ -72,6 +81,9 @@ mod tests {
                 default_ttl_seconds: 300,
                 error_ttl_seconds: 60,
             },
+            remote_blocklist: Some(RemoteBlocklistConfig {
+                url: "https://example.com/hagezi-multi.txt".to_string(),
+            }),
         };
 
         let actual: Configuration = serde_yaml::from_str(yaml)?;

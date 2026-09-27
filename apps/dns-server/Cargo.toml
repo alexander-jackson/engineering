@@ -20,6 +20,8 @@ opentelemetry = { workspace = true }
 sqlx = { version = "0.8.0", features = ["postgres", "runtime-tokio-rustls", "uuid", "chrono"] }
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server", features = ["metrics"] }
 axum.workspace = true
+reqwest.workspace = true
+wildcard-domains-parser = { git = "https://github.com/alexander-jackson/wildcard-domains-parser" }
 
 [dev-dependencies]
 dns-mock-server = "0.2.0"
