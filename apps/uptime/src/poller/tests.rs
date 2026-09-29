@@ -258,8 +258,8 @@ async fn certificate_expiry_triggers_notification(pool: PgPool) -> Result<()> {
     let origin_uid = Uuid::new_v4();
     crate::persistence::insert_origin(&pool, origin_uid, &uri).await?;
 
-    // Insert a certificate check that expires in 20 days (< 30 day threshold)
-    let expires_at = chrono::Utc::now() + Duration::days(20);
+    // Insert a certificate check that expires in 3 days (< 6 day threshold)
+    let expires_at = chrono::Utc::now() + Duration::days(3);
     let checked_at = chrono::Utc::now();
     crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
 
@@ -295,7 +295,7 @@ async fn certificate_expiry_does_not_trigger_when_far_away(pool: PgPool) -> Resu
     let origin_uid = Uuid::new_v4();
     crate::persistence::insert_origin(&pool, origin_uid, &uri).await?;
 
-    // Insert a certificate check that expires in 60 days (> 30 day threshold)
+    // Insert a certificate check that expires in 60 days (> 6 day threshold)
     let expires_at = chrono::Utc::now() + Duration::days(60);
     let checked_at = chrono::Utc::now();
     crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
@@ -331,7 +331,7 @@ async fn notification_types_have_independent_cooldowns(pool: PgPool) -> Result<(
     crate::persistence::insert_origin(&pool, origin_uid, uri).await?;
 
     // Insert a certificate check that expires soon
-    let expires_at = chrono::Utc::now() + Duration::days(20);
+    let expires_at = chrono::Utc::now() + Duration::days(3);
     let checked_at = chrono::Utc::now();
     crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
 
@@ -367,7 +367,7 @@ async fn renewed_certificate_does_not_trigger_notification(pool: PgPool) -> Resu
     crate::persistence::insert_origin(&pool, origin_uid, &uri).await?;
 
     // Insert an old certificate check that was expiring soon (e.g. before renewal)
-    let old_expires_at = chrono::Utc::now() + Duration::days(20);
+    let old_expires_at = chrono::Utc::now() + Duration::days(3);
     let old_checked_at = chrono::Utc::now() - Duration::days(10);
     crate::persistence::insert_certificate_check(&pool, origin_uid, old_expires_at, old_checked_at)
         .await?;
@@ -413,7 +413,7 @@ async fn certificate_notifications_respect_cooldown(pool: PgPool) -> Result<()> 
     crate::persistence::insert_origin(&pool, origin_uid, &uri).await?;
 
     // Insert a certificate check that expires soon
-    let expires_at = chrono::Utc::now() + Duration::days(20);
+    let expires_at = chrono::Utc::now() + Duration::days(3);
     let checked_at = chrono::Utc::now();
     crate::persistence::insert_certificate_check(&pool, origin_uid, expires_at, checked_at).await?;
 
