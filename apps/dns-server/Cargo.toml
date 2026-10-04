@@ -22,7 +22,10 @@ foundation-http-server = { version = "0.1.0", path = "../foundation/http-server"
 axum.workspace = true
 reqwest.workspace = true
 wildcard-domains-parser = { git = "https://github.com/alexander-jackson/wildcard-domains-parser" }
+foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
 
 [dev-dependencies]
 dns-mock-server = "0.2.0"
+http-body-util = "0.1.5"
 serde_yaml = "0.9.34"
+tower = { version = "0.5.3", features = ["util"] }

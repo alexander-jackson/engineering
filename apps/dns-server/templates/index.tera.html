@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" class="dark h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="DNS blocklist manager" />
+    <title>DNS Blocklist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              dark: {
+                bg: "#1e201e",
+                card: "#2a2c2a",
+                text: "#ecdfcc",
+                border: "#3e403e",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="h-full bg-dark-bg text-dark-text">
+    <div class="min-h-full flex flex-col">
+      <header class="bg-dark-card shadow-lg border-b border-dark-border">
+        <div class="max-w-lg mx-auto px-4 sm:px-6 py-6">
+          <h1 class="text-3xl font-bold text-dark-text">
+            <span class="text-amber-400">DNS</span> Blocklist
+          </h1>
+        </div>
+      </header>
+
+      <main class="max-w-lg mx-auto w-full px-4 sm:px-6 py-8 flex flex-col gap-6">
+        <form
+          action="/block"
+          method="post"
+          class="bg-dark-card rounded-lg shadow-lg border border-dark-border p-6 flex gap-3"
+        >
+          <input
+            type="text"
+            name="domain"
+            placeholder="example.com"
+            required
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            class="flex-1 min-w-0 rounded-md bg-dark-bg border border-dark-border px-3 py-2 text-dark-text placeholder-gray-500 focus:outline-none focus:border-amber-400"
+          />
+          <button
+            type="submit"
+            class="rounded-md bg-amber-400 px-4 py-2 font-medium text-dark-bg hover:bg-amber-300 transition-colors"
+          >
+            Block
+          </button>
+        </form>
+
+        <div class="bg-dark-card rounded-lg shadow-lg border border-dark-border">
+          <div class="px-6 py-4 border-b border-dark-border flex items-center justify-between">
+            <span class="text-lg font-medium text-gray-400">Blocked domains</span>
+            <span class="text-sm text-gray-400">{{ domains | length }}</span>
+          </div>
+          {% if domains %}
+          <ul class="divide-y divide-dark-border">
+            {% for domain in domains %}
+            <li class="px-6 py-3 font-mono text-sm break-all">{{ domain }}</li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="px-6 py-4 text-gray-400">No domains blocked.</p>
+          {% endif %}
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
