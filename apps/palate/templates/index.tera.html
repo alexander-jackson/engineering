@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/assets/style.css" />
+    <title>Palate</title>
+  </head>
+
+  <body class="container">
+    <h1>Palate</h1>
+
+    {% if conversations | length == 0 %}
+    <p>No recipe ideas yet. The first batch will arrive on the next scheduled run.</p>
+    {% endif %}
+
+    <ul class="conversations">
+      {% for conversation in conversations %}
+      <li>
+        <a href="/conversations/{{ conversation.conversation_uid }}">{{ conversation.created_at }}</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </body>
+</html>

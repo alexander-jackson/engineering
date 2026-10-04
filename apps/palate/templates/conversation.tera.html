@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/assets/style.css" />
+    <title>Palate - {{ created_at }}</title>
+  </head>
+
+  <body class="container">
+    <p><a href="/">&larr; All conversations</a></p>
+    <h1>{{ created_at }}</h1>
+
+    {% for message in messages %}
+    {% if message.role == "system" %}
+    <details class="message system">
+      <summary>System prompt</summary>
+      <div class="content">{{ message.html | safe }}</div>
+    </details>
+    {% else %}
+    <section class="message {{ message.role }}">
+      <header>{{ message.role }} &middot; {{ message.created_at }}</header>
+      <div class="content">{{ message.html | safe }}</div>
+    </section>
+    {% endif %}
+    {% endfor %}
+
+    <form action="/conversations/{{ conversation_uid }}/messages" method="post">
+      <textarea name="content" rows="4" placeholder="Ask for changes, swaps or more detail" required></textarea>
+      <button type="submit">Send</button>
+      <p class="hint">Replies can take a little while, so the page will wait for the response.</p>
+    </form>
+  </body>
+</html>

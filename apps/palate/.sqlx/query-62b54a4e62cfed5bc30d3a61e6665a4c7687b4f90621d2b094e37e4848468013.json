@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT r.name AS role, m.content, m.created_at\n        FROM conversation_message m\n        JOIN conversation c ON c.id = m.conversation_id\n        JOIN conversation_message_role r ON r.id = m.conversation_message_role_id\n        WHERE c.conversation_uid = $1\n        ORDER BY m.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "62b54a4e62cfed5bc30d3a61e6665a4c7687b4f90621d2b094e37e4848468013"
+}
