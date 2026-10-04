@@ -21,3 +21,4 @@ services:
     routes:
       - host: old.example.com
         port: 8080
+        protocol: tcp

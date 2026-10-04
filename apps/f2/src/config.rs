@@ -221,11 +221,22 @@ pub enum ShutdownMode {
     Forceful,
 }
 
+/// The protocol spoken by the backend a route points at.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Protocol {
+    #[default]
+    Http,
+    Tcp,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq, Hash, Deserialize)]
 pub struct Route {
     pub host: String,
     pub prefix: Option<String>,
     pub port: u16,
+    #[serde(default)]
+    pub protocol: Protocol,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize)]
@@ -265,7 +276,17 @@ mod tests {
     use std::collections::HashMap;
     use std::net::Ipv4Addr;
 
-    use crate::config::{AlbConfig, Config, Diff, Scheme, Service};
+    use crate::config::{AlbConfig, Config, Diff, Protocol, Route, Scheme, Service};
+
+    #[test]
+    fn route_protocol_defaults_to_http() {
+        let route: Route = serde_yaml::from_str("host: example.com\nport: 80").unwrap();
+        assert_eq!(route.protocol, Protocol::Http);
+
+        let route: Route =
+            serde_yaml::from_str("host: example.com\nport: 853\nprotocol: tcp").unwrap();
+        assert_eq!(route.protocol, Protocol::Tcp);
+    }
 
     fn some_config() -> Config {
         let mut services = HashMap::new();
