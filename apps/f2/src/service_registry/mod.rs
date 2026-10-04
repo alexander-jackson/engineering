@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use indexmap::IndexSet;
 
-use crate::config::Service;
+use crate::config::{Protocol, Service};
 use crate::docker::api::StartedContainerDetails;
 use crate::docker::models::ContainerId;
 use crate::service_registry::matching::PathMatchCalculator;
@@ -62,8 +62,9 @@ impl ServiceRegistry {
         &self,
         host: &str,
         path: &str,
+        protocol: Protocol,
     ) -> Option<(&IndexSet<StartedContainerDetails>, u16)> {
-        tracing::debug!(host, path, "finding downstream containers");
+        tracing::debug!(host, path, ?protocol, "finding downstream containers");
 
         self.definitions
             .iter()
@@ -71,7 +72,7 @@ impl ServiceRegistry {
                 service
                     .routes
                     .iter()
-                    .find(|route| route.host == host)
+                    .find(|route| route.host == host && route.protocol == protocol)
                     .map(|route| {
                         let calculator = PathMatchCalculator::new(path, route.prefix.as_deref());
                         (name, calculator.compute_match_length(), route.port)
@@ -90,10 +91,67 @@ mod tests {
     use std::collections::HashSet;
     use std::net::Ipv4Addr;
 
-    use crate::config::{Route, Service};
+    use crate::config::{Protocol, Route, Service};
     use crate::docker::api::StartedContainerDetails;
     use crate::docker::models::ContainerId;
     use crate::service_registry::ServiceRegistry;
+
+    #[test]
+    fn selects_the_route_matching_the_requested_protocol() {
+        let mut registry = ServiceRegistry::new();
+        let host = "dns.example.com";
+
+        let service = Service {
+            routes: HashSet::from([
+                Route {
+                    host: host.to_string(),
+                    port: 853,
+                    protocol: Protocol::Tcp,
+                    ..Default::default()
+                },
+                Route {
+                    host: host.to_string(),
+                    port: 80,
+                    protocol: Protocol::Http,
+                    ..Default::default()
+                },
+            ]),
+            ..Default::default()
+        };
+
+        registry.define("dns", service);
+        add_container(&mut registry, "dns");
+
+        let http = registry.find_downstreams(host, "/", Protocol::Http);
+        let tcp = registry.find_downstreams(host, "", Protocol::Tcp);
+
+        assert_eq!(http.map(|(_, port)| port), Some(80));
+        assert_eq!(tcp.map(|(_, port)| port), Some(853));
+    }
+
+    #[test]
+    fn does_not_match_routes_of_a_different_protocol() {
+        let mut registry = ServiceRegistry::new();
+        let host = "tcp.example.com";
+
+        let service = Service {
+            routes: HashSet::from([Route {
+                host: host.to_string(),
+                port: 853,
+                protocol: Protocol::Tcp,
+                ..Default::default()
+            }]),
+            ..Default::default()
+        };
+
+        registry.define("tcp", service);
+        add_container(&mut registry, "tcp");
+
+        assert!(registry
+            .find_downstreams(host, "/", Protocol::Http)
+            .is_none());
+        assert!(registry.find_downstreams(host, "", Protocol::Tcp).is_some());
+    }
 
     #[test]
     fn can_store_and_fetch_service_definitions() {
@@ -196,13 +254,15 @@ mod tests {
         host: &str,
         path: &str,
     ) -> Option<HashSet<ContainerId>> {
-        registry.find_downstreams(host, path).map(|value| {
-            value
-                .0
-                .into_iter()
-                .map(|details| details.id.clone())
-                .collect()
-        })
+        registry
+            .find_downstreams(host, path, Protocol::Http)
+            .map(|value| {
+                value
+                    .0
+                    .into_iter()
+                    .map(|details| details.id.clone())
+                    .collect()
+            })
     }
 
     #[test]
@@ -322,8 +382,8 @@ mod tests {
         registry.define(name, service);
         let container_id = add_container(&mut registry, name);
 
-        let internal_downstreams = registry.find_downstreams(internal_host, path);
-        let external_downstreams = registry.find_downstreams(external_host, path);
+        let internal_downstreams = registry.find_downstreams(internal_host, path, Protocol::Http);
+        let external_downstreams = registry.find_downstreams(external_host, path, Protocol::Http);
 
         assert_eq!(internal_downstreams, external_downstreams);
 

@@ -16,7 +16,7 @@ use hyper_util::server::conn::auto::Builder;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 
-use crate::config::{AlbConfig, Config, Route, Scheme, Service};
+use crate::config::{AlbConfig, Config, Protocol, Route, Scheme, Service};
 use crate::docker::api::StartedContainerDetails;
 use crate::docker::models::ContainerId;
 use crate::ipc::MessageBus;
@@ -33,6 +33,7 @@ fn create_service<T: Into<Option<&'static str>>>(
             host: String::from(host),
             prefix: path_prefix.into().map(ToOwned::to_owned),
             port,
+            ..Default::default()
         }]),
         ..Default::default()
     }
@@ -303,11 +304,13 @@ async fn can_proxy_to_different_ports_based_on_route_configuration() -> Result<(
                 host: String::from(internal_host),
                 prefix: None,
                 port: internal_addr.port(),
+                ..Default::default()
             },
             Route {
                 host: String::from(external_host),
                 prefix: None,
                 port: external_addr.port(),
+                ..Default::default()
             },
         ]),
         ..Default::default()
@@ -333,6 +336,67 @@ async fn can_proxy_to_different_ports_based_on_route_configuration() -> Result<(
         .body(Full::default())?;
 
     assert_eq!(get_response_body(&client, request).await?, external_reply);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn http_requests_ignore_routes_for_other_protocols() -> Result<()> {
+    let reply = "Hello from the http port";
+
+    let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
+    let http_listener = TcpListener::bind(&addr).await?;
+    let http_addr = http_listener.local_addr()?;
+
+    tokio::spawn(async move {
+        loop {
+            let (stream, _) = http_listener.accept().await.unwrap();
+            let io = TokioIo::new(stream);
+
+            tokio::spawn(async move {
+                Builder::new(TokioExecutor::new())
+                    .serve_connection(io, service_fn(move |_| handler(reply)))
+                    .await
+                    .unwrap();
+            });
+        }
+    });
+
+    let name = "dns-server";
+    let host = "dns.opentracker.app";
+    let mut service_registry = ServiceRegistry::new();
+
+    // The tcp port is deliberately one nothing is listening on
+    let service = Service {
+        routes: HashSet::from([
+            Route {
+                host: String::from(host),
+                port: 1,
+                protocol: Protocol::Tcp,
+                ..Default::default()
+            },
+            Route {
+                host: String::from(host),
+                port: http_addr.port(),
+                protocol: Protocol::Http,
+                ..Default::default()
+            },
+        ]),
+        ..Default::default()
+    };
+
+    service_registry.define(name, service);
+    add_container(&mut service_registry, name);
+
+    let addr = spawn_load_balancer(service_registry).await?;
+    let client = Client::builder(TokioExecutor::new()).build_http();
+
+    let request = Request::builder()
+        .uri(format!("http://{}/", addr))
+        .header(HOST, host)
+        .body(Full::default())?;
+
+    assert_eq!(get_response_body(&client, request).await?, reply);
 
     Ok(())
 }

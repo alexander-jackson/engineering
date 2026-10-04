@@ -281,6 +281,9 @@ services:
     routes:
       - host: dns.opentracker.app
         port: 853
+        protocol: tcp
+      - host: dns.opentracker.app
+        port: 80
     replicas: 1
     volumes:
       config:
