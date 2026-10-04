@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use color_eyre::eyre::Result;
 use foundation_shutdown::ShutdownCoordinator;
+use foundation_templating::TemplateEngine;
 use tokio::net::TcpListener;
 
 mod blocklist;
@@ -12,6 +13,7 @@ mod http_server;
 mod persistence;
 mod remote_blocklist;
 mod server;
+mod templates;
 mod upstream;
 
 use crate::blocklist::{BlocklistManager, PostgresBlocklistBackend};
@@ -58,7 +60,9 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    let http_server = crate::http_server::build(blocklist_manager.clone(), http_listener);
+    let template_engine = TemplateEngine::new()?;
+    let http_server =
+        crate::http_server::build(blocklist_manager.clone(), template_engine, http_listener);
 
     ShutdownCoordinator::new()
         .with_task(dns_server)

@@ -20,5 +20,6 @@ RUN useradd -m -u 1000 appuser
 WORKDIR /app
 COPY --from=builder /app/target/release/dns-server ./dns-server
 COPY --from=builder /app/dns-server/migrations ./migrations
+COPY --from=builder /app/dns-server/templates ./templates
 USER appuser
 CMD ["./dns-server", "--config", "/app/config/dns-server.yaml"]
