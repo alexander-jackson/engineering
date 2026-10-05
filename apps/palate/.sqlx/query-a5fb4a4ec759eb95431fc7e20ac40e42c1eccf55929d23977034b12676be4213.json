@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO conversation_message (conversation_id, conversation_message_role_id, content, created_at)\n        SELECT c.id, r.id, $3, $4\n        FROM conversation c\n        JOIN conversation_message_role r ON r.name = $2\n        WHERE c.conversation_uid = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a5fb4a4ec759eb95431fc7e20ac40e42c1eccf55929d23977034b12676be4213"
+}

@@ -1,0 +1,41 @@
+server:
+  host: 127.0.0.1
+  port: 8000
+
+base_url: http://localhost:8000
+
+# UTC
+schedule:
+  weekday: Sun
+  hour: 9
+  minute: 0
+
+openrouter:
+  api_key: replace-with-an-openrouter-api-key
+  model: replace-with-an-openrouter-model-slug
+
+telegram:
+  bot_token: replace-with-a-bot-token
+  chat_id: "replace-with-a-chat-id"
+
+telemetry:
+  enabled: false
+  endpoint: "http://localhost:4318/v1/traces"
+
+metrics:
+  endpoint: "http://localhost:9090/api/v1/otlp/v1/metrics"
+  interval_seconds: 15
+
+database:
+  host: localhost
+  port: 5432
+
+  root:
+    username: postgres
+    password: test
+    database: postgres
+
+  application:
+    username: palateblue
+    password: test
+    database: palate

@@ -21,6 +21,7 @@ members = [
 	"f2/integration-tests",
 	"lockers",
 	"opentracker/backend",
+	"palate",
 	"pgmanager",
 	"tag-updater",
 	"today",

@@ -1,0 +1,26 @@
+FROM lukemathwalker/cargo-chef:0.1.77-rust-1.97.1-slim-bookworm AS chef
+WORKDIR /app
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --package palate --recipe-path recipe.json
+COPY . .
+ENV SQLX_OFFLINE=true
+RUN cargo build --release --package palate
+
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+    && apt-get install -y ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN useradd -m -u 1000 appuser
+WORKDIR /app
+COPY --from=builder /app/target/release/palate ./palate
+COPY --from=builder /app/palate/templates ./templates
+COPY --from=builder /app/palate/assets ./assets
+COPY --from=builder /app/palate/migrations ./migrations
+USER appuser
+CMD ["./palate", "--config", "/app/config/palate.yaml"]

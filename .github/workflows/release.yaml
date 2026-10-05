@@ -33,6 +33,7 @@ jobs:
             {"name":"f2",                  "path":"f2"},
             {"name":"lockers",             "path":"lockers"},
             {"name":"opentracker-backend", "path":"opentracker/backend"},
+            {"name":"palate",              "path":"palate"},
             {"name":"pgmanager",           "path":"pgmanager"},
             {"name":"tag-updater",         "path":"tag-updater"},
             {"name":"today",               "path":"today"},

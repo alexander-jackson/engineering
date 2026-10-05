@@ -1,14 +1,22 @@
 use std::future::Future;
 use std::time::Duration;
 
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Days, TimeZone, Utc, Weekday};
 use color_eyre::eyre::{Result, eyre};
 use foundation_shutdown::{CancellationToken, GracefulTask};
 
 #[derive(Copy, Clone, Debug)]
 pub enum Schedule {
     Interval(Duration),
-    Daily { hour: u32, minute: u32 },
+    Daily {
+        hour: u32,
+        minute: u32,
+    },
+    Weekly {
+        weekday: Weekday,
+        hour: u32,
+        minute: u32,
+    },
 }
 
 impl Schedule {
@@ -18,6 +26,14 @@ impl Schedule {
 
     pub fn daily(hour: u32, minute: u32) -> Self {
         Schedule::Daily { hour, minute }
+    }
+
+    pub fn weekly(weekday: Weekday, hour: u32, minute: u32) -> Self {
+        Schedule::Weekly {
+            weekday,
+            hour,
+            minute,
+        }
     }
 }
 
@@ -63,17 +79,20 @@ impl<T: Job> RecurringJob<T> {
         Ok(())
     }
 
-    async fn run_daily_job(
-        self,
-        hour: u32,
-        minute: u32,
-        shutdown: CancellationToken,
-    ) -> Result<()> {
+    async fn run_calendar_job(self, schedule: Schedule, shutdown: CancellationToken) -> Result<()> {
         let job = T::NAME;
 
         loop {
             let now = Utc::now();
-            let sleep_duration = calculate_sleep_duration(now, hour, minute)?;
+            let sleep_duration = match schedule {
+                Schedule::Daily { hour, minute } => calculate_sleep_duration(now, hour, minute)?,
+                Schedule::Weekly {
+                    weekday,
+                    hour,
+                    minute,
+                } => calculate_weekly_sleep_duration(now, weekday, hour, minute)?,
+                Schedule::Interval(_) => unreachable!("intervals are not calendar based"),
+            };
 
             tracing::info!(%job, ?sleep_duration, "waiting until next scheduled run");
 
@@ -101,9 +120,23 @@ impl<T: Job> GracefulTask for RecurringJob<T> {
                 tracing::info!(job = T::NAME, ?duration, "starting recurring job");
                 self.run_interval_job(duration, shutdown).await
             }
-            Schedule::Daily { hour, minute } => {
+            schedule @ Schedule::Daily { hour, minute } => {
                 tracing::info!(job = T::NAME, ?hour, ?minute, "starting recurring job");
-                self.run_daily_job(hour, minute, shutdown).await
+                self.run_calendar_job(schedule, shutdown).await
+            }
+            schedule @ Schedule::Weekly {
+                weekday,
+                hour,
+                minute,
+            } => {
+                tracing::info!(
+                    job = T::NAME,
+                    ?weekday,
+                    ?hour,
+                    ?minute,
+                    "starting recurring job"
+                );
+                self.run_calendar_job(schedule, shutdown).await
             }
         }
     }
@@ -138,6 +171,36 @@ fn calculate_next_run(
     Ok(next_run_utc)
 }
 
+fn calculate_next_weekly_run(
+    now: DateTime<Utc>,
+    target_weekday: Weekday,
+    target_hour: u32,
+    target_minute: u32,
+) -> Result<DateTime<Utc>> {
+    // The next daily occurrence is always strictly in the future, so we only need to
+    // move forward to the first day that matches the target weekday
+    let next_daily = calculate_next_run(now, target_hour, target_minute)?;
+
+    let days_ahead = (target_weekday.num_days_from_monday() + 7
+        - next_daily.weekday().num_days_from_monday())
+        % 7;
+
+    next_daily
+        .checked_add_days(Days::new(u64::from(days_ahead)))
+        .ok_or_else(|| eyre!("Failed to calculate next weekly run"))
+}
+
+fn calculate_weekly_sleep_duration(
+    now: DateTime<Utc>,
+    target_weekday: Weekday,
+    target_hour: u32,
+    target_minute: u32,
+) -> Result<Duration> {
+    let next_run = calculate_next_weekly_run(now, target_weekday, target_hour, target_minute)?;
+
+    Ok((next_run - now).to_std().unwrap_or_default())
+}
+
 fn calculate_sleep_duration(
     now: DateTime<Utc>,
     target_hour: u32,
@@ -157,7 +220,7 @@ mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::time::Duration;
 
-    use chrono::{DateTime, Utc};
+    use chrono::{DateTime, Utc, Weekday};
     use color_eyre::eyre::Result;
     use foundation_shutdown::{CancellationToken, GracefulTask};
     use test_case::test_case;
@@ -280,5 +343,54 @@ mod tests {
             .expect("Failed to calculate next run time");
 
         assert_eq!(next_run, expected);
+    }
+
+    #[test_case(datetime("01/06/2026", "08:00"), Weekday::Mon, datetime("01/06/2026", "09:00"); "same day before scheduled time")]
+    #[test_case(datetime("01/06/2026", "09:00"), Weekday::Mon, datetime("08/06/2026", "09:00"); "same day at scheduled time")]
+    #[test_case(datetime("01/06/2026", "10:00"), Weekday::Mon, datetime("08/06/2026", "09:00"); "same day after scheduled time")]
+    #[test_case(datetime("01/06/2026", "10:00"), Weekday::Tue, datetime("02/06/2026", "09:00"); "next day")]
+    #[test_case(datetime("01/06/2026", "10:00"), Weekday::Sun, datetime("07/06/2026", "09:00"); "later in the week")]
+    #[test_case(datetime("02/06/2026", "10:00"), Weekday::Mon, datetime("08/06/2026", "09:00"); "wraps to next week")]
+    #[test_case(datetime("29/12/2026", "10:00"), Weekday::Mon, datetime("04/01/2027", "09:00"); "wraps across year end")]
+    fn can_calculate_next_weekly_run(
+        now: DateTime<Utc>,
+        weekday: Weekday,
+        expected: DateTime<Utc>,
+    ) {
+        let next_run = crate::calculate_next_weekly_run(now, weekday, 9, 0)
+            .expect("Failed to calculate next weekly run time");
+
+        assert_eq!(next_run, expected);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn can_handle_weekly_jobs() -> Result<()> {
+        let counter = Arc::new(AtomicU32::new(0));
+
+        let schedule = Schedule::weekly(Weekday::Sun, 9, 0);
+
+        let job = TestJob {
+            counter: counter.clone(),
+            schedule,
+        };
+
+        let job = RecurringJob::new(job);
+
+        let shutdown_token = CancellationToken::new();
+        let job_token = shutdown_token.clone();
+
+        let handle = tokio::spawn(async move { job.run_until_shutdown(job_token).await });
+
+        let sleep_duration =
+            crate::calculate_weekly_sleep_duration(Utc::now(), Weekday::Sun, 9, 0)?;
+        tokio::time::sleep(sleep_duration + Duration::from_millis(1)).await;
+
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+
+        shutdown_token.cancel();
+
+        handle.await??;
+
+        Ok(())
     }
 }

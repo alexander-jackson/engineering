@@ -368,6 +368,7 @@ resource "aws_route53_record" "records" {
     "events",
     "grafana",
     "lockers",
+    "palate",
     "tags",
     "today",
     "uptime"
