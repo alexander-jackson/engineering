@@ -65,6 +65,10 @@ impl Renewer {
 
         Ok(expiry)
     }
+
+    pub async fn delete_certificate(&self, domain: &str) -> Result<()> {
+        self.cert_store.delete(domain).await
+    }
 }
 
 fn extract_certificate_expiry(chain: &[u8]) -> Result<DateTime<Utc>> {

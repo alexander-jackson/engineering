@@ -41,6 +41,21 @@ impl CertificateStore {
         Ok(())
     }
 
+    pub async fn delete(&self, domain: &str) -> Result<()> {
+        let (chain_key, privkey_key) = Self::keys(&self.prefix, domain);
+
+        for key in [chain_key, privkey_key] {
+            self.client
+                .delete_object()
+                .bucket(&self.bucket)
+                .key(key)
+                .send()
+                .await?;
+        }
+
+        Ok(())
+    }
+
     fn keys(prefix: &str, domain: &str) -> (String, String) {
         let base = format!("{prefix}/{domain}");
         (

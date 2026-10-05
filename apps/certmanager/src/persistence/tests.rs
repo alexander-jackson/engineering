@@ -3,7 +3,10 @@ use std::time::Duration;
 use sqlx::types::chrono::{DateTime, Utc};
 use sqlx::{PgPool, Result};
 
-use crate::persistence::{insert_certificate, insert_domain, select_latest_expiry_per_domain};
+use crate::persistence::{
+    DomainStatus, insert_certificate, insert_domain, is_domain_active, resurrect_domain,
+    retire_domain, select_domain_by_name, select_domain_by_uid, select_latest_expiry_per_domain,
+};
 
 /// Asserts that two timestamps are equal by comparing their microsecond representations.
 fn assert_timestamp_equality(expected: &DateTime<Utc>, actual: &DateTime<Utc>) {
@@ -104,6 +107,101 @@ async fn can_handle_expiries_for_multiple_domains_and_sort_by_name(pool: PgPool)
 
     assert_eq!(certs[1].domain, "example.org");
     assert_timestamp_equality(&certs[1].expires_at, &expiry1);
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn retired_domains_are_excluded_from_expiries(pool: PgPool) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    let retired = insert_domain(&mut tx, "retired.com").await?;
+    let active = insert_domain(&mut tx, "active.com").await?;
+
+    let created_at = Utc::now();
+
+    // The retired domain would sort first if it were still included
+    insert_certificate(
+        &mut tx,
+        retired,
+        created_at,
+        created_at + Duration::from_hours(24),
+    )
+    .await?;
+    insert_certificate(
+        &mut tx,
+        active,
+        created_at,
+        created_at + Duration::from_hours(48),
+    )
+    .await?;
+
+    retire_domain(&mut tx, retired).await?;
+    tx.commit().await?;
+
+    let certs = select_latest_expiry_per_domain(&pool).await?;
+
+    assert_eq!(certs.len(), 1);
+    assert_eq!(certs[0].domain, "active.com");
+
+    assert!(!is_domain_active(&pool, retired).await?);
+    assert!(is_domain_active(&pool, active).await?);
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn latest_status_change_wins(pool: PgPool) -> Result<()> {
+    let mut tx = pool.begin().await?;
+    let domain_uid = insert_domain(&mut tx, "example.com").await?;
+    let created_at = Utc::now();
+    insert_certificate(
+        &mut tx,
+        domain_uid,
+        created_at,
+        created_at + Duration::from_hours(24),
+    )
+    .await?;
+
+    retire_domain(&mut tx, domain_uid).await?;
+    resurrect_domain(&mut tx, domain_uid).await?;
+    tx.commit().await?;
+
+    assert_eq!(select_latest_expiry_per_domain(&pool).await?.len(), 1);
+    assert!(is_domain_active(&pool, domain_uid).await?);
+
+    let mut tx = pool.begin().await?;
+    retire_domain(&mut tx, domain_uid).await?;
+    tx.commit().await?;
+
+    assert!(select_latest_expiry_per_domain(&pool).await?.is_empty());
+    assert!(!is_domain_active(&pool, domain_uid).await?);
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn can_select_domains_by_name_and_uid(pool: PgPool) -> Result<()> {
+    let mut tx = pool.begin().await?;
+
+    assert!(
+        select_domain_by_name(&mut tx, "example.com")
+            .await?
+            .is_none()
+    );
+
+    let domain_uid = insert_domain(&mut tx, "example.com").await?;
+
+    let record = select_domain_by_name(&mut tx, "example.com")
+        .await?
+        .unwrap();
+    assert_eq!(*record.domain_uid, *domain_uid);
+    assert_eq!(record.status, DomainStatus::Active);
+
+    retire_domain(&mut tx, domain_uid).await?;
+
+    let record = select_domain_by_uid(&mut tx, domain_uid).await?.unwrap();
+    assert_eq!(record.name, "example.com");
+    assert_eq!(record.status, DomainStatus::Retired);
 
     Ok(())
 }

@@ -103,6 +103,11 @@
                   >
                     Status
                   </th>
+                  <th
+                    class="text-left px-6 py-4 text-sm font-medium text-gray-400"
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -156,6 +161,25 @@
                       Expired
                     </span>
                     {% endif %}
+                  </td>
+                  <td class="px-6 py-4">
+                    <form
+                      action="/retire"
+                      method="POST"
+                      onsubmit="return confirm('Retire {{ domain.domain }}? Remove it from the f2 config first. This stops renewals and deletes its certificate from S3.');"
+                    >
+                      <input
+                        type="hidden"
+                        name="domain_uid"
+                        value="{{ domain.domain_uid }}"
+                      />
+                      <button
+                        type="submit"
+                        class="text-sm text-red-400 hover:text-red-300 transition-colors duration-150"
+                      >
+                        Retire
+                      </button>
+                    </form>
                   </td>
                 </tr>
                 {% endfor %}

@@ -70,6 +70,16 @@ impl Job for Watcher {
             tokio::time::sleep(sleep_duration).await;
         }
 
+        // The domain may have been retired while we were sleeping
+        if !crate::persistence::is_domain_active(&self.pool, next_expiry.domain_uid).await? {
+            tracing::info!(
+                domain = %next_expiry.domain,
+                "Domain was retired while waiting, skipping renewal"
+            );
+
+            return Ok(());
+        }
+
         // Time to renew the certificate!
         tracing::info!(
             domain = %next_expiry.domain,
