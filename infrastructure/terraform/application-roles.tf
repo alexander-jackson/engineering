@@ -18,7 +18,7 @@ module "application_role" {
           ]
         },
         {
-          Action = ["s3:PutObject"]
+          Action = ["s3:PutObject", "s3:DeleteObject"]
           Effect = "Allow"
           Resource = [
             format("%s/f2/certificates/*/fullchain.pem", module.config_bucket.arn),
