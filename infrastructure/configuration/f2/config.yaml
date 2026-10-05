@@ -25,6 +25,15 @@ alb:
           location: s3
           bucket: configuration-68f6c7
           key: f2/certificates/tags.opentracker.app/privkey.pem
+      palate.opentracker.app:
+        cert_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/palate.opentracker.app/fullchain.pem
+        key_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/palate.opentracker.app/privkey.pem
       today.opentracker.app:
         cert_file:
           location: s3
@@ -103,6 +112,7 @@ alb:
       bucket: configuration-68f6c7
       key: f2/anchor.pem
     domains:
+      - palate.opentracker.app
       - today.opentracker.app
       - uptime.opentracker.app
       - lockers.opentracker.app
@@ -196,6 +206,21 @@ services:
           bucket: configuration-68f6c7
           key: today/config.yaml
         target: /app/config/today.yaml
+
+  palate:
+    image: alexanderjackson/palate
+    tag: 20261005-1813
+    routes:
+      - host: palate.opentracker.app
+        port: 8000
+    replicas: 1
+    volumes:
+      config:
+        source:
+          location: s3
+          bucket: configuration-68f6c7
+          key: palate/config.yaml
+        target: /app/config/palate.yaml
 
   lockers:
     image: alexanderjackson/lockers

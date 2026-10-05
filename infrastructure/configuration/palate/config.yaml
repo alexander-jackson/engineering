@@ -4,20 +4,18 @@ server:
 
 base_url: https://palate.opentracker.app
 
-# UTC
 schedule:
   weekday: Sun
   hour: 9
   minute: 0
 
-# TODO: replace the placeholders below with encrypted `{{ ... }}` values before deploying
 openrouter:
-  api_key: PLACEHOLDER
-  model: PLACEHOLDER
+  api_key: {{ kW9J6TRwe1qovmSNA17OmZ9IEY4BHA7feQ4DW2siXrBq23ZK+p9jAz+xccEaMAwuR86E0oQIdvAUdXN47D6KgNJ2MmJWY6K9SachmD43ajuJKoprd3ZgqqNE9/aTdtx/JIiai7DGRTek2c2Gwo5Tyc5R1WpWyJ9TMP6HYXrg6o9EruHKZXHLh+ZiKfjYAV3sQLmAeLJU7JfV546RU3ojyoqvuC4qlgt6xykl+1aswM8MQa+FQ1gzwJdhxHTSJIV8BxzDdS3b47ro59s9jK3Ri1zMUqyISkTtwD8kLWJApDFTmtsspe0LchDwYRphicv2gM7WA/JhezTvW1zznOvdIQ== }}
+  model: anthropic/claude-haiku-4.5
 
 telegram:
-  bot_token: PLACEHOLDER
-  chat_id: "PLACEHOLDER"
+  bot_token: {{ MssCIkWql3FGXVs+Ig1cA547hMTOUKxQYJeemDQiYasqvSzrf/nSCuw4Aan6oleWzKXoQzIJoCNrIUyM9bDEFaVZqdd9k4uObLemizkADEPNYiS/MdkUW4N3IDjSVTnMXX3gZD8XxMj+vd8xJjW8m6cfW218RY/DQGqrksL/bNztdSBTeuVb5xrxmJIyUPFuwbJ1nqkbBXvldKPeMEMCuO+XkErIc4GuQMn7iyHgjchAAwz3E5LyzeX5mZ4oX1KKhDRVvuxhqXF+jqLEgj5hx4+qE+XFStzJP/Qm/URw46hW9YiUB1di2yo/CFfk4MIrhH2I+BY8oKq6Zv4z8vDarg== }}
+  chat_id: "{{ l6jncs052Wms99nCcLuGg22i658PuYtqJv6XQNNDfdgahpVUd36fJGf72ZrV6G32o1ZqdaSFCrq6z3AwoALJBnFGk/TKPAP02l/cwWKWNof8Y+ePrtmza1NMqrz9xAbByoPh09x6/iBiAjIGY9HvxedbxxEmmUaBNfmqlV+LCaV970J5P3yV55bC79EPP3DLor9ufNaXDUXh6NsDnnnPmAxv7CF5pvUZ9n1hJYfbPIIWcgLT04FmuulrcLvPFLDBh++5qQcHrtlFfZto0p7cAYXLy55cqfldXU8AwUD9vb8RbiCZ7omRJBnzp/nBMfwqBJic42I/IemuS5B+rYFxiA== }}"
 
 database:
   host: rds.mesh.internal
@@ -25,12 +23,12 @@ database:
 
   root:
     username: "postgres"
-    password: {{ fqVc33oytS3bXv3if9VnWEH1kkYmP042nCPnlS3ZbMiJ1DpY3wNQZ3VlarS3Sk+IJmGJOcZ47N62S0JgBZXjCvI586I/LyVFCHTjaeVIApczj/LtdFA5jbU73kYdWm15cEu73WWOnt4Y65/1h9YAP/pQDmhQxyDDBK9DNBHGJmh9tp1BX3AQ978kUKLdrodjxqZDLDVw6xzNhrrhmvJGypyTfKuqnTCB7JV7s9mgNeratZ+7Cb5wjaHFRkt8T/nsEq7vm14zgKPAQSH5ln2vc19Vmai+iYuEwdKDTbgIwPWP6ATP1QTS2t+Cd452vgGHVR3Kvd6geG/D1hWCw1tYtw== }}
+    password: {{ N9MenLBlFq7s9my9rijw6FLrHw1YHzinbKNsGraJ78Dyh4SEzgiN6MBwzQNuCw2hdwIULo9U6e6i3a7sAKJ+9Xjg/egbZsrcGbnPDxzQWE4WIKWruJ8uiY5TpuTvXz8ogQ8mK+5J4AT2pEIZOlcjVQRkChm2SKYD0daay4SyaCbgJo3knCDVqJ11nfQv1WO8ltuzB30/1v0thHQK18N1RDkLYvOtn2Kc5IOCgsE6TDq3Y6EMcxhI4vM4o85ccEdOJpWqUf/fsy51+njmtpgj95hr5ZIj28FwvPphtdMf/xoClMFPdV6WTeqnDCuz/xuxzFz3t7Z/xq5Nw9W5fF3PpQ== }}
     database: "postgres"
 
   application:
     username: "palateblue"
-    password: {{ fFalHq733TmgACKeryFW2TzppYtn7H5FDquPx4Z7Dh76Mgq5Zz4DS+iOmSzWIhC4RDC8+U7b2NKUGnWzEAEM3ltF1v5I029Wlv6nOHo5pGHWEPseaPmvrk3mfupyK+FDsDnVyXJ35QNBvJEgEIJHAzNd79hGTcdHU5WlXsIrIP9FPH4dw72ATAkdaNP1zgKriUx5luYYONlM+H81zmWCt1XX9gRG3Y8eSMwAgIZQcfFvvGZ4+CNJJfQRrPMX1mQfGTjtSQ10p9YqdEuNrJvxxsoMXgrsxJRE5Qr8sc+QYBn1f5CKFXw23QoupBFUR6Dggoi+Z1xUoVOE2Ly8zI1kRQ== }}
+    password: {{ rVEHt+dj9KC1iGelYxs0sDuhyA0xa6U/HZ1QwOeq+m/IHAiniOhtv4urw4pzbVRfjrbjUMOb1zRjXwrD+ER3kORk1+D4tv6ltdz8lEUHEla/GrtIkk7yFWsM6z73+huKvb4PFL+7u3HalvtO9npzKfg/rg6m9hfeJBnqHmSzHWVo3RH7YKMYVHo5+mqoy50JsW8ZVFbjoZlyWAOEe3FrfRHL8eXhkoqGZPpVpG2oTQXoNBqjSRlD4Fh8G7bLZAF/b/pfV7tZ+HYw/V+7CwnmaTKj3D1S6iwAmY/h0rVzQ/3mU+QVJEPl3J5wqhebYKP3Fr7VFaAW7BNBVjzwKcdp2Q== }}
     database: "palate"
 
 metrics:
