@@ -191,13 +191,19 @@ pub fn merge<'a>(
 pub fn commit(
     repo: &git2::Repository,
     index: &mut git2::Index,
-    service: &str,
+    services: &[&str],
 ) -> Result<Oid, git2::Error> {
     let head_commit = repo.head().unwrap().peel_to_commit()?;
     let signature = Signature::now("Alexander Jackson", "alexanderjackson@protonmail.com")?;
 
     let tree = repo.find_tree(index.write_tree()?)?;
-    let message = format!("auto: update tag for `{service}`");
+    let message = match services {
+        [service] => format!("auto: update tag for `{service}`"),
+        _ => {
+            let joined = services.join("`, `");
+            format!("auto: update tags for `{joined}`")
+        }
+    };
 
     let commit_oid = repo.commit(
         Some("HEAD"),

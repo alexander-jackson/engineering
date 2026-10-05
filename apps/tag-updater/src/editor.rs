@@ -32,11 +32,18 @@ impl fmt::Display for TagEditError {
 
 impl std::error::Error for TagEditError {}
 
-pub fn make_tag_edit(path: &Path, service: &str, tag: &str) -> Result<(), TagEditError> {
-    let raw = std::fs::read_to_string(path)?;
-    let edited = make_tag_edit_in_string(&raw, service, tag)?;
+/// Applies a set of tag edits to a file, only writing it if every edit succeeds.
+pub fn make_tag_edits<'a>(
+    path: &Path,
+    edits: impl IntoIterator<Item = (&'a str, &'a str)>,
+) -> Result<(), TagEditError> {
+    let mut contents = std::fs::read_to_string(path)?;
 
-    std::fs::write(path, edited)?;
+    for (service, tag) in edits {
+        contents = make_tag_edit_in_string(&contents, service, tag)?;
+    }
+
+    std::fs::write(path, contents)?;
 
     Ok(())
 }

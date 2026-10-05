@@ -22,7 +22,7 @@ mod editor;
 mod git;
 
 use crate::config::{Configuration, RepositoryConfiguration};
-use crate::editor::make_tag_edit;
+use crate::editor::make_tag_edits;
 
 #[derive(Clone)]
 struct SharedState {
@@ -95,11 +95,33 @@ struct TagUpdate {
     tag: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+struct BatchTagUpdate {
+    updates: Vec<TagUpdate>,
+}
+
+/// A request is either a single update or a batch of them.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+enum UpdateRequest {
+    Batch(BatchTagUpdate),
+    Single(TagUpdate),
+}
+
+impl UpdateRequest {
+    fn into_updates(self) -> Vec<TagUpdate> {
+        match self {
+            UpdateRequest::Batch(batch) => batch.updates,
+            UpdateRequest::Single(update) => vec![update],
+        }
+    }
+}
+
 #[tracing::instrument(skip(state, authorization))]
 async fn handle_tag_update(
     State(state): State<SharedState>,
     TypedHeader(authorization): TypedHeader<Authorization<Bearer>>,
-    Json(update): Json<TagUpdate>,
+    Json(request): Json<UpdateRequest>,
 ) -> StatusCode {
     let token = authorization.token();
 
@@ -110,7 +132,13 @@ async fn handle_tag_update(
         return StatusCode::UNAUTHORIZED;
     }
 
-    let TagUpdate { service, tag } = &update;
+    let updates = request.into_updates();
+
+    if updates.is_empty() {
+        tracing::warn!("Invalid request, no updates were provided");
+
+        return StatusCode::BAD_REQUEST;
+    }
 
     let repository = match state.repository.lock() {
         Ok(repo) => repo,
@@ -155,7 +183,9 @@ async fn handle_tag_update(
     let root = path.parent().unwrap();
     let config = &state.repository_configuration.target_path;
 
-    if let Err(e) = make_tag_edit(&root.join(config), service, tag) {
+    let edits = updates.iter().map(|u| (u.service.as_str(), u.tag.as_str()));
+
+    if let Err(e) = make_tag_edits(&root.join(config), edits) {
         tracing::error!(?e, "failed to make the tag edit");
         return StatusCode::INTERNAL_SERVER_ERROR;
     }
@@ -164,7 +194,8 @@ async fn handle_tag_update(
     let mut index = git::add(&repository, config).unwrap();
 
     // Make a new commit
-    let commit_oid = git::commit(&repository, &mut index, service).unwrap();
+    let services: Vec<_> = updates.iter().map(|u| u.service.as_str()).collect();
+    let commit_oid = git::commit(&repository, &mut index, &services).unwrap();
 
     tracing::info!(oid = %commit_oid, "created a new commit with the changes");
 
