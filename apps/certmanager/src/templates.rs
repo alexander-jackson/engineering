@@ -5,6 +5,7 @@ use crate::persistence::DomainCertificateInfo;
 
 #[derive(Clone, Serialize)]
 pub struct DomainDisplay {
+    pub domain_uid: String,
     pub domain: String,
     pub expires_at: String,
     pub days_until_expiry: i64,
@@ -25,6 +26,7 @@ impl From<DomainCertificateInfo> for DomainDisplay {
         };
 
         Self {
+            domain_uid: info.domain_uid.to_string(),
             domain: info.domain,
             expires_at: info.expires_at.format("%b %d, %Y").to_string(),
             days_until_expiry,

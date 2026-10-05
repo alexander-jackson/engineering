@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT (\n                SELECT ds.name\n                FROM domain_status_change dsc\n                JOIN domain_status ds ON ds.id = dsc.domain_status_id\n                WHERE dsc.domain_id = d.id\n                ORDER BY dsc.created_at DESC, dsc.id DESC\n                LIMIT 1\n            ) AS \"status!: DomainStatus\"\n            FROM domain d\n            WHERE d.domain_uid = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status!: DomainStatus",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bf9cd46d4476299fcfc5b5a642234e8c0bdaa7fa6ee51f5f1333e545288ef6f8"
+}
