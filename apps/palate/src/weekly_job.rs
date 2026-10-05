@@ -7,36 +7,36 @@ use crate::config::ScheduleConfig;
 use crate::openrouter::OpenRouterClient;
 use crate::persistence::Role;
 use crate::prompt::{SYSTEM_PROMPT, WEEKLY_PROMPT};
-use crate::telegram::{TelegramClient, conversation_ready_message};
+use crate::telegram::{Notifier, conversation_ready_message};
 use crate::uid::ConversationUid;
 
-pub struct WeeklyRecipes {
+pub struct WeeklyRecipes<N> {
     pool: PgPool,
     openrouter: OpenRouterClient,
-    telegram: TelegramClient,
+    notifier: N,
     base_url: String,
     schedule: ScheduleConfig,
 }
 
-impl WeeklyRecipes {
+impl<N: Notifier> WeeklyRecipes<N> {
     pub fn new(
         pool: PgPool,
         openrouter: OpenRouterClient,
-        telegram: TelegramClient,
+        notifier: N,
         base_url: &str,
         schedule: ScheduleConfig,
     ) -> Self {
         Self {
             pool,
             openrouter,
-            telegram,
+            notifier,
             base_url: base_url.trim_end_matches('/').to_owned(),
             schedule,
         }
     }
 }
 
-impl Job for WeeklyRecipes {
+impl<N: Notifier> Job for WeeklyRecipes<N> {
     const NAME: &'static str = "Weekly Recipes";
 
     fn schedule(&self) -> Schedule {
@@ -67,7 +67,7 @@ impl Job for WeeklyRecipes {
 
         let url = format!("{}/conversations/{conversation_uid}", self.base_url);
 
-        self.telegram
+        self.notifier
             .send_message(&conversation_ready_message(&url))
             .await?;
 
@@ -77,31 +77,51 @@ impl Job for WeeklyRecipes {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use chrono::Weekday;
+    use color_eyre::eyre::Result;
     use foundation_configuration::Secret;
     use foundation_recurring_job::Job;
-    use mockito::{Matcher, Mock, Server, ServerGuard};
+    use mockito::{Mock, Server, ServerGuard};
     use serde_json::json;
     use sqlx::PgPool;
 
-    use crate::config::{OpenRouterConfig, ScheduleConfig, TelegramConfig};
+    use crate::config::{OpenRouterConfig, ScheduleConfig};
     use crate::openrouter::OpenRouterClient;
     use crate::persistence::Role;
-    use crate::telegram::TelegramClient;
+    use crate::telegram::Notifier;
     use crate::weekly_job::WeeklyRecipes;
 
-    fn job(pool: PgPool, openrouter: &ServerGuard, telegram: &ServerGuard) -> WeeklyRecipes {
+    /// Records the messages it is asked to send instead of delivering them.
+    #[derive(Clone, Default)]
+    struct RecordingNotifier {
+        messages: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl RecordingNotifier {
+        fn messages(&self) -> Vec<String> {
+            self.messages.lock().unwrap().clone()
+        }
+    }
+
+    impl Notifier for RecordingNotifier {
+        async fn send_message(&self, text: &str) -> Result<()> {
+            self.messages.lock().unwrap().push(text.to_owned());
+
+            Ok(())
+        }
+    }
+
+    fn job(
+        pool: PgPool,
+        openrouter: &ServerGuard,
+        notifier: RecordingNotifier,
+    ) -> WeeklyRecipes<RecordingNotifier> {
         let openrouter = OpenRouterClient::new(&OpenRouterConfig {
             api_key: Secret::from("key".to_owned()),
             model: "test/model".to_owned(),
             base_url: openrouter.url(),
-        })
-        .unwrap();
-
-        let telegram = TelegramClient::new(&TelegramConfig {
-            bot_token: Secret::from("token".to_owned()),
-            chat_id: "1".to_owned(),
-            base_url: telegram.url(),
         })
         .unwrap();
 
@@ -111,7 +131,7 @@ mod tests {
             minute: 0,
         };
 
-        WeeklyRecipes::new(pool, openrouter, telegram, "https://palate.test/", schedule)
+        WeeklyRecipes::new(pool, openrouter, notifier, "https://palate.test/", schedule)
     }
 
     async fn openrouter_ok(server: &mut ServerGuard) -> Mock {
@@ -129,28 +149,16 @@ mod tests {
     #[sqlx::test]
     async fn stores_conversation_and_sends_link(pool: PgPool) {
         let mut openrouter = Server::new_async().await;
-        let mut telegram = Server::new_async().await;
+        let notifier = RecordingNotifier::default();
 
         let completion = openrouter_ok(&mut openrouter).await;
 
-        // The link is only known once the conversation has been created, so match on its shape
-        let notification = telegram
-            .mock("POST", "/bottoken/sendMessage")
-            .match_body(Matcher::Regex(
-                r#"<a href=\\"https://palate\.test/conversations/[0-9a-f-]+\\">"#.to_owned(),
-            ))
-            .with_header("content-type", "application/json")
-            .with_body(json!({"ok": true}).to_string())
-            .create_async()
-            .await;
-
-        job(pool.clone(), &openrouter, &telegram)
+        job(pool.clone(), &openrouter, notifier.clone())
             .run()
             .await
             .unwrap();
 
         completion.assert_async().await;
-        notification.assert_async().await;
 
         let conversations = crate::persistence::select_conversations(&pool)
             .await
@@ -158,6 +166,14 @@ mod tests {
         assert_eq!(conversations.len(), 1);
 
         let uid = conversations[0].conversation_uid;
+
+        // The link points at the conversation that was just stored
+        let messages = notifier.messages();
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].contains(&format!(
+            "<a href=\"https://palate.test/conversations/{uid}\">"
+        )));
+
         let conversation = crate::persistence::select_conversation(&pool, uid)
             .await
             .unwrap()
@@ -171,7 +187,7 @@ mod tests {
     #[sqlx::test]
     async fn failed_model_calls_do_not_notify(pool: PgPool) {
         let mut openrouter = Server::new_async().await;
-        let mut telegram = Server::new_async().await;
+        let notifier = RecordingNotifier::default();
 
         openrouter
             .mock("POST", "/chat/completions")
@@ -179,19 +195,13 @@ mod tests {
             .create_async()
             .await;
 
-        let notification = telegram
-            .mock("POST", "/bottoken/sendMessage")
-            .expect(0)
-            .create_async()
-            .await;
-
         assert!(
-            job(pool.clone(), &openrouter, &telegram)
+            job(pool.clone(), &openrouter, notifier.clone())
                 .run()
                 .await
                 .is_err()
         );
-        notification.assert_async().await;
+        assert!(notifier.messages().is_empty());
 
         // The prompts are kept so the failure can be investigated
         let conversations = crate::persistence::select_conversations(&pool)

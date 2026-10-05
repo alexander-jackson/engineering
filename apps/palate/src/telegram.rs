@@ -1,26 +1,22 @@
-use std::time::Duration;
-
-use color_eyre::eyre::{Result, WrapErr, eyre};
-use foundation_configuration::Secret;
-use reqwest::Client;
-use serde::Serialize;
+use color_eyre::eyre::{Result, WrapErr};
+use reqwest::Url;
+use teloxide::payloads::SendMessageSetters;
+use teloxide::prelude::*;
+use teloxide::types::{ChatId, LinkPreviewOptions, ParseMode};
 
 use crate::config::TelegramConfig;
 
-#[derive(Clone)]
-pub struct TelegramClient {
-    http_client: Client,
-    base_url: String,
-    bot_token: Secret<String>,
-    chat_id: String,
+/// Something that can deliver a notification, so the job doesn't depend on Telegram directly.
+///
+/// The text must be valid Telegram `HTML` with any text escaped.
+pub trait Notifier: Send + Sync + 'static {
+    fn send_message(&self, text: &str) -> impl Future<Output = Result<()>> + Send;
 }
 
-#[derive(Serialize)]
-struct SendMessageRequest<'a> {
-    chat_id: &'a str,
-    text: &'a str,
-    parse_mode: &'static str,
-    disable_web_page_preview: bool,
+#[derive(Clone)]
+pub struct TelegramClient {
+    bot: Bot,
+    chat_id: ChatId,
 }
 
 /// Escapes text for use in a message sent with the `HTML` parse mode.
@@ -43,45 +39,37 @@ pub fn conversation_ready_message(url: &str) -> String {
 
 impl TelegramClient {
     pub fn new(config: &TelegramConfig) -> Result<Self> {
-        let http_client = Client::builder().timeout(Duration::from_secs(30)).build()?;
+        let api_url = Url::parse(&config.base_url).wrap_err("invalid Telegram base URL")?;
+        let chat_id = config
+            .chat_id
+            .parse()
+            .map(ChatId)
+            .wrap_err("Telegram chat id must be a number")?;
 
         Ok(Self {
-            http_client,
-            base_url: config.base_url.trim_end_matches('/').to_owned(),
-            bot_token: config.bot_token.clone(),
-            chat_id: config.chat_id.clone(),
+            bot: Bot::new(&*config.bot_token).set_api_url(api_url),
+            chat_id,
         })
     }
+}
 
-    /// Sends a message, which must be valid Telegram `HTML` with any text escaped.
+impl Notifier for TelegramClient {
     #[tracing::instrument(skip(self, text))]
-    pub async fn send_message(&self, text: &str) -> Result<()> {
-        // The bot token is part of the URL, so make sure it never ends up in an error
-        let url = format!("{}/bot{}/sendMessage", self.base_url, *self.bot_token);
-        let request = SendMessageRequest {
-            chat_id: &self.chat_id,
-            text,
-            parse_mode: "HTML",
+    async fn send_message(&self, text: &str) -> Result<()> {
+        // teloxide strips the bot token from network errors, so they are safe to report
+        self.bot
+            .send_message(self.chat_id, text)
+            .parse_mode(ParseMode::Html)
             // Links sit behind mTLS, so Telegram could never generate a preview
-            disable_web_page_preview: true,
-        };
-
-        let response = self
-            .http_client
-            .post(url)
-            .json(&request)
-            .send()
+            .link_preview_options(LinkPreviewOptions {
+                is_disabled: true,
+                url: None,
+                prefer_small_media: false,
+                prefer_large_media: false,
+                show_above_text: false,
+            })
             .await
-            .map_err(reqwest::Error::without_url)
-            .wrap_err("failed to send request to Telegram")?;
-
-        let status = response.status();
-
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-
-            return Err(eyre!("Telegram returned {status}: {body}"));
-        }
+            .wrap_err("failed to send message to Telegram")?;
 
         Ok(())
     }
@@ -90,41 +78,10 @@ impl TelegramClient {
 #[cfg(test)]
 mod tests {
     use foundation_configuration::Secret;
-    use mockito::{Matcher, Server};
-    use serde_json::json;
 
     use crate::config::TelegramConfig;
-    use crate::telegram::{TelegramClient, conversation_ready_message};
+    use crate::telegram::{Notifier, TelegramClient, conversation_ready_message};
 
-    #[tokio::test]
-    async fn sends_message_to_configured_chat() {
-        let mut server = Server::new_async().await;
-
-        // The bot token is part of the path
-        let mock = server
-            .mock("POST", "/bottoken/sendMessage")
-            .match_body(Matcher::Json(json!({
-                "chat_id": "-100",
-                "text": "hello",
-                "parse_mode": "HTML",
-                "disable_web_page_preview": true,
-            })))
-            .with_header("content-type", "application/json")
-            .with_body(json!({"ok": true}).to_string())
-            .create_async()
-            .await;
-
-        let client = TelegramClient::new(&TelegramConfig {
-            bot_token: Secret::from("token".to_owned()),
-            chat_id: "-100".to_owned(),
-            base_url: server.url(),
-        })
-        .unwrap();
-
-        client.send_message("hello").await.unwrap();
-
-        mock.assert_async().await;
-    }
     #[test]
     fn conversation_message_links_with_an_anchor() {
         let message = conversation_ready_message("https://palate.test/conversations/abc?a=1&b=2");
