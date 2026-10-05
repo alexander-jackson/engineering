@@ -209,7 +209,7 @@ services:
 
   palate:
     image: alexanderjackson/palate
-    tag: 20261005-1813
+    tag: 20261005-1900
     routes:
       - host: palate.opentracker.app
         port: 8000
