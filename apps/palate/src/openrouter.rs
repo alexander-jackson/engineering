@@ -1,185 +1,153 @@
 use std::time::Duration;
 
 use color_eyre::eyre::{Result, WrapErr, eyre};
-use foundation_configuration::Secret;
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use openrouter_rs::api::chat::{ChatCompletionRequest, Message as ChatMessage};
+use openrouter_rs::types::Role as ChatRole;
 
 use crate::config::OpenRouterConfig;
-use crate::persistence::Message;
+use crate::persistence::{Message, Role};
+
+/// Models can take a while to respond, particularly with long conversations
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Something that can continue a conversation, so callers don't depend on OpenRouter directly.
+pub trait ChatModel: Clone + Send + Sync + 'static {
+    /// Sends the full conversation history and returns the content of the reply.
+    fn complete(&self, messages: &[Message]) -> impl Future<Output = Result<String>> + Send;
+}
 
 #[derive(Clone)]
 pub struct OpenRouterClient {
-    http_client: Client,
-    base_url: String,
-    api_key: Secret<String>,
+    client: openrouter_rs::OpenRouterClient,
     model: String,
 }
 
-#[derive(Serialize)]
-struct ChatRequest<'a> {
-    model: &'a str,
-    messages: Vec<ChatMessage<'a>>,
-}
-
-#[derive(Serialize)]
-struct ChatMessage<'a> {
-    role: &'a str,
-    content: &'a str,
-}
-
-#[derive(Deserialize)]
-struct ChatResponse {
-    choices: Vec<Choice>,
-}
-
-#[derive(Deserialize)]
-struct Choice {
-    message: ResponseMessage,
-}
-
-#[derive(Deserialize)]
-struct ResponseMessage {
-    content: Option<String>,
+impl From<Role> for ChatRole {
+    fn from(role: Role) -> Self {
+        match role {
+            Role::System => Self::System,
+            Role::User => Self::User,
+            Role::Assistant => Self::Assistant,
+        }
+    }
 }
 
 impl OpenRouterClient {
     pub fn new(config: &OpenRouterConfig) -> Result<Self> {
-        // Models can take a while to respond, particularly with long conversations
-        let http_client = Client::builder()
-            .timeout(Duration::from_secs(300))
-            .build()?;
+        let client = openrouter_rs::OpenRouterClient::builder()
+            .base_url(config.base_url.trim_end_matches('/'))
+            .api_key(&*config.api_key)
+            .build()
+            .wrap_err("failed to build OpenRouter client")?;
 
         Ok(Self {
-            http_client,
-            base_url: config.base_url.trim_end_matches('/').to_owned(),
-            api_key: config.api_key.clone(),
+            client,
             model: config.model.clone(),
         })
     }
+}
 
-    /// Sends the full conversation history and returns the content of the reply.
+impl ChatModel for OpenRouterClient {
     #[tracing::instrument(skip(self, messages), fields(model = %self.model, messages = messages.len()))]
-    pub async fn complete(&self, messages: &[Message]) -> Result<String> {
-        let request = ChatRequest {
-            model: &self.model,
-            messages: messages
-                .iter()
-                .map(|m| ChatMessage {
-                    role: m.role.as_str(),
-                    content: &m.content,
-                })
-                .collect(),
-        };
+    async fn complete(&self, messages: &[Message]) -> Result<String> {
+        let messages = messages
+            .iter()
+            .map(|m| ChatMessage::new(m.role.into(), m.content.as_str()))
+            .collect();
 
-        let url = format!("{}/chat/completions", self.base_url);
+        let request = ChatCompletionRequest::builder()
+            .model(self.model.as_str())
+            .messages(messages)
+            .build()
+            .wrap_err("failed to build OpenRouter request")?;
 
-        let response = self
-            .http_client
-            .post(url)
-            .bearer_auth(&*self.api_key)
-            .json(&request)
-            .send()
-            .await
-            .wrap_err("failed to send request to OpenRouter")?;
-
-        let status = response.status();
-
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-
-            return Err(eyre!("OpenRouter returned {status}: {body}"));
-        }
-
-        let response: ChatResponse = response
-            .json()
-            .await
-            .wrap_err("failed to parse OpenRouter response")?;
+        let response =
+            tokio::time::timeout(REQUEST_TIMEOUT, self.client.send_chat_completion(&request))
+                .await
+                .wrap_err("timed out waiting for OpenRouter")?
+                .wrap_err("failed to get a completion from OpenRouter")?;
 
         response
             .choices
-            .into_iter()
-            .next()
-            .and_then(|choice| choice.message.content)
+            .first()
+            .and_then(|choice| choice.content())
             .filter(|content| !content.trim().is_empty())
+            .map(str::to_owned)
             .ok_or_else(|| eyre!("OpenRouter response contained no content"))
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use chrono::Utc;
-    use foundation_configuration::Secret;
-    use mockito::{Matcher, Server};
-    use serde_json::json;
+pub mod testing {
+    use std::sync::{Arc, Mutex};
 
-    use crate::config::OpenRouterConfig;
-    use crate::openrouter::OpenRouterClient;
+    use color_eyre::eyre::{Result, eyre};
+
+    use crate::openrouter::ChatModel;
     use crate::persistence::{Message, Role};
 
-    fn client(base_url: String) -> OpenRouterClient {
-        OpenRouterClient::new(&OpenRouterConfig {
-            api_key: Secret::from("key".to_owned()),
-            model: "test/model".to_owned(),
-            base_url,
-        })
-        .unwrap()
+    /// The history sent with a single call.
+    type History = Vec<(Role, String)>;
+
+    /// A model that replies with a fixed answer and records what it was asked.
+    #[derive(Clone)]
+    pub struct ScriptedModel {
+        reply: Option<String>,
+        requests: Arc<Mutex<Vec<History>>>,
     }
 
-    fn message(role: Role, content: &str) -> Message {
-        Message {
-            role,
-            content: content.to_owned(),
-            created_at: Utc::now(),
+    impl ScriptedModel {
+        pub fn replying(reply: &str) -> Self {
+            Self {
+                reply: Some(reply.to_owned()),
+                requests: Default::default(),
+            }
+        }
+
+        pub fn failing() -> Self {
+            Self {
+                reply: None,
+                requests: Default::default(),
+            }
+        }
+
+        /// The history sent with each call, in order.
+        pub fn requests(&self) -> Vec<History> {
+            self.requests.lock().unwrap().clone()
         }
     }
 
-    #[tokio::test]
-    async fn sends_history_and_returns_reply() {
-        let mut server = Server::new_async().await;
+    impl ChatModel for ScriptedModel {
+        async fn complete(&self, messages: &[Message]) -> Result<String> {
+            let history = messages
+                .iter()
+                .map(|m| (m.role, m.content.clone()))
+                .collect();
+            self.requests.lock().unwrap().push(history);
 
-        let mock = server
-            .mock("POST", "/chat/completions")
-            .match_header("authorization", "Bearer key")
-            .match_body(Matcher::Json(json!({
-                "model": "test/model",
-                "messages": [
-                    {"role": "system", "content": "sys"},
-                    {"role": "user", "content": "hi"},
-                ],
-            })))
-            .with_header("content-type", "application/json")
-            .with_body(
-                json!({"choices": [{"message": {"role": "assistant", "content": "ideas"}}]})
-                    .to_string(),
-            )
-            .create_async()
-            .await;
-
-        let content = client(server.url())
-            .complete(&[message(Role::System, "sys"), message(Role::User, "hi")])
-            .await
-            .unwrap();
-
-        assert_eq!(content, "ideas");
-        mock.assert_async().await;
+            self.reply.clone().ok_or_else(|| eyre!("model unavailable"))
+        }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use foundation_configuration::Secret;
+
+    use crate::config::OpenRouterConfig;
+    use crate::openrouter::{ChatModel, OpenRouterClient};
 
     #[tokio::test]
-    async fn empty_choices_are_an_error() {
-        let mut server = Server::new_async().await;
+    async fn errors_do_not_leak_the_api_key() {
+        let client = OpenRouterClient::new(&OpenRouterConfig {
+            api_key: Secret::from("super-secret".to_owned()),
+            model: "test/model".to_owned(),
+            base_url: "http://127.0.0.1:1".to_owned(),
+        })
+        .unwrap();
 
-        server
-            .mock("POST", "/chat/completions")
-            .with_header("content-type", "application/json")
-            .with_body(json!({"choices": []}).to_string())
-            .create_async()
-            .await;
+        let error = client.complete(&[]).await.unwrap_err();
 
-        let result = client(server.url())
-            .complete(&[message(Role::User, "hi")])
-            .await;
-
-        assert!(result.is_err());
+        assert!(!format!("{error:?}").contains("super-secret"));
     }
 }

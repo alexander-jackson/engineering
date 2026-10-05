@@ -2,7 +2,7 @@ use chrono::Utc;
 use color_eyre::eyre::{Result, eyre};
 use sqlx::PgPool;
 
-use crate::openrouter::OpenRouterClient;
+use crate::openrouter::ChatModel;
 use crate::persistence::Role;
 use crate::uid::ConversationUid;
 
@@ -10,7 +10,7 @@ use crate::uid::ConversationUid;
 #[tracing::instrument(skip(pool, openrouter))]
 pub async fn generate_reply(
     pool: &PgPool,
-    openrouter: &OpenRouterClient,
+    openrouter: &impl ChatModel,
     conversation_uid: ConversationUid,
 ) -> Result<()> {
     let conversation = crate::persistence::select_conversation(pool, conversation_uid)

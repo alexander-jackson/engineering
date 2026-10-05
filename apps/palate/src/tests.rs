@@ -2,28 +2,17 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use chrono::Utc;
-use foundation_configuration::Secret;
 use foundation_templating::TemplateEngine;
 use http_body_util::BodyExt;
-use mockito::{Matcher, Server, ServerGuard};
-use serde_json::json;
 use sqlx::PgPool;
 use tower::ServiceExt;
 
-use crate::config::OpenRouterConfig;
-use crate::openrouter::OpenRouterClient;
+use crate::openrouter::testing::ScriptedModel;
 use crate::persistence::Role;
 use crate::uid::ConversationUid;
 
-fn router(pool: PgPool, openrouter: &ServerGuard) -> Router {
-    let openrouter = OpenRouterClient::new(&OpenRouterConfig {
-        api_key: Secret::from("key".to_owned()),
-        model: "test/model".to_owned(),
-        base_url: openrouter.url(),
-    })
-    .unwrap();
-
-    crate::server::build_router(TemplateEngine::new().unwrap(), pool, openrouter)
+fn router(pool: PgPool, model: ScriptedModel) -> Router {
+    crate::server::build_router(TemplateEngine::new().unwrap(), pool, model)
 }
 
 async fn body_string(response: axum::response::Response) -> String {
@@ -50,8 +39,7 @@ async fn index_lists_conversations(pool: PgPool) {
         .await
         .unwrap();
 
-    let server = Server::new_async().await;
-    let router = router(pool, &server);
+    let router = router(pool, ScriptedModel::failing());
     let response = router.oneshot(get("/")).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
@@ -70,8 +58,7 @@ async fn conversation_renders_messages(pool: PgPool) {
     .await
     .unwrap();
 
-    let server = Server::new_async().await;
-    let router = router(pool, &server);
+    let router = router(pool, ScriptedModel::failing());
     let response = router
         .oneshot(get(&format!("/conversations/{uid}")))
         .await
@@ -86,8 +73,7 @@ async fn conversation_renders_messages(pool: PgPool) {
 
 #[sqlx::test]
 async fn unknown_conversations_are_not_found(pool: PgPool) {
-    let server = Server::new_async().await;
-    let router = router(pool, &server);
+    let router = router(pool, ScriptedModel::failing());
     let response = router
         .oneshot(get(&format!("/conversations/{}", ConversationUid::new())))
         .await
@@ -108,20 +94,8 @@ async fn follow_ups_are_stored_with_the_reply(pool: PgPool) {
     .await
     .unwrap();
 
-    let mut server = Server::new_async().await;
-    // The whole history is replayed to the model
-    let mock = server
-        .mock("POST", "/chat/completions")
-        .match_body(Matcher::PartialJson(json!({"messages": [
-            {"role": "system", "content": "sys"},
-            {"role": "user", "content": "first"},
-            {"role": "user", "content": "more vegetarian please"},
-        ]})))
-        .with_header("content-type", "application/json")
-        .with_body(json!({"choices": [{"message": {"content": "reply"}}]}).to_string())
-        .create_async()
-        .await;
-    let router = router(pool.clone(), &server);
+    let model = ScriptedModel::replying("reply");
+    let router = router(pool.clone(), model.clone());
     let path = format!("/conversations/{uid}/messages");
     let response = router
         .oneshot(form(&path, "content=more+vegetarian+please"))
@@ -154,7 +128,16 @@ async fn follow_ups_are_stored_with_the_reply(pool: PgPool) {
             (Role::Assistant, "reply"),
         ]
     );
-    mock.assert_async().await;
+
+    // The whole history is replayed to the model
+    assert_eq!(
+        model.requests(),
+        vec![vec![
+            (Role::System, "sys".to_owned()),
+            (Role::User, "first".to_owned()),
+            (Role::User, "more vegetarian please".to_owned()),
+        ]]
+    );
 }
 
 #[sqlx::test]
@@ -164,16 +147,11 @@ async fn blank_follow_ups_do_not_call_the_model(pool: PgPool) {
         .await
         .unwrap();
 
-    let mut server = Server::new_async().await;
-    let mock = server
-        .mock("POST", "/chat/completions")
-        .expect(0)
-        .create_async()
-        .await;
-    let router = router(pool, &server);
+    let model = ScriptedModel::replying("reply");
+    let router = router(pool, model.clone());
     let path = format!("/conversations/{uid}/messages");
     let response = router.oneshot(form(&path, "content=+++")).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::FOUND);
-    mock.assert_async().await;
+    assert!(model.requests().is_empty());
 }

@@ -15,22 +15,22 @@ use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 
 use crate::error::{ServerError, ServerResult};
-use crate::openrouter::OpenRouterClient;
+use crate::openrouter::ChatModel;
 use crate::persistence::Role;
 use crate::templates::{ConversationContext, IndexContext};
 use crate::uid::ConversationUid;
 
 #[derive(Clone)]
-struct ApplicationState {
+struct ApplicationState<M> {
     template_engine: TemplateEngine,
     pool: PgPool,
-    openrouter: OpenRouterClient,
+    openrouter: M,
 }
 
-pub fn build_router(
+pub fn build_router<M: ChatModel>(
     template_engine: TemplateEngine,
     pool: PgPool,
-    openrouter: OpenRouterClient,
+    openrouter: M,
 ) -> Router {
     let state = ApplicationState {
         template_engine,
@@ -39,20 +39,20 @@ pub fn build_router(
     };
 
     Router::new()
-        .route("/", get(index))
-        .route("/conversations/{conversation_uid}", get(conversation))
+        .route("/", get(index::<M>))
+        .route("/conversations/{conversation_uid}", get(conversation::<M>))
         .route(
             "/conversations/{conversation_uid}/messages",
-            post(add_message),
+            post(add_message::<M>),
         )
         .nest_service("/assets", ServeDir::new("assets"))
         .with_state(state)
 }
 
-pub fn build(
+pub fn build<M: ChatModel>(
     template_engine: TemplateEngine,
     pool: PgPool,
-    openrouter: OpenRouterClient,
+    openrouter: M,
     listener: TcpListener,
 ) -> Server {
     let router = build_router(template_engine, pool, openrouter);
@@ -60,12 +60,12 @@ pub fn build(
 }
 
 #[tracing::instrument(skip(template_engine, pool))]
-async fn index(
+async fn index<M: ChatModel>(
     State(ApplicationState {
         template_engine,
         pool,
         ..
-    }): State<ApplicationState>,
+    }): State<ApplicationState<M>>,
 ) -> ServerResult<RenderedTemplate> {
     let conversations = crate::persistence::select_conversations(&pool).await?;
     let context = IndexContext::from(conversations);
@@ -74,12 +74,12 @@ async fn index(
 }
 
 #[tracing::instrument(skip(template_engine, pool))]
-async fn conversation(
+async fn conversation<M: ChatModel>(
     State(ApplicationState {
         template_engine,
         pool,
         ..
-    }): State<ApplicationState>,
+    }): State<ApplicationState<M>>,
     Path(conversation_uid): Path<ConversationUid>,
 ) -> ServerResult<RenderedTemplate> {
     let conversation = crate::persistence::select_conversation(&pool, conversation_uid)
@@ -98,10 +98,10 @@ struct AddMessageForm {
 
 /// Stores the message, waits for the model's reply and redirects back to the conversation.
 #[tracing::instrument(skip(pool, openrouter, content))]
-async fn add_message(
+async fn add_message<M: ChatModel>(
     State(ApplicationState {
         pool, openrouter, ..
-    }): State<ApplicationState>,
+    }): State<ApplicationState<M>>,
     Path(conversation_uid): Path<ConversationUid>,
     Form(AddMessageForm { content }): Form<AddMessageForm>,
 ) -> ServerResult<Response> {

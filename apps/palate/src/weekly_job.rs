@@ -4,24 +4,24 @@ use foundation_recurring_job::{Job, Schedule};
 use sqlx::PgPool;
 
 use crate::config::ScheduleConfig;
-use crate::openrouter::OpenRouterClient;
+use crate::openrouter::ChatModel;
 use crate::persistence::Role;
 use crate::prompt::{SYSTEM_PROMPT, WEEKLY_PROMPT};
 use crate::telegram::{Notifier, conversation_ready_message};
 use crate::uid::ConversationUid;
 
-pub struct WeeklyRecipes<N> {
+pub struct WeeklyRecipes<M, N> {
     pool: PgPool,
-    openrouter: OpenRouterClient,
+    openrouter: M,
     notifier: N,
     base_url: String,
     schedule: ScheduleConfig,
 }
 
-impl<N: Notifier> WeeklyRecipes<N> {
+impl<M: ChatModel, N: Notifier> WeeklyRecipes<M, N> {
     pub fn new(
         pool: PgPool,
-        openrouter: OpenRouterClient,
+        openrouter: M,
         notifier: N,
         base_url: &str,
         schedule: ScheduleConfig,
@@ -36,7 +36,7 @@ impl<N: Notifier> WeeklyRecipes<N> {
     }
 }
 
-impl<N: Notifier> Job for WeeklyRecipes<N> {
+impl<M: ChatModel, N: Notifier> Job for WeeklyRecipes<M, N> {
     const NAME: &'static str = "Weekly Recipes";
 
     fn schedule(&self) -> Schedule {
@@ -81,14 +81,11 @@ mod tests {
 
     use chrono::Weekday;
     use color_eyre::eyre::Result;
-    use foundation_configuration::Secret;
     use foundation_recurring_job::Job;
-    use mockito::{Mock, Server, ServerGuard};
-    use serde_json::json;
     use sqlx::PgPool;
 
-    use crate::config::{OpenRouterConfig, ScheduleConfig};
-    use crate::openrouter::OpenRouterClient;
+    use crate::config::ScheduleConfig;
+    use crate::openrouter::testing::ScriptedModel;
     use crate::persistence::Role;
     use crate::telegram::Notifier;
     use crate::weekly_job::WeeklyRecipes;
@@ -115,50 +112,33 @@ mod tests {
 
     fn job(
         pool: PgPool,
-        openrouter: &ServerGuard,
+        model: ScriptedModel,
         notifier: RecordingNotifier,
-    ) -> WeeklyRecipes<RecordingNotifier> {
-        let openrouter = OpenRouterClient::new(&OpenRouterConfig {
-            api_key: Secret::from("key".to_owned()),
-            model: "test/model".to_owned(),
-            base_url: openrouter.url(),
-        })
-        .unwrap();
-
+    ) -> WeeklyRecipes<ScriptedModel, RecordingNotifier> {
         let schedule = ScheduleConfig {
             weekday: Weekday::Sun,
             hour: 9,
             minute: 0,
         };
 
-        WeeklyRecipes::new(pool, openrouter, notifier, "https://palate.test/", schedule)
-    }
-
-    async fn openrouter_ok(server: &mut ServerGuard) -> Mock {
-        server
-            .mock("POST", "/chat/completions")
-            .with_header("content-type", "application/json")
-            .with_body(
-                json!({"choices": [{"message": {"role": "assistant", "content": "ideas"}}]})
-                    .to_string(),
-            )
-            .create_async()
-            .await
+        WeeklyRecipes::new(pool, model, notifier, "https://palate.test/", schedule)
     }
 
     #[sqlx::test]
     async fn stores_conversation_and_sends_link(pool: PgPool) {
-        let mut openrouter = Server::new_async().await;
+        let model = ScriptedModel::replying("ideas");
         let notifier = RecordingNotifier::default();
 
-        let completion = openrouter_ok(&mut openrouter).await;
-
-        job(pool.clone(), &openrouter, notifier.clone())
+        job(pool.clone(), model.clone(), notifier.clone())
             .run()
             .await
             .unwrap();
 
-        completion.assert_async().await;
+        // The model saw both prompts
+        let requests = model.requests();
+        assert_eq!(requests.len(), 1);
+        let roles: Vec<_> = requests[0].iter().map(|(role, _)| *role).collect();
+        assert_eq!(roles, vec![Role::System, Role::User]);
 
         let conversations = crate::persistence::select_conversations(&pool)
             .await
@@ -186,17 +166,10 @@ mod tests {
 
     #[sqlx::test]
     async fn failed_model_calls_do_not_notify(pool: PgPool) {
-        let mut openrouter = Server::new_async().await;
         let notifier = RecordingNotifier::default();
 
-        openrouter
-            .mock("POST", "/chat/completions")
-            .with_status(500)
-            .create_async()
-            .await;
-
         assert!(
-            job(pool.clone(), &openrouter, notifier.clone())
+            job(pool.clone(), ScriptedModel::failing(), notifier.clone())
                 .run()
                 .await
                 .is_err()
