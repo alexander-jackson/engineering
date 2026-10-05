@@ -245,7 +245,7 @@ services:
 
   events:
     image: alexanderjackson/events
-    tag: 20261004-0659
+    tag: 20261005-1813
     routes:
       - host: events.opentracker.app
         port: 3333
