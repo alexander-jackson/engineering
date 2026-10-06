@@ -101,28 +101,11 @@ struct BatchTagUpdate {
     updates: Vec<TagUpdate>,
 }
 
-/// A request is either a single update or a batch of them.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(untagged)]
-enum UpdateRequest {
-    Batch(BatchTagUpdate),
-    Single(TagUpdate),
-}
-
-impl UpdateRequest {
-    fn into_updates(self) -> Vec<TagUpdate> {
-        match self {
-            UpdateRequest::Batch(batch) => batch.updates,
-            UpdateRequest::Single(update) => vec![update],
-        }
-    }
-}
-
 #[tracing::instrument(skip(state, authorization))]
 async fn handle_tag_update(
     State(state): State<SharedState>,
     TypedHeader(authorization): TypedHeader<Authorization<Bearer>>,
-    Json(request): Json<UpdateRequest>,
+    Json(request): Json<BatchTagUpdate>,
 ) -> Response {
     let token = authorization.token();
 
@@ -133,7 +116,7 @@ async fn handle_tag_update(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
-    let updates = request.into_updates();
+    let BatchTagUpdate { updates } = request;
 
     if updates.is_empty() {
         tracing::warn!("Invalid request, no updates were provided");
