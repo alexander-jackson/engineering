@@ -28,6 +28,10 @@ fn main() -> Result<()> {
         .get_text()
         .wrap_err("failed to read text from the clipboard")?;
 
+    // Copying from terminals/files often includes a trailing newline, which would
+    // otherwise be encrypted and break validation after decryption.
+    let plaintext = plaintext.trim_end_matches(['\n', '\r']);
+
     if plaintext.is_empty() {
         return Err(eyre!("the clipboard is empty"));
     }
