@@ -90,10 +90,40 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.name }}:${{ needs.setup.outputs.tag }}
           context: ./apps
           file: ./apps/${{ matrix.path }}/Dockerfile
+      - name: Record successful build
+        run: |
+          mkdir -p built
+          echo "${{ matrix.name }}" > "built/${{ matrix.name }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: built-${{ matrix.name }}
+          path: built/${{ matrix.name }}
+
+  notify:
+    name: Notify tag-updater
+    needs: [setup, docker]
+    # Run even if some builds failed, so the successful ones still get deployed
+    if: ${{ !cancelled() && needs.setup.outputs.build-matrix != '[]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: built-*
+          path: built
+          merge-multiple: true
       - name: Notify tag-updater
         run: |
-          curl https://tags.opentracker.app/update \
+          if [[ -z "$(ls -A built 2>/dev/null)" ]]; then
+            echo "No applications were built successfully, nothing to notify"
+            exit 0
+          fi
+
+          PAYLOAD=$(ls built | jq -R --arg tag "${{ needs.setup.outputs.tag }}" \
+            '{service: ., tag: $tag}' | jq -sc '{updates: .}')
+          echo "Sending: $PAYLOAD"
+
+          curl --fail-with-body https://tags.opentracker.app/update \
             -X PUT \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.TAG_UPDATER_PASSPHRASE }}" \
-            --data "{\"service\": \"${{ matrix.name }}\", \"tag\": \"${{ needs.setup.outputs.tag }}\"}"
+            --data "$PAYLOAD"
