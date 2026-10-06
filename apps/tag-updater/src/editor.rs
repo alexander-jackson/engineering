@@ -2,6 +2,7 @@ use std::fmt;
 use std::path::Path;
 
 use color_eyre::eyre::Result;
+use serde::Serialize;
 
 #[derive(Debug)]
 pub enum TagEditError {
@@ -32,20 +33,42 @@ impl fmt::Display for TagEditError {
 
 impl std::error::Error for TagEditError {}
 
-/// Applies a set of tag edits to a file, only writing it if every edit succeeds.
+/// Applies a set of tag edits to a file, returning which services were updated and skipped.
+///
+/// Services missing from the file are skipped rather than treated as errors, but any other
+/// failure means nothing is written.
 pub fn make_tag_edits<'a>(
     path: &Path,
     edits: impl IntoIterator<Item = (&'a str, &'a str)>,
-) -> Result<(), TagEditError> {
+) -> Result<TagEditOutcome, TagEditError> {
     let mut contents = std::fs::read_to_string(path)?;
+    let mut outcome = TagEditOutcome::default();
 
     for (service, tag) in edits {
-        contents = make_tag_edit_in_string(&contents, service, tag)?;
+        match make_tag_edit_in_string(&contents, service, tag) {
+            Ok(edited) => {
+                contents = edited;
+                outcome.updated.push(service.to_string());
+            }
+            Err(RawTagEditError::ServiceNotFound(_)) => {
+                tracing::warn!(%service, "service not found in the file, skipping");
+                outcome.skipped.push(service.to_string());
+            }
+            Err(e) => return Err(e.into()),
+        }
     }
 
-    std::fs::write(path, contents)?;
+    if !outcome.updated.is_empty() {
+        std::fs::write(path, contents)?;
+    }
 
-    Ok(())
+    Ok(outcome)
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct TagEditOutcome {
+    pub updated: Vec<String>,
+    pub skipped: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -142,6 +165,29 @@ mod tests {
         let expected = RawTagEditError::ServiceNotFound("does-not-exist".to_string());
 
         assert!(result.is_err_and(|e| e == expected));
+
+        Ok(())
+    }
+
+    #[test]
+    fn skips_missing_services_and_applies_the_rest() -> Result<()> {
+        let before = std::fs::read_to_string("resources/before/simple.yaml")?;
+        let after = std::fs::read_to_string("resources/after/simple.yaml")?;
+
+        let path = std::env::temp_dir().join("tag-updater-skip-test.yaml");
+        std::fs::write(&path, before)?;
+
+        let edits = [
+            ("does-not-exist", "20230614-1830"),
+            ("frontend", "20230614-1830"),
+        ];
+        let outcome = super::make_tag_edits(&path, edits)?;
+
+        assert_eq!(outcome.updated, ["frontend"]);
+        assert_eq!(outcome.skipped, ["does-not-exist"]);
+        assert_eq!(std::fs::read_to_string(&path)?, after);
+
+        std::fs::remove_file(&path)?;
 
         Ok(())
     }

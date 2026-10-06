@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use axum::extract::State;
 use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::routing::put;
 use axum::{Json, Router};
 use axum_extra::TypedHeader;
@@ -122,14 +123,14 @@ async fn handle_tag_update(
     State(state): State<SharedState>,
     TypedHeader(authorization): TypedHeader<Authorization<Bearer>>,
     Json(request): Json<UpdateRequest>,
-) -> StatusCode {
+) -> Response {
     let token = authorization.token();
 
     // Check the request state
     if token != **state.passphrase {
         tracing::warn!("Invalid request, token was {token} which did not match the passphrase");
 
-        return StatusCode::UNAUTHORIZED;
+        return StatusCode::UNAUTHORIZED.into_response();
     }
 
     let updates = request.into_updates();
@@ -137,7 +138,7 @@ async fn handle_tag_update(
     if updates.is_empty() {
         tracing::warn!("Invalid request, no updates were provided");
 
-        return StatusCode::BAD_REQUEST;
+        return StatusCode::BAD_REQUEST.into_response();
     }
 
     let repository = match state.repository.lock() {
@@ -185,16 +186,24 @@ async fn handle_tag_update(
 
     let edits = updates.iter().map(|u| (u.service.as_str(), u.tag.as_str()));
 
-    if let Err(e) = make_tag_edits(&root.join(config), edits) {
-        tracing::error!(?e, "failed to make the tag edit");
-        return StatusCode::INTERNAL_SERVER_ERROR;
+    let outcome = match make_tag_edits(&root.join(config), edits) {
+        Ok(outcome) => outcome,
+        Err(e) => {
+            tracing::error!(?e, "failed to make the tag edit");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if outcome.updated.is_empty() {
+        tracing::warn!(skipped = ?outcome.skipped, "no services were updated, skipping commit");
+        return Json(outcome).into_response();
     }
 
     // Add the file to the index and write it to disk
     let mut index = git::add(&repository, config).unwrap();
 
     // Make a new commit
-    let services: Vec<_> = updates.iter().map(|u| u.service.as_str()).collect();
+    let services: Vec<_> = outcome.updated.iter().map(String::as_str).collect();
     let commit_oid = git::commit(&repository, &mut index, &services).unwrap();
 
     tracing::info!(oid = %commit_oid, "created a new commit with the changes");
@@ -206,5 +215,5 @@ async fn handle_tag_update(
 
     tracing::info!(%remote_name, %remote_ref, "pushed the changes to the remote");
 
-    StatusCode::OK
+    Json(outcome).into_response()
 }
