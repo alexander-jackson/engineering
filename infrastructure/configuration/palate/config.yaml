@@ -5,13 +5,13 @@ server:
 base_url: https://palate.opentracker.app
 
 schedule:
-  weekday: Sun
-  hour: 9
+  weekday: Sat
+  hour: 10
   minute: 0
 
 openrouter:
   api_key: {{ kW9J6TRwe1qovmSNA17OmZ9IEY4BHA7feQ4DW2siXrBq23ZK+p9jAz+xccEaMAwuR86E0oQIdvAUdXN47D6KgNJ2MmJWY6K9SachmD43ajuJKoprd3ZgqqNE9/aTdtx/JIiai7DGRTek2c2Gwo5Tyc5R1WpWyJ9TMP6HYXrg6o9EruHKZXHLh+ZiKfjYAV3sQLmAeLJU7JfV546RU3ojyoqvuC4qlgt6xykl+1aswM8MQa+FQ1gzwJdhxHTSJIV8BxzDdS3b47ro59s9jK3Ri1zMUqyISkTtwD8kLWJApDFTmtsspe0LchDwYRphicv2gM7WA/JhezTvW1zznOvdIQ== }}
-  model: anthropic/claude-haiku-4.5
+  model: anthropic/claude-haiku-5.5
 
 telegram:
   bot_token: {{ MssCIkWql3FGXVs+Ig1cA547hMTOUKxQYJeemDQiYasqvSzrf/nSCuw4Aan6oleWzKXoQzIJoCNrIUyM9bDEFaVZqdd9k4uObLemizkADEPNYiS/MdkUW4N3IDjSVTnMXX3gZD8XxMj+vd8xJjW8m6cfW218RY/DQGqrksL/bNztdSBTeuVb5xrxmJIyUPFuwbJ1nqkbBXvldKPeMEMCuO+XkErIc4GuQMn7iyHgjchAAwz3E5LyzeX5mZ4oX1KKhDRVvuxhqXF+jqLEgj5hx4+qE+XFStzJP/Qm/URw46hW9YiUB1di2yo/CFfk4MIrhH2I+BY8oKq6Zv4z8vDarg== }}
