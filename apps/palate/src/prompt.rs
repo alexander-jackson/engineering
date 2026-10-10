@@ -13,4 +13,16 @@ Please suggest recipe ideas for the coming week. Include a mix of:
 - a dish from a cuisine that is likely to be new to me
 - a dish built around a cooking technique that is likely to be new to me
 
-Mostly choose meal prep friendly recipes that reheat well.";
+Mostly choose meal prep friendly recipes that reheat well.
+
+The following is a list of dishes prepared in recent weeks:
+
+- Beef ragu
+- Chicken cacciatore
+- Gochujang beef pasta
+- Chicken and chorizo risotto
+- Chicken, onions and peppers burrito bowls
+- Beef and chilli pesto pasta with olives
+- Chicken and chickpea curry
+- Beef chilli con carne
+";
