@@ -50,6 +50,6 @@ module "application_role" {
   }
 
   application_name   = each.key
-  instance_role_name = module.primary.role_name
+  instance_role_name = "primary-role"
   policy_json        = each.value
 }
