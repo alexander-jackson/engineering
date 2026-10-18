@@ -23,7 +23,8 @@ mod upstream;
 use crate::blocklist::{BlocklistManager, PostgresBlocklistBackend};
 use crate::cache::ResponseCache;
 use crate::classifier::{
-    Classify, DomainClassifier, OpenRouterDecider, PostgresDecisionStore, ReqwestFetcher,
+    ClassifierMetrics, Classify, DomainClassifier, OpenRouterDecider, PostgresDecisionStore,
+    ReqwestFetcher,
 };
 use crate::config::Configuration;
 use crate::server::{DnsServer, DnsServerMetrics};
@@ -49,6 +50,8 @@ async fn main() -> Result<()> {
     let upstream = UpstreamResolver::new(&config.upstream).await?;
     let cache = ResponseCache::new(&config.cache);
 
+    let meter = opentelemetry::global::meter("dns-server");
+
     let decision_store = PostgresDecisionStore::new(pool.clone());
 
     let classifier: Option<Arc<dyn Classify>> = match &config.classifier {
@@ -63,20 +66,26 @@ async fn main() -> Result<()> {
             let wait = Duration::from_secs(classifier_config.timeout_seconds);
 
             Some(Arc::new(
-                DomainClassifier::new(fetcher, decider, store, wait).await?,
+                DomainClassifier::new(
+                    fetcher,
+                    decider,
+                    store,
+                    wait,
+                    ClassifierMetrics::new(&meter),
+                )
+                .await?,
             ))
         }
         None => None,
     };
+
+    let metrics = DnsServerMetrics::new(&meter);
 
     let addr = (config.server.dns.host, config.server.dns.port);
     let dns_listener = TcpListener::bind(addr).await?;
 
     let addr = (config.server.http.host, config.server.http.port);
     let http_listener = TcpListener::bind(addr).await?;
-
-    let meter = opentelemetry::global::meter("dns-server");
-    let metrics = DnsServerMetrics::new(&meter);
 
     let dns_server = DnsServer::new(
         dns_listener,
