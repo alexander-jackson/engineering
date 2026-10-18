@@ -6,20 +6,23 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use color_eyre::eyre::Result;
 use tokio::sync::watch;
 
+use crate::classifier::metrics::{FetchOutcome, JobOutcome, LookupResult};
 use crate::uid::QuestionUid;
 
 mod decider;
 mod fetcher;
+mod metrics;
 mod question;
 mod store;
 
 pub use crate::classifier::decider::OpenRouterDecider;
 pub use crate::classifier::fetcher::ReqwestFetcher;
+pub use crate::classifier::metrics::ClassifierMetrics;
 pub use crate::classifier::question::{Prompt, Question, Threshold};
 pub use crate::classifier::store::PostgresDecisionStore;
 
@@ -30,6 +33,15 @@ const JOB_TIMEOUT: Duration = Duration::from_secs(30);
 pub enum Verdict {
     Allowed,
     Blocked,
+}
+
+impl Verdict {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Allowed => "allowed",
+            Self::Blocked => "blocked",
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -89,6 +101,7 @@ pub struct DomainClassifier<F, D, S> {
     decisions: Arc<RwLock<HashMap<String, bool>>>,
     in_flight: InFlight,
     wait_timeout: Duration,
+    metrics: ClassifierMetrics,
 }
 
 impl<F, D, S> DomainClassifier<F, D, S>
@@ -98,7 +111,13 @@ where
     S: DecisionStore + 'static,
 {
     /// Create a classifier, loading any previously stored decisions from `store`.
-    pub async fn new(fetcher: F, decider: D, store: S, wait_timeout: Duration) -> Result<Self> {
+    pub async fn new(
+        fetcher: F,
+        decider: D,
+        store: S,
+        wait_timeout: Duration,
+        metrics: ClassifierMetrics,
+    ) -> Result<Self> {
         let decisions = store.decisions().await?;
 
         Ok(Self {
@@ -108,6 +127,7 @@ where
             decisions: Arc::new(RwLock::new(decisions)),
             in_flight: Arc::default(),
             wait_timeout,
+            metrics,
         })
     }
 
@@ -138,17 +158,22 @@ where
             store: Arc::clone(&self.store),
             decisions: Arc::clone(&self.decisions),
             domain: domain.to_string(),
+            metrics: self.metrics.clone(),
         };
         let in_flight = Arc::clone(&self.in_flight);
 
         tokio::spawn(async move {
-            let verdict = match tokio::time::timeout(JOB_TIMEOUT, job.run()).await {
-                Ok(verdict) => verdict,
+            let start = Instant::now();
+
+            let (outcome, verdict) = match tokio::time::timeout(JOB_TIMEOUT, job.run()).await {
+                Ok(result) => result,
                 Err(_) => {
                     tracing::warn!(domain = %job.domain, "classification timed out");
-                    Verdict::Allowed
+                    (JobOutcome::TimedOut, Verdict::Allowed)
                 }
             };
+
+            job.metrics.job(outcome, verdict, elapsed_ms(start));
 
             // Remove the entry before publishing so a later query sees the stored decision (or
             // starts a fresh job) rather than a finished channel.
@@ -173,25 +198,31 @@ where
 
         if !is_classifiable(&domain) {
             tracing::debug!("decided that the input was unclassifiable");
+            self.metrics
+                .lookup(LookupResult::Unclassifiable, Verdict::Allowed);
             return Verdict::Allowed;
         }
 
         if let Some(verdict) = self.known(&domain) {
             tracing::debug!(?verdict, "input was already known");
+            self.metrics.lookup(LookupResult::Known, verdict);
             return verdict;
         }
 
         let mut rx = self.subscribe(&domain);
         let wait = rx.wait_for(|verdict| verdict.is_some());
 
-        match tokio::time::timeout(self.wait_timeout, wait).await {
-            Ok(Ok(verdict)) => verdict.unwrap_or(Verdict::Allowed),
-            Ok(Err(_)) => Verdict::Allowed,
+        let (result, verdict) = match tokio::time::timeout(self.wait_timeout, wait).await {
+            Ok(Ok(verdict)) => (LookupResult::Completed, verdict.unwrap_or(Verdict::Allowed)),
+            Ok(Err(_)) => (LookupResult::Completed, Verdict::Allowed),
             Err(_) => {
                 tracing::warn!(%domain, "timed out waiting for classification, allowing");
-                Verdict::Allowed
+                (LookupResult::WaitTimeout, Verdict::Allowed)
             }
-        }
+        };
+
+        self.metrics.lookup(result, verdict);
+        verdict
     }
 }
 
@@ -201,41 +232,55 @@ struct Job<F, D, S> {
     store: Arc<S>,
     decisions: Arc<RwLock<HashMap<String, bool>>>,
     domain: String,
+    metrics: ClassifierMetrics,
 }
 
 impl<F: DomainFetcher, D: DomainDecider, S: DecisionStore> Job<F, D, S> {
-    async fn run(&self) -> Verdict {
+    async fn run(&self) -> (JobOutcome, Verdict) {
         let questions = match self.store.questions().await {
-            Ok(questions) if questions.is_empty() => return Verdict::Allowed,
+            Ok(questions) if questions.is_empty() => {
+                return (JobOutcome::NoQuestions, Verdict::Allowed);
+            }
             Ok(questions) => questions,
             Err(e) => {
                 tracing::error!(error = ?e, domain = %self.domain, "failed to load questions");
-                return Verdict::Allowed;
+                return (JobOutcome::QuestionsFailed, Verdict::Allowed);
             }
         };
 
-        let content = match self.fetcher.fetch(&self.domain).await {
-            Ok(Some(content)) if !content.is_empty() => content,
+        let start = Instant::now();
+        let fetched = self.fetcher.fetch(&self.domain).await;
+
+        let content = match fetched {
+            Ok(Some(content)) if !content.is_empty() => {
+                self.metrics.fetch(FetchOutcome::Content, elapsed_ms(start));
+                content
+            }
             Ok(_) => {
                 tracing::debug!(domain = %self.domain, "no content to classify, allowing");
-                return self.finish(false, &[]).await;
+                self.metrics.fetch(FetchOutcome::Empty, elapsed_ms(start));
+                return (JobOutcome::NoContent, self.finish(false, &[]).await);
             }
             Err(e) => {
                 tracing::debug!(error = ?e, domain = %self.domain, "failed to fetch, allowing");
-                return self.finish(false, &[]).await;
+                self.metrics.fetch(FetchOutcome::Error, elapsed_ms(start));
+                return (JobOutcome::FetchFailed, self.finish(false, &[]).await);
             }
         };
 
-        let scores = match self
+        let start = Instant::now();
+        let decided = self
             .decider
             .decide(&self.domain, &content, &questions)
-            .await
-        {
+            .await;
+        self.metrics.decision(decided.is_ok(), elapsed_ms(start));
+
+        let scores = match decided {
             Ok(scores) => scores,
             Err(e) => {
                 // Don't record anything, so the domain is evaluated again next time.
                 tracing::error!(error = ?e, domain = %self.domain, "decision model failed");
-                return Verdict::Allowed;
+                return (JobOutcome::DecisionFailed, Verdict::Allowed);
             }
         };
 
@@ -252,7 +297,7 @@ impl<F: DomainFetcher, D: DomainDecider, S: DecisionStore> Job<F, D, S> {
 
         tracing::info!(domain = %self.domain, blocked, ?scores, "classified domain");
 
-        self.finish(blocked, &scores).await
+        (JobOutcome::Scored, self.finish(blocked, &scores).await)
     }
 
     async fn finish(&self, blocked: bool, scores: &[(QuestionUid, f64)]) -> Verdict {
@@ -271,6 +316,10 @@ impl<F: DomainFetcher, D: DomainDecider, S: DecisionStore> Job<F, D, S> {
             Verdict::Allowed
         }
     }
+}
+
+fn elapsed_ms(start: Instant) -> f64 {
+    start.elapsed().as_secs_f64() * 1000.0
 }
 
 /// Whether it makes sense to try fetching a website for `domain`.
@@ -412,10 +461,15 @@ mod tests {
             calls: Arc::clone(&fetches),
             delay,
         };
-        let classifier =
-            DomainClassifier::new(fetcher, StubDecider(scores), Arc::clone(&store), wait)
-                .await
-                .unwrap();
+        let classifier = DomainClassifier::new(
+            fetcher,
+            StubDecider(scores),
+            Arc::clone(&store),
+            wait,
+            ClassifierMetrics::new(&opentelemetry::global::meter("test")),
+        )
+        .await
+        .unwrap();
 
         Harness {
             classifier,
