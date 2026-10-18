@@ -1,7 +1,8 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use axum::body::Body;
-use axum::extract::{Form, State};
+use axum::extract::{Form, Path, State};
 use axum::http::StatusCode;
 use axum::http::header::LOCATION;
 use axum::response::{IntoResponse, Response};
@@ -13,8 +14,10 @@ use serde::Deserialize;
 use tokio::net::TcpListener;
 
 use crate::blocklist::{BlocklistBackend, BlocklistManager};
+use crate::classifier::{DecisionStore, Prompt, Threshold};
 use crate::persistence::DomainEventType;
-use crate::templates::IndexContext;
+use crate::templates::{IndexContext, QuestionsContext};
+use crate::uid::QuestionUid;
 
 struct ErrorDetails {
     report: color_eyre::Report,
@@ -39,29 +42,36 @@ type ServerResult<T> = Result<T, ErrorDetails>;
 #[derive(Clone)]
 struct ApplicationState<B: BlocklistBackend> {
     manager: BlocklistManager<B>,
+    questions: Arc<dyn DecisionStore>,
     template_engine: TemplateEngine,
 }
 
 pub fn build<B: BlocklistBackend + Clone + 'static>(
     manager: BlocklistManager<B>,
+    questions: Arc<dyn DecisionStore>,
     template_engine: TemplateEngine,
     listener: TcpListener,
 ) -> Server {
-    Server::new(build_router(manager, template_engine), listener)
+    Server::new(build_router(manager, questions, template_engine), listener)
 }
 
 pub fn build_router<B: BlocklistBackend + Clone + 'static>(
     manager: BlocklistManager<B>,
+    questions: Arc<dyn DecisionStore>,
     template_engine: TemplateEngine,
 ) -> Router {
     let state = ApplicationState {
         manager,
+        questions,
         template_engine,
     };
 
     Router::new()
         .route("/", get(index))
         .route("/block", post(block_domain))
+        .route("/questions", get(list_questions).post(add_question))
+        .route("/questions/{uid}/retire", post(retire_question))
+        .route("/questions/{uid}/replace", post(replace_question))
         .route("/health", get(health_check))
         .route(
             "/api/v1/blocklist",
@@ -117,6 +127,68 @@ async fn block_domain<B: BlocklistBackend + Clone + 'static>(
     Ok(redirect("/"))
 }
 
+async fn list_questions<B: BlocklistBackend + Clone + 'static>(
+    State(state): State<ApplicationState<B>>,
+) -> ServerResult<RenderedTemplate> {
+    let context = QuestionsContext::new(state.questions.questions().await?);
+
+    Ok(state
+        .template_engine
+        .render_serialized("questions.tera.html", &context)?)
+}
+
+#[derive(Deserialize)]
+struct QuestionForm {
+    prompt: Prompt,
+    threshold: Threshold,
+}
+
+async fn add_question<B: BlocklistBackend + Clone + 'static>(
+    State(state): State<ApplicationState<B>>,
+    Form(form): Form<QuestionForm>,
+) -> ServerResult<Response> {
+    let uid = state
+        .questions
+        .add_question(&form.prompt, form.threshold)
+        .await?;
+    tracing::info!(%uid, threshold = %form.threshold, "added classifier question");
+
+    Ok(redirect("/questions"))
+}
+
+async fn retire_question<B: BlocklistBackend + Clone + 'static>(
+    State(state): State<ApplicationState<B>>,
+    Path(uid): Path<QuestionUid>,
+) -> ServerResult<Response> {
+    if !state.questions.retire_question(uid).await? {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
+    tracing::info!(%uid, "retired classifier question");
+
+    Ok(redirect("/questions"))
+}
+
+/// Questions are immutable, so changing one marks it as redundant and adds a new question in its
+/// place.
+async fn replace_question<B: BlocklistBackend + Clone + 'static>(
+    State(state): State<ApplicationState<B>>,
+    Path(uid): Path<QuestionUid>,
+    Form(form): Form<QuestionForm>,
+) -> ServerResult<Response> {
+    let Some(replacement) = state
+        .questions
+        .replace_question(uid, &form.prompt, form.threshold)
+        .await?
+    else {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    };
+
+    tracing::info!(%uid, %replacement, threshold = %form.threshold, "replaced classifier question");
+
+    Ok(redirect("/questions"))
+}
+
 fn redirect(path: &'static str) -> Response {
     Response::builder()
         .status(StatusCode::FOUND)
@@ -169,8 +241,62 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::blocklist::{BlocklistBackend, BlocklistManager};
+    use crate::classifier::{DecisionStore, Prompt, Question, Threshold};
     use crate::http_server::{build_router, normalize_domain};
     use crate::persistence::DomainEventType;
+    use crate::uid::QuestionUid;
+
+    #[derive(Default)]
+    struct MemoryQuestions {
+        questions: Mutex<Vec<Question>>,
+    }
+
+    #[async_trait::async_trait]
+    impl DecisionStore for MemoryQuestions {
+        async fn questions(&self) -> Result<Vec<Question>> {
+            Ok(self.questions.lock().unwrap().clone())
+        }
+
+        async fn decisions(&self) -> Result<std::collections::HashMap<String, bool>> {
+            Ok(Default::default())
+        }
+
+        async fn record(&self, _: &str, _: bool, _: &[(QuestionUid, f64)]) -> Result<()> {
+            Ok(())
+        }
+
+        async fn add_question(&self, prompt: &Prompt, threshold: Threshold) -> Result<QuestionUid> {
+            let uid = QuestionUid::new();
+            self.questions.lock().unwrap().push(Question {
+                uid,
+                prompt: prompt.clone(),
+                threshold,
+            });
+
+            Ok(uid)
+        }
+
+        async fn retire_question(&self, uid: QuestionUid) -> Result<bool> {
+            let mut questions = self.questions.lock().unwrap();
+            let before = questions.len();
+            questions.retain(|q| q.uid != uid);
+
+            Ok(questions.len() != before)
+        }
+
+        async fn replace_question(
+            &self,
+            uid: QuestionUid,
+            prompt: &Prompt,
+            threshold: Threshold,
+        ) -> Result<Option<QuestionUid>> {
+            if !self.retire_question(uid).await? {
+                return Ok(None);
+            }
+
+            self.add_question(prompt, threshold).await.map(Some)
+        }
+    }
 
     #[derive(Clone, Default)]
     struct SharedBackend {
@@ -198,9 +324,37 @@ mod tests {
             .extend(domains.iter().map(|d| d.to_string()));
 
         let manager = BlocklistManager::new(backend.clone(), HashSet::new()).await?;
-        let router = build_router(manager, TemplateEngine::new()?);
+        let router = build_router(
+            manager,
+            Arc::new(MemoryQuestions::default()),
+            TemplateEngine::new()?,
+        );
 
         Ok((router, backend))
+    }
+
+    async fn router_with_questions() -> Result<(axum::Router, Arc<MemoryQuestions>)> {
+        let backend = SharedBackend::default();
+        let manager = BlocklistManager::new(backend, HashSet::new()).await?;
+        let questions = Arc::new(MemoryQuestions::default());
+        let router = build_router(manager, questions.clone(), TemplateEngine::new()?);
+
+        Ok((router, questions))
+    }
+
+    async fn add(questions: &MemoryQuestions, prompt: &str, threshold: f64) -> Result<QuestionUid> {
+        questions
+            .add_question(&Prompt::try_from(prompt)?, Threshold::try_from(threshold)?)
+            .await
+    }
+
+    fn post_form(uri: &str, body: &'static str) -> Request<Body> {
+        Request::builder()
+            .method(Method::POST)
+            .uri(uri)
+            .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(Body::from(body))
+            .unwrap()
     }
 
     async fn body_of(response: Response) -> String {
@@ -279,6 +433,132 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert!(backend.domains.lock().unwrap().is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn questions_page_shows_empty_state() -> Result<()> {
+        let (router, _) = router_with_questions().await?;
+
+        let response = router
+            .oneshot(Request::get("/questions").body(Body::empty())?)
+            .await?;
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(body_of(response).await.contains("No active questions"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn adding_a_question_stores_it_and_lists_it() -> Result<()> {
+        let (router, questions) = router_with_questions().await?;
+
+        let response = router
+            .clone()
+            .oneshot(post_form(
+                "/questions",
+                "prompt=+Is+this+a+proxy%3F+&threshold=0.8",
+            ))
+            .await?;
+
+        assert_eq!(response.status(), StatusCode::FOUND);
+        assert_eq!(response.headers().get(LOCATION).unwrap(), "/questions");
+
+        let stored = questions.questions.lock().unwrap().clone();
+        assert_eq!(stored.len(), 1);
+        assert_eq!(&*stored[0].prompt, "Is this a proxy?");
+        assert_eq!(*stored[0].threshold, 0.8);
+
+        let response = router
+            .oneshot(Request::get("/questions").body(Body::empty())?)
+            .await?;
+        assert!(body_of(response).await.contains("Is this a proxy?"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn invalid_questions_are_rejected() -> Result<()> {
+        let (router, questions) = router_with_questions().await?;
+
+        for body in [
+            "prompt=+&threshold=0.5",
+            "prompt=ok&threshold=1.5",
+            "prompt=ok&threshold=-0.1",
+            "prompt=ok&threshold=NaN",
+            "prompt=ok&threshold=abc",
+        ] {
+            let response = router
+                .clone()
+                .oneshot(post_form("/questions", body))
+                .await?;
+            assert_eq!(
+                response.status(),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "{body}"
+            );
+        }
+
+        assert!(questions.questions.lock().unwrap().is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn retiring_a_question_removes_it() -> Result<()> {
+        let (router, questions) = router_with_questions().await?;
+        let uid = add(&questions, "q", 0.5).await?;
+
+        let response = router
+            .clone()
+            .oneshot(post_form(&format!("/questions/{uid}/retire"), ""))
+            .await?;
+        assert_eq!(response.status(), StatusCode::FOUND);
+        assert!(questions.questions.lock().unwrap().is_empty());
+
+        let again = router
+            .clone()
+            .oneshot(post_form(&format!("/questions/{uid}/retire"), ""))
+            .await?;
+        assert_eq!(again.status(), StatusCode::NOT_FOUND);
+
+        let invalid = router
+            .oneshot(post_form("/questions/not-a-uid/retire", ""))
+            .await?;
+        assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn replacing_a_question_swaps_its_definition() -> Result<()> {
+        let (router, questions) = router_with_questions().await?;
+        let uid = add(&questions, "old", 0.5).await?;
+
+        let response = router
+            .clone()
+            .oneshot(post_form(
+                &format!("/questions/{uid}/replace"),
+                "prompt=new&threshold=0.9",
+            ))
+            .await?;
+        assert_eq!(response.status(), StatusCode::FOUND);
+
+        let stored = questions.questions.lock().unwrap().clone();
+        assert_eq!(stored.len(), 1);
+        assert_ne!(stored[0].uid, uid);
+        assert_eq!(&*stored[0].prompt, "new");
+        assert_eq!(*stored[0].threshold, 0.9);
+
+        let missing = router
+            .oneshot(post_form(
+                &format!("/questions/{}/replace", QuestionUid::new()),
+                "prompt=new&threshold=0.9",
+            ))
+            .await?;
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
 
         Ok(())
     }

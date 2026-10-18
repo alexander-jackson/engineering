@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
@@ -8,6 +9,7 @@ use tokio::net::TcpListener;
 
 use crate::blocklist::{BlocklistBackend, BlocklistManager};
 use crate::cache::ResponseCache;
+use crate::classifier::Classify;
 use crate::handler::DnsRequestHandler;
 use crate::upstream::UpstreamResolver;
 
@@ -49,15 +51,21 @@ pub struct DnsServer<B: BlocklistBackend + 'static> {
 }
 
 impl<B: BlocklistBackend> DnsServer<B> {
-    #[tracing::instrument(skip(listener, upstream, blocklist, cache, metrics))]
+    #[tracing::instrument(skip(listener, upstream, blocklist, cache, metrics, classifier))]
     pub async fn new(
         listener: TcpListener,
         upstream: UpstreamResolver,
         blocklist: BlocklistManager<B>,
         cache: ResponseCache,
         metrics: DnsServerMetrics,
+        classifier: Option<Arc<dyn Classify>>,
     ) -> Result<Self> {
-        let handler = DnsRequestHandler::new(upstream, blocklist, cache, metrics);
+        let mut handler = DnsRequestHandler::new(upstream, blocklist, cache, metrics);
+
+        if let Some(classifier) = classifier {
+            handler = handler.with_classifier(classifier);
+        }
+
         let mut server_future = Server::new(handler);
 
         register_tcp_listener(&mut server_future, listener).await?;

@@ -1,4 +1,6 @@
 use std::collections::HashSet;
+use std::sync::Arc;
+use std::time::Duration;
 
 use color_eyre::eyre::Result;
 use foundation_shutdown::ShutdownCoordinator;
@@ -7,6 +9,7 @@ use tokio::net::TcpListener;
 
 mod blocklist;
 mod cache;
+mod classifier;
 mod config;
 mod handler;
 mod http_server;
@@ -14,10 +17,14 @@ mod persistence;
 mod remote_blocklist;
 mod server;
 mod templates;
+mod uid;
 mod upstream;
 
 use crate::blocklist::{BlocklistManager, PostgresBlocklistBackend};
 use crate::cache::ResponseCache;
+use crate::classifier::{
+    Classify, DomainClassifier, OpenRouterDecider, PostgresDecisionStore, ReqwestFetcher,
+};
 use crate::config::Configuration;
 use crate::server::{DnsServer, DnsServerMetrics};
 use crate::upstream::UpstreamResolver;
@@ -42,6 +49,26 @@ async fn main() -> Result<()> {
     let upstream = UpstreamResolver::new(&config.upstream).await?;
     let cache = ResponseCache::new(&config.cache);
 
+    let decision_store = PostgresDecisionStore::new(pool.clone());
+
+    let classifier: Option<Arc<dyn Classify>> = match &config.classifier {
+        Some(classifier_config) => {
+            tracing::info!(config = ?classifier_config, "setting up the classifier for new domains");
+
+            let fetcher =
+                ReqwestFetcher::new(Duration::from_secs(5), classifier_config.max_content_chars)?;
+            let decider =
+                OpenRouterDecider::new(&classifier_config.api_key, &classifier_config.model)?;
+            let store = decision_store.clone();
+            let wait = Duration::from_secs(classifier_config.timeout_seconds);
+
+            Some(Arc::new(
+                DomainClassifier::new(fetcher, decider, store, wait).await?,
+            ))
+        }
+        None => None,
+    };
+
     let addr = (config.server.dns.host, config.server.dns.port);
     let dns_listener = TcpListener::bind(addr).await?;
 
@@ -57,12 +84,17 @@ async fn main() -> Result<()> {
         blocklist_manager.clone(),
         cache,
         metrics,
+        classifier,
     )
     .await?;
 
     let template_engine = TemplateEngine::new()?;
-    let http_server =
-        crate::http_server::build(blocklist_manager.clone(), template_engine, http_listener);
+    let http_server = crate::http_server::build(
+        blocklist_manager.clone(),
+        Arc::new(decision_store),
+        template_engine,
+        http_listener,
+    );
 
     ShutdownCoordinator::new()
         .with_task(dns_server)

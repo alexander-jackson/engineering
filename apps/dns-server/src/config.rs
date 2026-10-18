@@ -1,5 +1,6 @@
 use std::net::Ipv4Addr;
 
+use foundation_configuration::Secret;
 use hickory_net::xfer::Protocol;
 use serde::Deserialize;
 
@@ -9,6 +10,7 @@ pub struct Configuration {
     pub upstream: UpstreamConfig,
     pub cache: CacheConfig,
     pub remote_blocklist: Option<RemoteBlocklistConfig>,
+    pub classifier: Option<ClassifierConfig>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -43,6 +45,16 @@ pub struct RemoteBlocklistConfig {
     pub url: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+pub struct ClassifierConfig {
+    pub api_key: Secret<String>,
+    pub model: String,
+    /// How long a query waits for a new domain to be classified before it is allowed.
+    pub timeout_seconds: u64,
+    /// The most characters of page text sent to the model.
+    pub max_content_chars: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::Ipv4Addr;
@@ -51,8 +63,8 @@ mod tests {
     use hickory_net::xfer::Protocol;
 
     use crate::config::{
-        CacheConfig, Configuration, ListenerConfig, RemoteBlocklistConfig, ServerConfig,
-        UpstreamConfig,
+        CacheConfig, ClassifierConfig, Configuration, ListenerConfig, RemoteBlocklistConfig,
+        ServerConfig, UpstreamConfig,
     };
 
     #[test]
@@ -83,6 +95,12 @@ mod tests {
             },
             remote_blocklist: Some(RemoteBlocklistConfig {
                 url: "https://example.com/hagezi-multi.txt".to_string(),
+            }),
+            classifier: Some(ClassifierConfig {
+                api_key: "sk-or-example".to_string().into(),
+                model: "typesafe/jev-1.14".to_string(),
+                timeout_seconds: 8,
+                max_content_chars: 8000,
             }),
         };
 

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO domain_decision_question (\n                    domain_decision_id,\n                    classifier_question_id,\n                    score\n                )\n                VALUES (\n                    $1,\n                    (SELECT id FROM classifier_question WHERE classifier_question_uid = $2),\n                    $3\n                )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fb7fbb79412c8a97f707cf54371df992c67e029ffdbae4047213e7147a4c0a53"
+}
