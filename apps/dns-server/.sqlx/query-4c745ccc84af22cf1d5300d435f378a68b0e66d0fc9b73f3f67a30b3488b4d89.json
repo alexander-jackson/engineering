@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT q.classifier_question_uid, q.prompt, q.threshold\n            FROM classifier_question q\n            WHERE NOT EXISTS (\n                SELECT 1\n                FROM classifier_question_event e\n                WHERE e.classifier_question_id = q.id\n            )\n            ORDER BY q.created_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "classifier_question_uid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "prompt",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "threshold",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4c745ccc84af22cf1d5300d435f378a68b0e66d0fc9b73f3f67a30b3488b4d89"
+}

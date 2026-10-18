@@ -13,7 +13,7 @@ pub mod external_bytes;
 pub use crate::external_bytes::ExternalBytes;
 
 /// Wrapper type to ensure secret values are not displayed.
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, PartialEq, Eq)]
 pub struct Secret<T>(T);
 
 impl<T> Deref for Secret<T> {

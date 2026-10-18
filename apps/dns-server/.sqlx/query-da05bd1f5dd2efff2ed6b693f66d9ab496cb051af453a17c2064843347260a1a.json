@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO domain_decision (domain_decision_uid, name, blocked, decided_at)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (name) DO NOTHING\n            RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "da05bd1f5dd2efff2ed6b693f66d9ab496cb051af453a17c2064843347260a1a"
+}

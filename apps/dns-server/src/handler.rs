@@ -1,6 +1,8 @@
+use std::sync::Arc;
 use std::time::Instant;
 
 use hickory_proto::op::{Header, HeaderCounts, Message, MessageType, OpCode, ResponseCode};
+use hickory_proto::rr::{RData, RecordType};
 use hickory_server::net::runtime::Time;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
 use hickory_server::zone_handler::MessageResponseBuilder;
@@ -8,6 +10,7 @@ use opentelemetry::KeyValue;
 
 use crate::blocklist::{BlockSource, Blocklist};
 use crate::cache::ResponseCache;
+use crate::classifier::{Classify, Verdict};
 use crate::server::DnsServerMetrics;
 use crate::upstream::Upstream;
 
@@ -17,6 +20,7 @@ pub struct DnsRequestHandler<U, B> {
     blocklist: B,
     cache: ResponseCache,
     metrics: DnsServerMetrics,
+    classifier: Option<Arc<dyn Classify>>,
 }
 
 impl<U: Upstream, B: Blocklist> DnsRequestHandler<U, B> {
@@ -26,7 +30,47 @@ impl<U: Upstream, B: Blocklist> DnsRequestHandler<U, B> {
             blocklist,
             cache,
             metrics,
+            classifier: None,
         }
+    }
+
+    /// Enable autonomous classification of domains that are not otherwise blocked.
+    pub fn with_classifier(mut self, classifier: Arc<dyn Classify>) -> Self {
+        self.classifier = Some(classifier);
+        self
+    }
+
+    /// Whether the classifier decides that the domain in a successful `response` is blocked.
+    ///
+    /// Only resolved address queries are classified: there's nothing to fetch for failed lookups,
+    /// and an upstream that has already blocked the domain answers with an unspecified address.
+    async fn classifier_blocks(
+        &self,
+        domain: &str,
+        query_type: RecordType,
+        response: &Message,
+    ) -> bool {
+        let Some(classifier) = &self.classifier else {
+            return false;
+        };
+
+        let is_address_query = matches!(
+            query_type,
+            RecordType::A | RecordType::AAAA | RecordType::HTTPS
+        );
+        let is_resolved = response.metadata.response_code == ResponseCode::NoError
+            && !response.answers.is_empty();
+        let is_sinkholed = response.answers.iter().any(|record| match &record.data {
+            RData::A(a) => a.0.is_unspecified(),
+            RData::AAAA(aaaa) => aaaa.0.is_unspecified(),
+            _ => false,
+        });
+
+        if !is_address_query || !is_resolved || is_sinkholed {
+            return false;
+        }
+
+        classifier.classify(domain).await == Verdict::Blocked
     }
 }
 
@@ -35,6 +79,34 @@ fn make_response_info(request: &Request) -> ResponseInfo {
         metadata: request.metadata,
         counts: HeaderCounts::default(),
     })
+}
+
+impl<U: Upstream, B: Blocklist> DnsRequestHandler<U, B> {
+    async fn refuse<R: ResponseHandler>(
+        &self,
+        request: &Request,
+        mut response_handle: R,
+        block_type: &'static str,
+        start: Instant,
+    ) -> ResponseInfo {
+        let attrs = [KeyValue::new("type", block_type)];
+        self.metrics.responses.add(1, &attrs);
+
+        let response = MessageResponseBuilder::from_message_request(request)
+            .error_msg(&request.metadata, ResponseCode::Refused);
+
+        let result = match response_handle.send_response(response).await {
+            Ok(info) => info,
+            Err(e) => {
+                tracing::error!(error = ?e, "failed to send blocked response");
+                make_response_info(request)
+            }
+        };
+        self.metrics
+            .request_duration
+            .record(start.elapsed().as_millis() as f64, &attrs);
+        result
+    }
 }
 
 #[async_trait::async_trait]
@@ -95,23 +167,9 @@ where
                 "blocked domain query"
             );
 
-            let attrs = [KeyValue::new("type", block_type)];
-            self.metrics.responses.add(1, &attrs);
-
-            let response = MessageResponseBuilder::from_message_request(request)
-                .error_msg(&request.metadata, ResponseCode::Refused);
-
-            let result = match response_handle.send_response(response).await {
-                Ok(info) => info,
-                Err(e) => {
-                    tracing::error!(error = ?e, "failed to send blocked response");
-                    make_response_info(request)
-                }
-            };
-            self.metrics
-                .request_duration
-                .record(start.elapsed().as_millis() as f64, &attrs);
-            return result;
+            return self
+                .refuse(request, response_handle, block_type, start)
+                .await;
         }
 
         let cache_key = format!("{}:{:?}", domain_name, request_info.query.query_type());
@@ -129,6 +187,22 @@ where
                 negative = is_negative,
                 "returning cached response"
             );
+
+            if !is_negative
+                && self
+                    .classifier_blocks(
+                        &domain_name,
+                        request_info.query.query_type(),
+                        &cached_response,
+                    )
+                    .await
+            {
+                tracing::info!(name = %domain_name, src = %request.src(), "classifier blocked domain query");
+
+                return self
+                    .refuse(request, response_handle, "classifier-block", start)
+                    .await;
+            }
 
             let attrs = [KeyValue::new("type", type_label)];
             self.metrics.responses.add(1, &attrs);
@@ -198,6 +272,22 @@ where
         self.metrics
             .upstream_duration
             .record(upstream_start.elapsed().as_millis() as f64, &[]);
+        if response_type == "upstream"
+            && self
+                .classifier_blocks(
+                    &domain_name,
+                    request_info.query.query_type(),
+                    &response_message,
+                )
+                .await
+        {
+            tracing::info!(name = %domain_name, src = %request.src(), "classifier blocked domain query");
+
+            return self
+                .refuse(request, response_handle, "classifier-block", start)
+                .await;
+        }
+
         let attrs = [KeyValue::new("type", response_type)];
         self.metrics.responses.add(1, &attrs);
 
@@ -244,6 +334,7 @@ mod tests {
 
     use crate::blocklist::{BlockSource, Blocklist};
     use crate::cache::ResponseCache;
+    use crate::classifier::{Classify, Verdict};
     use crate::config::CacheConfig;
     use crate::server::DnsServerMetrics;
     use crate::upstream::Upstream;
@@ -355,6 +446,94 @@ mod tests {
                 counts: HeaderCounts::default(),
             }))
         }
+    }
+
+    struct StubClassifier(Verdict, Arc<AtomicUsize>);
+
+    #[async_trait::async_trait]
+    impl Classify for StubClassifier {
+        async fn classify(&self, _: &str) -> Verdict {
+            self.1.fetch_add(1, Ordering::SeqCst);
+            self.0
+        }
+    }
+
+    fn classifying_handler(
+        verdict: Verdict,
+        response: Message,
+    ) -> (
+        DnsRequestHandler<SuccessUpstream, NeverBlocked>,
+        Arc<AtomicUsize>,
+    ) {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let handler = DnsRequestHandler::new(
+            SuccessUpstream(response),
+            NeverBlocked,
+            test_cache(),
+            test_metrics(),
+        )
+        .with_classifier(Arc::new(StubClassifier(verdict, Arc::clone(&calls))));
+
+        (handler, calls)
+    }
+
+    #[tokio::test]
+    async fn classifier_blocked_domain_returns_refused_even_when_cached() {
+        let (handler, calls) = classifying_handler(Verdict::Blocked, make_success_message());
+        let request = make_test_request("example.com.");
+
+        for _ in 0..2 {
+            let info = handler
+                .handle_request::<_, TokioTime>(&request, CapturingResponseHandler)
+                .await;
+
+            assert_eq!(info.response_code, ResponseCode::Refused);
+        }
+
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn classifier_allowed_domain_is_resolved_normally() {
+        let (handler, calls) = classifying_handler(Verdict::Allowed, make_success_message());
+        let request = make_test_request("example.com.");
+
+        let info = handler
+            .handle_request::<_, TokioTime>(&request, CapturingResponseHandler)
+            .await;
+
+        assert_eq!(info.response_code, ResponseCode::NoError);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn classifier_is_not_consulted_for_failed_lookups() {
+        let (handler, calls) = classifying_handler(Verdict::Blocked, make_servfail_message());
+        let request = make_test_request("example.com.");
+
+        handler
+            .handle_request::<_, TokioTime>(&request, CapturingResponseHandler)
+            .await;
+
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn classifier_is_not_consulted_for_sinkholed_answers() {
+        let name = Name::from_str("example.com.").unwrap();
+        let record = Record::from_rdata(name, 300, RData::A(Ipv4Addr::UNSPECIFIED.into()));
+        let mut response = Message::new(1, MessageType::Response, OpCode::Query);
+        response.add_answer(record);
+
+        let (handler, calls) = classifying_handler(Verdict::Blocked, response);
+        let request = make_test_request("example.com.");
+
+        let info = handler
+            .handle_request::<_, TokioTime>(&request, CapturingResponseHandler)
+            .await;
+
+        assert_eq!(info.response_code, ResponseCode::NoError);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]

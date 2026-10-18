@@ -19,3 +19,9 @@ cache:
 
 remote_blocklist:
   url: https://example.com/hagezi-multi.txt
+
+classifier:
+  api_key: sk-or-example
+  model: typesafe/jev-1.14
+  timeout_seconds: 8
+  max_content_chars: 8000

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en" class="dark h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="DNS classifier questions" />
+    <title>DNS Questions</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              dark: {
+                bg: "#1e201e",
+                card: "#2a2c2a",
+                text: "#ecdfcc",
+                border: "#3e403e",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="h-full bg-dark-bg text-dark-text">
+    <div class="min-h-full flex flex-col">
+      <header class="bg-dark-card shadow-lg border-b border-dark-border">
+        <div class="max-w-2xl mx-auto px-4 sm:px-6 py-6 flex items-center justify-between">
+          <h1 class="text-3xl font-bold text-dark-text">
+            <span class="text-amber-400">DNS</span> Questions
+          </h1>
+          <a href="/" class="text-sm text-gray-400 hover:text-amber-400">Blocklist</a>
+        </div>
+      </header>
+
+      <main class="max-w-2xl mx-auto w-full px-4 sm:px-6 py-8 flex flex-col gap-6">
+        <form
+          action="/questions"
+          method="post"
+          class="bg-dark-card rounded-lg shadow-lg border border-dark-border p-6 flex flex-col gap-3"
+        >
+          <label class="text-sm text-gray-400" for="prompt">
+            A yes/no question to ask about each new domain
+          </label>
+          <textarea
+            id="prompt"
+            name="prompt"
+            rows="2"
+            maxlength="1000"
+            required
+            placeholder="Does this domain provide proxying services?"
+            class="rounded-md bg-dark-bg border border-dark-border px-3 py-2 text-dark-text placeholder-gray-500 focus:outline-none focus:border-amber-400"
+          ></textarea>
+          <div class="flex gap-3 items-end">
+            <div class="flex flex-col gap-1">
+              <label class="text-sm text-gray-400" for="threshold">Block above (0 to 1)</label>
+              <input
+                id="threshold"
+                type="number"
+                name="threshold"
+                min="0"
+                max="1"
+                step="any"
+                value="0.8"
+                required
+                class="w-32 rounded-md bg-dark-bg border border-dark-border px-3 py-2 text-dark-text focus:outline-none focus:border-amber-400"
+              />
+            </div>
+            <button
+              type="submit"
+              class="rounded-md bg-amber-400 px-4 py-2 font-medium text-dark-bg hover:bg-amber-300 transition-colors"
+            >
+              Add question
+            </button>
+          </div>
+        </form>
+
+        <div class="bg-dark-card rounded-lg shadow-lg border border-dark-border">
+          <div class="px-6 py-4 border-b border-dark-border flex items-center justify-between">
+            <span class="text-lg font-medium text-gray-400">Active questions</span>
+            <span class="text-sm text-gray-400">{{ questions | length }}</span>
+          </div>
+          {% if questions %}
+          <ul class="divide-y divide-dark-border">
+            {% for question in questions %}
+            <li class="px-6 py-4 flex flex-col gap-3">
+              <div class="flex items-start justify-between gap-4">
+                <div class="flex flex-col gap-1 min-w-0">
+                  <span class="break-words">{{ question.prompt }}</span>
+                  <span class="font-mono text-xs text-gray-500 break-all">
+                    {{ question.uid }} &middot; blocks above {{ question.threshold }}
+                  </span>
+                </div>
+                <form action="/questions/{{ question.uid }}/retire" method="post">
+                  <button
+                    type="submit"
+                    class="rounded-md border border-dark-border px-3 py-1 text-sm text-gray-400 hover:text-red-400 hover:border-red-400 transition-colors"
+                  >
+                    Retire
+                  </button>
+                </form>
+              </div>
+              <details class="text-sm">
+                <summary class="cursor-pointer text-gray-400 hover:text-amber-400">
+                  Replace with a new version
+                </summary>
+                <form
+                  action="/questions/{{ question.uid }}/replace"
+                  method="post"
+                  class="mt-3 flex flex-col gap-3"
+                >
+                  <textarea
+                    name="prompt"
+                    rows="2"
+                    maxlength="1000"
+                    required
+                    class="rounded-md bg-dark-bg border border-dark-border px-3 py-2 text-dark-text focus:outline-none focus:border-amber-400"
+                  >{{ question.prompt }}</textarea>
+                  <div class="flex gap-3 items-center">
+                    <input
+                      type="number"
+                      name="threshold"
+                      min="0"
+                      max="1"
+                      step="any"
+                      value="{{ question.threshold }}"
+                      required
+                      class="w-32 rounded-md bg-dark-bg border border-dark-border px-3 py-2 text-dark-text focus:outline-none focus:border-amber-400"
+                    />
+                    <button
+                      type="submit"
+                      class="rounded-md bg-amber-400 px-4 py-2 font-medium text-dark-bg hover:bg-amber-300 transition-colors"
+                    >
+                      Replace
+                    </button>
+                  </div>
+                </form>
+              </details>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="px-6 py-4 text-gray-400">No active questions. Nothing will be classified.</p>
+          {% endif %}
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
