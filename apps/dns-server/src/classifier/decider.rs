@@ -36,7 +36,7 @@ impl DomainDecider for OpenRouterDecider {
         content: &str,
         questions: &[Question],
     ) -> Result<Vec<f64>> {
-        tracing::info!(%domain, ?questions, "making a decision");
+        tracing::info!(%domain, "making a decision");
 
         let request = DecisionsRequest::builder()
             .model(&self.model)
