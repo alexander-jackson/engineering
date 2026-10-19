@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use color_eyre::eyre::{Result, WrapErr};
 use sqlx::PgPool;
 
-use super::{DecisionStore, Prompt, Question, Threshold};
-use crate::persistence::QuestionEventType;
+use super::compression::compress;
+use super::{DecisionStore, Prompt, Question, RetrievedContent, Threshold};
+use crate::persistence::{QuestionEventType, StoredContent};
 use crate::uid::QuestionUid;
 
 #[derive(Clone)]
@@ -53,9 +54,34 @@ impl DecisionStore for PostgresDecisionStore {
         domain: &str,
         blocked: bool,
         scores: &[(QuestionUid, f64)],
+        content: Option<&RetrievedContent>,
     ) -> Result<()> {
+        let raw = match content {
+            Some(content) => Some(
+                compress(&content.raw)
+                    .await
+                    .wrap_err("failed to compress the retrieved content")?,
+            ),
+            None => None,
+        };
+
+        let stored = content
+            .zip(raw.as_deref())
+            .map(|(content, raw)| StoredContent {
+                compressed_raw: raw,
+                text: &content.text,
+                truncated: content.truncated,
+            });
+
         let mut tx = self.pool.begin().await?;
-        crate::persistence::insert_domain_decision(&mut tx, domain, blocked, scores).await?;
+        crate::persistence::insert_domain_decision(
+            &mut tx,
+            domain,
+            blocked,
+            scores,
+            stored.as_ref(),
+        )
+        .await?;
         tx.commit().await?;
 
         Ok(())

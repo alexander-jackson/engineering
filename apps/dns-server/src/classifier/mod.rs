@@ -14,6 +14,7 @@ use tokio::sync::watch;
 use crate::classifier::metrics::{FetchOutcome, JobOutcome, LookupResult};
 use crate::uid::QuestionUid;
 
+pub(crate) mod compression;
 mod decider;
 mod fetcher;
 mod metrics;
@@ -46,10 +47,21 @@ impl Verdict {
     }
 }
 
+/// The root document of a domain, both as it was received and reduced to the text we classify.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RetrievedContent {
+    /// The document exactly as received, up to the download limit.
+    pub raw: Vec<u8>,
+    /// The visible text extracted from `raw`.
+    pub text: String,
+    /// Whether `raw` was cut short by the download limit.
+    pub truncated: bool,
+}
+
 #[async_trait::async_trait]
 pub trait DomainFetcher: Send + Sync {
-    /// Fetch the text content of the root document for `domain`, or `None` if there isn't one.
-    async fn fetch(&self, domain: &str) -> Result<Option<String>>;
+    /// Fetch the root document for `domain`, or `None` if there isn't one.
+    async fn fetch(&self, domain: &str) -> Result<Option<RetrievedContent>>;
 }
 
 #[async_trait::async_trait]
@@ -64,12 +76,14 @@ pub trait DomainDecider: Send + Sync {
 pub trait DecisionStore: Send + Sync {
     async fn questions(&self) -> Result<Vec<Question>>;
     async fn decisions(&self) -> Result<HashMap<String, bool>>;
-    /// Record the decision for a domain, along with the score each question gave it for auditing.
+    /// Record the decision for a domain, along with the score each question gave it and the
+    /// content it was made from (if any was retrieved) for auditing.
     async fn record(
         &self,
         domain: &str,
         blocked: bool,
         scores: &[(QuestionUid, f64)],
+        content: Option<&RetrievedContent>,
     ) -> Result<()>;
 
     /// Add a new question. Questions are immutable once created.
@@ -267,26 +281,29 @@ impl<F: DomainFetcher, D: DomainDecider, S: DecisionStore> Job<F, D, S> {
         let fetched = self.fetcher.fetch(&self.domain).await;
 
         let content = match fetched {
-            Ok(Some(content)) if !content.is_empty() => {
+            Ok(Some(content)) if !content.text.is_empty() => {
                 self.metrics.fetch(FetchOutcome::Content, elapsed_ms(start));
                 content
             }
-            Ok(_) => {
+            Ok(content) => {
                 tracing::debug!(domain = %self.domain, "no content to classify, allowing");
                 self.metrics.fetch(FetchOutcome::Empty, elapsed_ms(start));
-                return (JobOutcome::NoContent, self.finish(false, &[]).await);
+                return (
+                    JobOutcome::NoContent,
+                    self.finish(false, &[], content.as_ref()).await,
+                );
             }
             Err(e) => {
                 tracing::debug!(error = ?e, domain = %self.domain, "failed to fetch, allowing");
                 self.metrics.fetch(FetchOutcome::Error, elapsed_ms(start));
-                return (JobOutcome::FetchFailed, self.finish(false, &[]).await);
+                return (JobOutcome::FetchFailed, self.finish(false, &[], None).await);
             }
         };
 
         let start = Instant::now();
         let decided = self
             .decider
-            .decide(&self.domain, &content, &questions)
+            .decide(&self.domain, &content.text, &questions)
             .await;
         self.metrics.decision(decided.is_ok(), elapsed_ms(start));
 
@@ -312,11 +329,23 @@ impl<F: DomainFetcher, D: DomainDecider, S: DecisionStore> Job<F, D, S> {
 
         tracing::info!(domain = %self.domain, blocked, ?scores, "classified domain");
 
-        (JobOutcome::Scored, self.finish(blocked, &scores).await)
+        (
+            JobOutcome::Scored,
+            self.finish(blocked, &scores, Some(&content)).await,
+        )
     }
 
-    async fn finish(&self, blocked: bool, scores: &[(QuestionUid, f64)]) -> Verdict {
-        if let Err(e) = self.store.record(&self.domain, blocked, scores).await {
+    async fn finish(
+        &self,
+        blocked: bool,
+        scores: &[(QuestionUid, f64)],
+        content: Option<&RetrievedContent>,
+    ) -> Verdict {
+        if let Err(e) = self
+            .store
+            .record(&self.domain, blocked, scores, content)
+            .await
+        {
             tracing::error!(error = ?e, domain = %self.domain, "failed to record decision");
         }
 
@@ -362,10 +391,15 @@ mod tests {
 
     #[async_trait::async_trait]
     impl DomainFetcher for StubFetcher {
-        async fn fetch(&self, _: &str) -> Result<Option<String>> {
+        async fn fetch(&self, _: &str) -> Result<Option<RetrievedContent>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             tokio::time::sleep(self.delay).await;
-            Ok(self.content.clone())
+
+            Ok(self.content.as_ref().map(|text| RetrievedContent {
+                raw: format!("<p>{text}</p>").into_bytes(),
+                text: text.clone(),
+                truncated: false,
+            }))
         }
     }
 
@@ -383,6 +417,7 @@ mod tests {
         questions: Mutex<Vec<Question>>,
         recorded: Mutex<HashMap<String, bool>>,
         scores: Mutex<HashMap<String, Vec<(QuestionUid, f64)>>>,
+        contents: Mutex<HashMap<String, Option<RetrievedContent>>>,
     }
 
     #[async_trait::async_trait]
@@ -400,7 +435,12 @@ mod tests {
             domain: &str,
             blocked: bool,
             scores: &[(QuestionUid, f64)],
+            content: Option<&RetrievedContent>,
         ) -> Result<()> {
+            self.contents
+                .lock()
+                .unwrap()
+                .insert(domain.to_string(), content.cloned());
             self.recorded
                 .lock()
                 .unwrap()
@@ -571,6 +611,41 @@ mod tests {
         assert_eq!(h.classifier.classify("api.example").await, Verdict::Allowed);
         assert!(!h.store.recorded.lock().unwrap()["api.example"]);
         assert!(h.store.scores.lock().unwrap()["api.example"].is_empty());
+    }
+
+    #[tokio::test]
+    async fn decisions_store_the_raw_and_trimmed_content() {
+        let h = simple(Some("bad stuff"), Ok(vec![0.9])).await;
+
+        h.classifier.classify("bad.example").await;
+
+        let contents = h.store.contents.lock().unwrap();
+        let content = contents["bad.example"].as_ref().unwrap();
+        assert_eq!(content.raw, b"<p>bad stuff</p>");
+        assert_eq!(content.text, "bad stuff");
+        assert!(!content.truncated);
+    }
+
+    #[tokio::test]
+    async fn documents_without_text_are_still_stored() {
+        let h = simple(Some(""), Ok(vec![0.9])).await;
+
+        assert_eq!(
+            h.classifier.classify("blank.example").await,
+            Verdict::Allowed
+        );
+
+        let contents = h.store.contents.lock().unwrap();
+        assert_eq!(contents["blank.example"].as_ref().unwrap().raw, b"<p></p>");
+    }
+
+    #[tokio::test]
+    async fn no_content_is_stored_when_nothing_was_retrieved() {
+        let h = simple(None, Ok(vec![0.9])).await;
+
+        h.classifier.classify("api.example").await;
+
+        assert!(h.store.contents.lock().unwrap()["api.example"].is_none());
     }
 
     #[tokio::test]

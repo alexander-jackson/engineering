@@ -3,7 +3,7 @@ use std::time::Duration;
 use color_eyre::eyre::{Result, WrapErr};
 use scraper::{Html, Node};
 
-use super::DomainFetcher;
+use super::{DomainFetcher, RetrievedContent};
 
 /// The most bytes of a response body that will be downloaded.
 const MAX_BODY_BYTES: usize = 1024 * 1024;
@@ -30,7 +30,7 @@ impl ReqwestFetcher {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn fetch_url(&self, url: &str) -> Result<Option<String>> {
+    async fn fetch_url(&self, url: &str) -> Result<Option<RetrievedContent>> {
         let mut response = self.client.get(url).send().await?;
 
         tracing::info!("fetching content from a remote server");
@@ -61,16 +61,22 @@ impl ReqwestFetcher {
             }
         }
 
+        let truncated = truncate_content_if_required(&mut body, MAX_BODY_BYTES);
+
         let html = String::from_utf8_lossy(&body);
         let text = extract_text(&html, self.max_chars);
 
-        Ok(Some(text).filter(|text| !text.is_empty()))
+        Ok(Some(RetrievedContent {
+            raw: body,
+            text,
+            truncated,
+        }))
     }
 }
 
 #[async_trait::async_trait]
 impl DomainFetcher for ReqwestFetcher {
-    async fn fetch(&self, domain: &str) -> Result<Option<String>> {
+    async fn fetch(&self, domain: &str) -> Result<Option<RetrievedContent>> {
         let https = format!("https://{domain}/");
 
         match self.fetch_url(&https).await {
@@ -84,6 +90,15 @@ impl DomainFetcher for ReqwestFetcher {
             }
         }
     }
+}
+
+/// Cut `body` down to the download limit, returning whether anything was cut or the limit was
+/// reached (so the document may be incomplete).
+fn truncate_content_if_required(body: &mut Vec<u8>, max_bytes: usize) -> bool {
+    let truncated = body.len() > max_bytes;
+    body.truncate(max_bytes);
+
+    truncated
 }
 
 /// Extract the visible text from `html`, ignoring scripts and styles, collapsing whitespace and
@@ -121,12 +136,16 @@ fn extract_text(html: &str, max_chars: usize) -> String {
         }
     }
 
-    text.chars().take(max_chars).collect()
+    // Postgres can't store NUL characters in text.
+    text.chars()
+        .filter(|c| *c != '\0')
+        .take(max_chars)
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::extract_text;
+    use super::{extract_text, truncate_content_if_required};
 
     #[test]
     fn strips_scripts_styles_and_tags() {
@@ -163,5 +182,31 @@ mod tests {
     #[test]
     fn empty_documents_produce_no_text() {
         assert_eq!(extract_text("<html><script>x</script></html>", 100), "");
+    }
+
+    const MAX_BODY_BYTES_TEST: usize = 1024;
+
+    #[test]
+    fn bodies_over_the_limit_are_cut_and_marked_truncated() {
+        let mut body = vec![b'a'; MAX_BODY_BYTES_TEST + 10];
+
+        assert!(truncate_content_if_required(&mut body, MAX_BODY_BYTES_TEST));
+        assert_eq!(body.len(), MAX_BODY_BYTES_TEST);
+    }
+
+    #[test]
+    fn bodies_under_the_limit_are_untouched() {
+        let mut body = b"<p>hi</p>".to_vec();
+
+        assert!(!truncate_content_if_required(
+            &mut body,
+            MAX_BODY_BYTES_TEST
+        ));
+        assert_eq!(body, b"<p>hi</p>");
+    }
+
+    #[test]
+    fn nul_characters_are_removed_from_the_text() {
+        assert_eq!(extract_text("<p>ab\0cd</p>", 100), "abcd");
     }
 }

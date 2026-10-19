@@ -228,7 +228,15 @@ pub async fn select_domain_decisions(
     Ok(rows.into_iter().map(|r| (r.name, r.blocked)).collect())
 }
 
-/// Record the decision for a domain alongside the score each question gave it.
+/// The content a decision was made from, with the raw document already compressed.
+pub struct StoredContent<'a> {
+    pub compressed_raw: &'a [u8],
+    pub text: &'a str,
+    pub truncated: bool,
+}
+
+/// Record the decision for a domain alongside the score each question gave it and the content it
+/// was made from.
 ///
 /// A domain is only decided once, so returns `false` and records nothing if a decision already
 /// exists for it.
@@ -237,6 +245,7 @@ pub async fn insert_domain_decision(
     domain: &str,
     blocked: bool,
     scores: &[(QuestionUid, f64)],
+    content: Option<&StoredContent<'_>>,
 ) -> Result<bool> {
     let domain_decision_uid = Uuid::new_v4();
     let now = Utc::now();
@@ -282,6 +291,28 @@ pub async fn insert_domain_decision(
         .await?;
     }
 
+    if let Some(content) = content {
+        sqlx::query!(
+            r#"
+                INSERT INTO domain_decision_content (
+                    domain_decision_id,
+                    raw_content,
+                    trimmed_content,
+                    truncated,
+                    fetched_at
+                )
+                VALUES ($1, $2, $3, $4, $5)
+            "#,
+            domain_decision_id,
+            content.compressed_raw,
+            content.text,
+            content.truncated,
+            now
+        )
+        .execute(tx.deref_mut())
+        .await?;
+    }
+
     Ok(true)
 }
 
@@ -290,13 +321,14 @@ mod tests {
     use color_eyre::eyre::Result;
     use sqlx::PgPool;
 
+    use crate::classifier::compression::{compress, decompress};
     use crate::classifier::{Prompt, Threshold};
     use crate::uid::QuestionUid;
 
     use crate::persistence::{
-        DomainEventType, QuestionEventType, end_question, insert_domain, insert_domain_decision,
-        insert_domain_event, insert_question, select_active_questions, select_blocked_domains,
-        select_domain_decisions,
+        DomainEventType, QuestionEventType, StoredContent, end_question, insert_domain,
+        insert_domain_decision, insert_domain_event, insert_question, select_active_questions,
+        select_blocked_domains, select_domain_decisions,
     };
 
     async fn add_question(
@@ -356,8 +388,8 @@ mod tests {
     #[sqlx::test]
     async fn decisions_are_selected(pool: PgPool) -> Result<()> {
         let mut tx = pool.begin().await?;
-        assert!(insert_domain_decision(&mut tx, "example.com", false, &[]).await?);
-        assert!(insert_domain_decision(&mut tx, "bad.example.com", true, &[]).await?);
+        assert!(insert_domain_decision(&mut tx, "example.com", false, &[], None).await?);
+        assert!(insert_domain_decision(&mut tx, "bad.example.com", true, &[], None).await?);
         tx.commit().await?;
 
         let mut tx = pool.begin().await?;
@@ -377,7 +409,7 @@ mod tests {
         let adult = add_question(&mut tx, "adult?", 0.8).await?;
         let scores = [(proxy, 0.95), (adult, 0.1)];
 
-        assert!(insert_domain_decision(&mut tx, "bad.example.com", true, &scores).await?);
+        assert!(insert_domain_decision(&mut tx, "bad.example.com", true, &scores, None).await?);
         tx.commit().await?;
 
         let rows = sqlx::query!(
@@ -407,8 +439,12 @@ mod tests {
         let mut tx = pool.begin().await?;
         let question = add_question(&mut tx, "question", 0.5).await?;
 
-        assert!(insert_domain_decision(&mut tx, "example.com", false, &[(question, 0.1)]).await?);
-        assert!(!insert_domain_decision(&mut tx, "example.com", true, &[(question, 0.9)]).await?);
+        assert!(
+            insert_domain_decision(&mut tx, "example.com", false, &[(question, 0.1)], None).await?
+        );
+        assert!(
+            !insert_domain_decision(&mut tx, "example.com", true, &[(question, 0.9)], None).await?
+        );
         tx.commit().await?;
 
         let mut tx = pool.begin().await?;
@@ -419,6 +455,90 @@ mod tests {
             .fetch_all(&pool)
             .await?;
         assert_eq!(scores, vec![0.1]);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn decisions_store_the_content_they_were_made_from(pool: PgPool) -> Result<()> {
+        let raw = compress(b"<p>hello</p>").await?;
+        let content = StoredContent {
+            compressed_raw: &raw,
+            text: "hello",
+            truncated: true,
+        };
+
+        let mut tx = pool.begin().await?;
+        assert!(insert_domain_decision(&mut tx, "a.example", false, &[], Some(&content)).await?);
+        assert!(insert_domain_decision(&mut tx, "b.example", false, &[], None).await?);
+        tx.commit().await?;
+
+        let rows = sqlx::query!(
+            r#"
+                SELECT dd.name, ddc.raw_content, ddc.trimmed_content, ddc.truncated
+                FROM domain_decision_content ddc
+                JOIN domain_decision dd ON dd.id = ddc.domain_decision_id
+            "#
+        )
+        .fetch_all(&pool)
+        .await?;
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].name, "a.example");
+        assert_eq!(decompress(&rows[0].raw_content).await?, b"<p>hello</p>");
+        assert_eq!(rows[0].trimmed_content, "hello");
+        assert!(rows[0].truncated);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn a_repeated_decision_does_not_store_content_again(pool: PgPool) -> Result<()> {
+        let first = StoredContent {
+            compressed_raw: b"first",
+            text: "first",
+            truncated: false,
+        };
+        let second = StoredContent {
+            compressed_raw: b"second",
+            text: "second",
+            truncated: false,
+        };
+
+        let mut tx = pool.begin().await?;
+        assert!(insert_domain_decision(&mut tx, "a.example", false, &[], Some(&first)).await?);
+        assert!(!insert_domain_decision(&mut tx, "a.example", true, &[], Some(&second)).await?);
+        tx.commit().await?;
+
+        let texts = sqlx::query_scalar!("SELECT trimmed_content FROM domain_decision_content")
+            .fetch_all(&pool)
+            .await?;
+        assert_eq!(texts, vec!["first"]);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn stored_content_cannot_be_modified_or_deleted(pool: PgPool) -> Result<()> {
+        let content = StoredContent {
+            compressed_raw: b"raw",
+            text: "text",
+            truncated: false,
+        };
+
+        let mut tx = pool.begin().await?;
+        insert_domain_decision(&mut tx, "a.example", false, &[], Some(&content)).await?;
+        tx.commit().await?;
+
+        let update = sqlx::query!("UPDATE domain_decision_content SET truncated = TRUE")
+            .execute(&pool)
+            .await;
+        let delete = sqlx::query!("DELETE FROM domain_decision_content")
+            .execute(&pool)
+            .await;
+
+        assert!(update.is_err());
+        assert!(delete.is_err());
 
         Ok(())
     }

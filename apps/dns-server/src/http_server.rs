@@ -241,7 +241,7 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::blocklist::{BlocklistBackend, BlocklistManager};
-    use crate::classifier::{DecisionStore, Prompt, Question, Threshold};
+    use crate::classifier::{DecisionStore, Prompt, Question, RetrievedContent, Threshold};
     use crate::http_server::{build_router, normalize_domain};
     use crate::persistence::DomainEventType;
     use crate::uid::QuestionUid;
@@ -261,7 +261,13 @@ mod tests {
             Ok(Default::default())
         }
 
-        async fn record(&self, _: &str, _: bool, _: &[(QuestionUid, f64)]) -> Result<()> {
+        async fn record(
+            &self,
+            _: &str,
+            _: bool,
+            _: &[(QuestionUid, f64)],
+            _: Option<&RetrievedContent>,
+        ) -> Result<()> {
             Ok(())
         }
 
