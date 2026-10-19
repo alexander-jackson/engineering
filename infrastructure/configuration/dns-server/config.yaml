@@ -37,3 +37,10 @@ database:
     username: dnsserverblue
     password: {{ f98B1k/7D5qZvHlt1nOM9lqO5/UPPf7eTxsvevhixHCwtrRd1QDOlvju8Sw4Ea3CT5PeUt/r+ggI42H6rUrCN1xl7Yi1q1EW74WSK9tyLInX2jMKIVdIeRxgz6KM9P3/GjiqvMOFsrASKzp52Kk4+OUatA605YUvLId4EUly/mlAbq/knOId9xUADeTLQGul+oQY2Hz4IzzKtvYmpPvSjJMynfdeetAwuZcmeGJFqlYaiZGAxrQIhe+ZYe6p4FqFVsBiY8XgTFhODRkuu1E6kgbDBoMF4b84LWTisNc7jp04Cbh+J/n2RUIz65v2R7B6gzA/mavmYHX/vZxMT/IWrQ== }}
     database: dnsserver
+
+classifier:
+  api_key: {{ k07HpXoSeAfKNYoujs7Hx23+QiPAiIHPO+HOB3PR/eGO9Gplr7zIKjMAY8ZNc7be1RuAxRCP5hPzyk59Tt7HziE5z+PfqzHH7rCQ/4nuIjyJXjS8dRh7X2TcouJCH+V2VEnSjyvz8RrwglQ13yR8o08Z+a3Iz5lpXSqUc4c8o2TQP4gmD6xWmnkhhcXwLMdGUbe1EgF2ZkbUB3l2KQEnJ+FI9uAELpU2IpXerIq8f1JaqHDD9chldAkv8CCtxKBq7vqlXcNRSburdKNglAlyIXMg64V7iTHzo8lR2IjrCxx+F/YG+ah2IxOJChyerXM+2TwHd8up1Tdk1Wxw5fzwvQ== }}
+  model: typesafe/jev-1.14
+  timeout_seconds: 8
+  max_content_chars: 8000
+  rollout_percentage: 1
