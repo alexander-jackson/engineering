@@ -79,6 +79,9 @@ pub(crate) enum LookupResult {
     Unclassifiable,
     /// A stored decision already existed.
     Known,
+    /// The domain is new but outside the configured rollout percentage, so it was allowed
+    /// without being looked at.
+    NotInRollout,
     /// A job finished while the caller was waiting.
     Completed,
     /// The caller gave up waiting and the domain was allowed.
@@ -90,6 +93,7 @@ impl LookupResult {
         match self {
             Self::Unclassifiable => "unclassifiable",
             Self::Known => "known",
+            Self::NotInRollout => "not_in_rollout",
             Self::Completed => "completed",
             Self::WaitTimeout => "wait_timeout",
         }

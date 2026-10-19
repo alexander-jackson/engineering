@@ -4,6 +4,8 @@ use foundation_configuration::Secret;
 use hickory_net::xfer::Protocol;
 use serde::Deserialize;
 
+use crate::classifier::Rollout;
+
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
 pub struct Configuration {
     pub server: ServerConfig,
@@ -53,6 +55,9 @@ pub struct ClassifierConfig {
     pub timeout_seconds: u64,
     /// The most characters of page text sent to the model.
     pub max_content_chars: usize,
+    /// The percentage of new domains to classify, defaulting to all of them.
+    #[serde(default)]
+    pub rollout_percentage: Rollout,
 }
 
 #[cfg(test)]
@@ -62,6 +67,7 @@ mod tests {
     use color_eyre::eyre::Result;
     use hickory_net::xfer::Protocol;
 
+    use crate::classifier::Rollout;
     use crate::config::{
         CacheConfig, ClassifierConfig, Configuration, ListenerConfig, RemoteBlocklistConfig,
         ServerConfig, UpstreamConfig,
@@ -101,6 +107,7 @@ mod tests {
                 model: "typesafe/jev-1.14".to_string(),
                 timeout_seconds: 8,
                 max_content_chars: 8000,
+                rollout_percentage: Rollout::try_from(25).unwrap(),
             }),
         };
 

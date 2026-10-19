@@ -1788,6 +1788,7 @@ dependencies = [
  "opentelemetry",
  "reqwest 0.13.5",
  "scraper",
+ "seahash",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -5255,6 +5256,12 @@ dependencies = [
  "ring",
  "untrusted 0.9.0",
 ]
+
+[[package]]
+name = "seahash"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
 name = "sec1"
