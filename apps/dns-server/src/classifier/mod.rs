@@ -18,12 +18,14 @@ mod decider;
 mod fetcher;
 mod metrics;
 mod question;
+mod rollout;
 mod store;
 
 pub use crate::classifier::decider::OpenRouterDecider;
 pub use crate::classifier::fetcher::ReqwestFetcher;
 pub use crate::classifier::metrics::ClassifierMetrics;
 pub use crate::classifier::question::{Prompt, Question, Threshold};
+pub use crate::classifier::rollout::Rollout;
 pub use crate::classifier::store::PostgresDecisionStore;
 
 /// The maximum time a background classification may run for, regardless of how long callers wait.
@@ -102,6 +104,7 @@ pub struct DomainClassifier<F, D, S> {
     in_flight: InFlight,
     wait_timeout: Duration,
     metrics: ClassifierMetrics,
+    rollout: Rollout,
 }
 
 impl<F, D, S> DomainClassifier<F, D, S>
@@ -111,12 +114,16 @@ where
     S: DecisionStore + 'static,
 {
     /// Create a classifier, loading any previously stored decisions from `store`.
+    ///
+    /// Only new domains that are part of `rollout` are classified, and the rest are allowed
+    /// without being looked at. Domains with a stored decision are enforced regardless.
     pub async fn new(
         fetcher: F,
         decider: D,
         store: S,
         wait_timeout: Duration,
         metrics: ClassifierMetrics,
+        rollout: Rollout,
     ) -> Result<Self> {
         let decisions = store.decisions().await?;
 
@@ -128,6 +135,7 @@ where
             in_flight: Arc::default(),
             wait_timeout,
             metrics,
+            rollout,
         })
     }
 
@@ -207,6 +215,13 @@ where
             tracing::debug!(?verdict, "input was already known");
             self.metrics.lookup(LookupResult::Known, verdict);
             return verdict;
+        }
+
+        if !self.rollout.includes(&domain) {
+            tracing::debug!("domain is not part of the rollout");
+            self.metrics
+                .lookup(LookupResult::NotInRollout, Verdict::Allowed);
+            return Verdict::Allowed;
         }
 
         let mut rx = self.subscribe(&domain);
@@ -450,6 +465,7 @@ mod tests {
         questions: Vec<Question>,
         delay: Duration,
         wait: Duration,
+        rollout: Rollout,
     ) -> Harness {
         let fetches = Arc::new(AtomicUsize::new(0));
         let store = Arc::new(MemoryStore {
@@ -467,6 +483,7 @@ mod tests {
             Arc::clone(&store),
             wait,
             ClassifierMetrics::new(&opentelemetry::global::meter("test")),
+            rollout,
         )
         .await
         .unwrap();
@@ -485,6 +502,7 @@ mod tests {
             vec![question(0.5)],
             Duration::ZERO,
             Duration::from_secs(5),
+            Rollout::ALL,
         )
         .await
     }
@@ -510,6 +528,7 @@ mod tests {
             questions,
             Duration::ZERO,
             Duration::from_secs(5),
+            Rollout::ALL,
         )
         .await;
 
@@ -573,6 +592,7 @@ mod tests {
             vec![],
             Duration::ZERO,
             Duration::from_secs(5),
+            Rollout::ALL,
         )
         .await;
 
@@ -603,6 +623,7 @@ mod tests {
             vec![question(0.5)],
             Duration::from_millis(200),
             Duration::from_millis(20),
+            Rollout::ALL,
         )
         .await;
 
@@ -627,6 +648,7 @@ mod tests {
             vec![question(0.5)],
             Duration::from_millis(100),
             Duration::from_secs(5),
+            Rollout::ALL,
         )
         .await;
 
@@ -638,5 +660,38 @@ mod tests {
 
         assert_eq!([a, b, c], [Verdict::Blocked; 3]);
         assert_eq!(h.fetches.load(Ordering::SeqCst), 1);
+    }
+
+    async fn outside_rollout() -> Harness {
+        harness(
+            Some("bad stuff"),
+            Ok(vec![0.9]),
+            vec![question(0.5)],
+            Duration::ZERO,
+            Duration::from_secs(5),
+            Rollout::try_from(0).unwrap(),
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn domains_outside_the_rollout_are_allowed_without_being_fetched() {
+        let h = outside_rollout().await;
+
+        assert_eq!(h.classifier.classify("bad.example").await, Verdict::Allowed);
+        assert_eq!(h.fetches.load(Ordering::SeqCst), 0);
+        assert!(h.store.recorded.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn known_decisions_are_enforced_outside_the_rollout() {
+        let h = outside_rollout().await;
+        h.classifier
+            .decisions
+            .write()
+            .unwrap()
+            .insert("bad.example".to_string(), true);
+
+        assert_eq!(h.classifier.classify("bad.example").await, Verdict::Blocked);
     }
 }
