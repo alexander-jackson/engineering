@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO domain_decision_content (\n                    domain_decision_id,\n                    raw_content,\n                    trimmed_content,\n                    truncated,\n                    fetched_at\n                )\n                VALUES ($1, $2, $3, $4, $5)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bytea",
+        "Text",
+        "Bool",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4ac9115e15372e01c968429d072a434f27c59575038bc7c13aab3d25fc5e3591"
+}
