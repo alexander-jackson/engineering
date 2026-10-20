@@ -43,4 +43,4 @@ classifier:
   model: typesafe/jev-1.14
   timeout_seconds: 8
   max_content_chars: 8000
-  rollout_percentage: 1
+  rollout_percentage: 15
