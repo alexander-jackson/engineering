@@ -5,6 +5,7 @@ on:
     branches: ["master"]
     paths:
     - "infrastructure/configuration/vector/**"
+    - "infrastructure/tests/vector/**"
     - ".github/workflows/vector-ci.yaml"
 
 env:
@@ -27,5 +28,6 @@ jobs:
       - name: Run unit tests
         run: |
           docker run --rm \
-            -v ./infrastructure/configuration/vector:/etc/vector \
-            "$VECTOR_IMAGE" test /etc/vector/vector.yaml /etc/vector/vector.test.yaml
+            -v ./infrastructure/configuration/vector:/etc/vector/config \
+            -v ./infrastructure/tests/vector:/etc/vector/tests \
+            "$VECTOR_IMAGE" test /etc/vector/config/vector.yaml /etc/vector/tests/vector.test.yaml

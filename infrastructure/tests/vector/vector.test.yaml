@@ -1,4 +1,4 @@
-# Run: docker run --rm -v ./infrastructure/configuration/vector:/etc/vector timberio/vector:0.55.0-alpine test /etc/vector/vector.yaml /etc/vector/vector.test.yaml
+# Run: docker run --rm -v ./infrastructure/configuration/vector:/etc/vector/config -v ./infrastructure/tests/vector:/etc/vector/tests timberio/vector:0.55.0-alpine test /etc/vector/config/vector.yaml /etc/vector/tests/vector.test.yaml
 tests:
   - name: json lines are parsed into `.log`
     inputs:
