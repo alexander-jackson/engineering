@@ -138,7 +138,7 @@ async fn format_volumes(
                 std::fs::create_dir_all(&directory)?;
                 std::fs::write(&path, content)?;
 
-                tracing::info!(?directory, ?path, "wrote volume content to temporary file");
+                tracing::info!(directory = %directory.display(), path = %path.display(), "wrote volume content to temporary file");
 
                 path
             }

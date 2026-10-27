@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
         }
         BackupSchedule::Daily { time } => {
             let offset = get_initial_offset(Utc::now().time(), time);
-            tracing::info!(?offset, %time, "waiting some time before running the first backups");
+            tracing::info!(offset_secs = offset.as_secs(), %time, "waiting some time before running the first backups");
 
             let start = Instant::now() + offset;
             let period = Duration::from_secs(60 * 60 * 24);

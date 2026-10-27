@@ -88,7 +88,7 @@ pub async fn upload_workout(
         persistence::exercises::insert(workout_id, exercise, &pool).await?;
     }
 
-    tracing::info!(?workout_id, "Inserted/updated a workout in the new format");
+    tracing::info!(%workout_id, "Inserted/updated a workout in the new format");
 
     Ok(())
 }

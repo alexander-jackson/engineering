@@ -191,7 +191,7 @@ impl DockerClient for Client {
         let path = format!("/containers/{id}/start");
         let uri = self.build_uri(&path);
 
-        tracing::info!(?id, "starting a container");
+        tracing::info!(%id, "starting a container");
 
         let request = Request::builder()
             .uri(uri)
@@ -207,7 +207,7 @@ impl DockerClient for Client {
         let path = format!("/containers/{id}/json");
         let uri = self.build_uri(&path);
 
-        tracing::info!(?id, "fetching exposed ports for a container");
+        tracing::info!(%id, "fetching exposed ports for a container");
 
         let request = Request::builder()
             .uri(uri)
