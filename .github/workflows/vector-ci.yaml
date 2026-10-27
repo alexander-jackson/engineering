@@ -9,7 +9,7 @@ on:
     - ".github/workflows/vector-ci.yaml"
 
 env:
-  VECTOR_IMAGE: timberio/vector:0.55.0-alpine
+  VECTOR_IMAGE: timberio/vector:0.60.0-alpine
 
 jobs:
   vector:
