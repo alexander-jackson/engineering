@@ -243,6 +243,7 @@ services:
     replicas: 1
     environment:
       AWS_ROLE_ARN: arn:aws:iam::558855412466:role/pgmanager-role
+      LOG_FORMAT: json
     volumes:
       config:
         source:
