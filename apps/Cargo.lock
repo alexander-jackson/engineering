@@ -2077,6 +2077,7 @@ dependencies = [
  "chrono",
  "color-eyre",
  "flume 0.12.0",
+ "foundation-logging",
  "futures",
  "hex",
  "http 1.5.0",
@@ -2099,7 +2100,6 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.6",
  "tracing",
- "tracing-subscriber",
  "urlencoding",
  "uuid",
 ]
@@ -4261,7 +4261,6 @@ dependencies = [
  "tokio-postgres-rustls",
  "tracing",
  "tracing-error",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -6806,7 +6805,6 @@ dependencies = [
  "tokio-rustls 0.26.6",
  "tower-http 0.7.1",
  "tracing",
- "tracing-subscriber",
  "uuid",
  "x509-parser 0.18.1",
 ]

@@ -104,7 +104,7 @@ async fn connect(database_config: &TargetDatabaseConfiguration, database: &str) 
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
+                tracing::error!(error = %e, "postgres connection error");
             }
         });
 
@@ -114,7 +114,7 @@ async fn connect(database_config: &TargetDatabaseConfiguration, database: &str) 
 
         tokio::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
+                tracing::error!(error = %e, "postgres connection error");
             }
         });
 

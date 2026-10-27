@@ -21,4 +21,3 @@ tokio-postgres = "0.7.17"
 tokio-postgres-rustls = "0.14.0"
 tracing.workspace = true
 tracing-error = "0.2.0"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

@@ -14,6 +14,7 @@ base64 = "0.23.0"
 chrono = "0.4.44"
 color-eyre = "0.6.5"
 flume = "0.12.0"
+foundation-logging = { version = "0.1.0", path = "../foundation/logging" }
 futures = "0.3.32"
 http = "1.4.0"
 http-body-util = "0.1.3"
@@ -34,7 +35,6 @@ serde_yaml = "0.9.33"
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "time", "fs", "signal"] }
 tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring"] }
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 urlencoding = "2.1.3"
 uuid = { version = "1.23.1", features = ["v4"] }
 

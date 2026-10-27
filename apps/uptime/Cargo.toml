@@ -22,7 +22,6 @@ tokio = { version = "1.41.0", features = ["macros", "rt", "net"] }
 tokio-rustls = { version = "0.26", features = ["ring"] }
 tower-http = { version = "0.7.0", features = ["fs"] }
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.23.2", features = ["serde", "v4"] }
 x509-parser = "0.18"
 foundation-credentials = { version = "0.1.0", path = "../foundation/credentials" }
