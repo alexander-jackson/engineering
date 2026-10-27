@@ -10,10 +10,6 @@ use service_registry::ServiceRegistry;
 use tokio::net::TcpListener;
 use tokio::signal::unix::SignalKind;
 use tokio::sync::RwLock;
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 
 use crate::args::Args;
 use crate::common::Container;
@@ -37,15 +33,7 @@ mod service_registry;
 fn setup() -> Result<()> {
     color_eyre::install()?;
 
-    let fmt_layer = tracing_subscriber::fmt::layer();
-    let env_filter_layer = EnvFilter::builder()
-        .with_default_directive(LevelFilter::INFO.into())
-        .from_env()?;
-
-    tracing_subscriber::registry()
-        .with(fmt_layer)
-        .with(env_filter_layer)
-        .init();
+    foundation_logging::install_default_registry();
 
     let _ = rustls::crypto::ring::default_provider().install_default();
 
