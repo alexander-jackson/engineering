@@ -1,0 +1,31 @@
+name: Vector CI
+
+on:
+  pull_request:
+    branches: ["master"]
+    paths:
+    - "infrastructure/configuration/vector/**"
+    - ".github/workflows/vector-ci.yaml"
+
+env:
+  VECTOR_IMAGE: timberio/vector:0.55.0-alpine
+
+jobs:
+  vector:
+    name: Validate and test configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Validate configuration
+        run: |
+          docker run --rm \
+            -v ./infrastructure/configuration/vector:/etc/vector \
+            "$VECTOR_IMAGE" validate --no-environment /etc/vector/vector.yaml
+
+      - name: Run unit tests
+        run: |
+          docker run --rm \
+            -v ./infrastructure/configuration/vector:/etc/vector \
+            "$VECTOR_IMAGE" test /etc/vector/vector.yaml /etc/vector/vector.test.yaml

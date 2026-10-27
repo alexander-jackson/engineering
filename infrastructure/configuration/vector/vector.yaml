@@ -6,12 +6,29 @@ sources:
     docker_host: /var/run/docker.sock
 
 transforms:
-  ansi_stripper:
+  parse_logs:
     type: remap
     inputs:
       - docker
     drop_on_error: false
-    source: .message = strip_ansi_escape_codes(string!(.message))
+    source: |
+      if is_string(.message) {
+        parsed, err = parse_json(.message)
+
+        if err == null && is_object(parsed) {
+          .log_format = "json"
+          .log = parsed
+
+          message, err = string(parsed.message)
+          if err == null {
+            .message = message
+            del(.log.message)
+          }
+        } else {
+          .log_format = "text"
+          .message = strip_ansi_escape_codes(.message) ?? .message
+        }
+      }
 
 sinks:
   s3:
@@ -22,4 +39,4 @@ sinks:
     encoding:
       codec: json
     inputs:
-      - ansi_stripper
+      - parse_logs

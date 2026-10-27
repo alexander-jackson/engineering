@@ -1,0 +1,65 @@
+# Run: docker run --rm -v ./infrastructure/configuration/vector:/etc/vector timberio/vector:0.55.0-alpine test /etc/vector/vector.yaml /etc/vector/vector.test.yaml
+tests:
+  - name: json lines are parsed into `.log`
+    inputs:
+      - insert_at: parse_logs
+        type: log
+        log_fields:
+          container_name: today
+          message: '{"timestamp":"2026-10-27T10:00:00Z","level":"INFO","message":"hello","user":"alex","span":{"name":"request","id":7},"spans":[{"name":"request","id":7}]}'
+    outputs:
+      - extract_from: parse_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.log_format, "json")
+              assert_eq!(.message, "hello")
+              assert_eq!(.log.level, "INFO")
+              assert_eq!(.log.user, "alex")
+              assert_eq!(.log.span.id, 7)
+              assert!(!exists(.log.message))
+              assert_eq!(.container_name, "today")
+
+  - name: text lines have ansi codes stripped
+    inputs:
+      - insert_at: parse_logs
+        type: log
+        log_fields:
+          message: "\u001b[2m2026-10-27T10:00:00Z\u001b[0m \u001b[32m INFO\u001b[0m hello"
+    outputs:
+      - extract_from: parse_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.log_format, "text")
+              assert_eq!(.message, "2026-10-27T10:00:00Z  INFO hello")
+              assert!(!exists(.log))
+
+  - name: json that is not an object is treated as text
+    inputs:
+      - insert_at: parse_logs
+        type: log
+        log_fields:
+          message: "42"
+    outputs:
+      - extract_from: parse_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.log_format, "text")
+              assert_eq!(.message, "42")
+
+  - name: json without a string message keeps the original message
+    inputs:
+      - insert_at: parse_logs
+        type: log
+        log_fields:
+          message: '{"level":"INFO","count":3}'
+    outputs:
+      - extract_from: parse_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.log_format, "json")
+              assert_eq!(.message, "{\"level\":\"INFO\",\"count\":3}")
+              assert_eq!(.log.count, 3)
