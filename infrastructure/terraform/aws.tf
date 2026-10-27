@@ -300,12 +300,12 @@ module "secondary" {
   configuration = {
     bucket    = module.config_bucket.name
     key       = "f2/config.yaml"
-    image_tag = "20261017-1322"
+    image_tag = "20261027-2024"
   }
 
   logging = {
     bucket     = module.logging_bucket.name
-    vector_tag = "0.55.0-alpine"
+    vector_tag = "0.60.0-alpine"
   }
 
   hackathon = {
