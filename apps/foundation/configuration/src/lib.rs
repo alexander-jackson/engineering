@@ -55,7 +55,7 @@ where
         let reader = File::open(path)?;
         let config = serde_yaml::from_reader(&reader)?;
 
-        tracing::info!(?path, "loaded configuration file");
+        tracing::info!(path = %path.display(), "loaded configuration file");
 
         Ok(config)
     }

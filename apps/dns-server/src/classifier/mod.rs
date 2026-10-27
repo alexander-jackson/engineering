@@ -272,7 +272,7 @@ impl<F: DomainFetcher, D: DomainDecider, S: DecisionStore> Job<F, D, S> {
             }
             Ok(questions) => questions,
             Err(e) => {
-                tracing::error!(error = ?e, domain = %self.domain, "failed to load questions");
+                tracing::error!(error = %format_args!("{e:#}"), domain = %self.domain, "failed to load questions");
                 return (JobOutcome::QuestionsFailed, Verdict::Allowed);
             }
         };
@@ -294,7 +294,7 @@ impl<F: DomainFetcher, D: DomainDecider, S: DecisionStore> Job<F, D, S> {
                 );
             }
             Err(e) => {
-                tracing::debug!(error = ?e, domain = %self.domain, "failed to fetch, allowing");
+                tracing::debug!(error = %format_args!("{e:#}"), domain = %self.domain, "failed to fetch, allowing");
                 self.metrics.fetch(FetchOutcome::Error, elapsed_ms(start));
                 return (JobOutcome::FetchFailed, self.finish(false, &[], None).await);
             }
@@ -311,7 +311,7 @@ impl<F: DomainFetcher, D: DomainDecider, S: DecisionStore> Job<F, D, S> {
             Ok(scores) => scores,
             Err(e) => {
                 // Don't record anything, so the domain is evaluated again next time.
-                tracing::error!(error = ?e, domain = %self.domain, "decision model failed");
+                tracing::error!(error = %format_args!("{e:#}"), domain = %self.domain, "decision model failed");
                 return (JobOutcome::DecisionFailed, Verdict::Allowed);
             }
         };
@@ -346,7 +346,7 @@ impl<F: DomainFetcher, D: DomainDecider, S: DecisionStore> Job<F, D, S> {
             .record(&self.domain, blocked, scores, content)
             .await
         {
-            tracing::error!(error = ?e, domain = %self.domain, "failed to record decision");
+            tracing::error!(error = %format_args!("{e:#}"), domain = %self.domain, "failed to record decision");
         }
 
         self.decisions

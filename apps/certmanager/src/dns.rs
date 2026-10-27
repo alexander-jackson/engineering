@@ -20,7 +20,7 @@ impl DnsClient {
         let identifier = identifier.to_string();
         let dns_record_name = format!("_acme-challenge.{identifier}");
 
-        tracing::info!(%dns_record_name, ?value, "setting challenge record for domain");
+        tracing::info!(%dns_record_name, value, "setting challenge record for domain");
 
         let zones = self.inner.list_hosted_zones().send().await?.hosted_zones;
 

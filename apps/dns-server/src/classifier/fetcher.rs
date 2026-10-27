@@ -82,7 +82,7 @@ impl DomainFetcher for ReqwestFetcher {
         match self.fetch_url(&https).await {
             Ok(content) => Ok(content),
             Err(https_error) => {
-                tracing::warn!(error = ?https_error, %domain, "https fetch failed, trying http");
+                tracing::warn!(error = %format_args!("{https_error:#}"), %domain, "https fetch failed, trying http");
 
                 self.fetch_url(&format!("http://{domain}/"))
                     .await

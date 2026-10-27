@@ -70,7 +70,7 @@ impl<T: Job> RecurringJob<T> {
                 }
                 _ = interval.tick() => {
                     if let Err(e) = self.state.run().await {
-                        tracing::warn!(%job, error = ?e, "job execution failed");
+                        tracing::warn!(%job, error = %format_args!("{e:#}"), "job execution failed");
                     }
                 }
             }
@@ -94,7 +94,7 @@ impl<T: Job> RecurringJob<T> {
                 Schedule::Interval(_) => unreachable!("intervals are not calendar based"),
             };
 
-            tracing::info!(%job, ?sleep_duration, "waiting until next scheduled run");
+            tracing::info!(%job, sleep_secs = sleep_duration.as_secs(), "waiting until next scheduled run");
 
             tokio::select! {
                 _ = shutdown.cancelled() => {
@@ -103,7 +103,7 @@ impl<T: Job> RecurringJob<T> {
                 }
                 _ = tokio::time::sleep(sleep_duration) => {
                     if let Err(e) = self.state.run().await {
-                        tracing::warn!(%job, error = ?e, "job execution failed");
+                        tracing::warn!(%job, error = %format_args!("{e:#}"), "job execution failed");
                     }
                 }
             }
@@ -117,11 +117,15 @@ impl<T: Job> GracefulTask for RecurringJob<T> {
     async fn run_until_shutdown(self, shutdown: CancellationToken) -> Result<()> {
         match self.state.schedule() {
             Schedule::Interval(duration) => {
-                tracing::info!(job = T::NAME, ?duration, "starting recurring job");
+                tracing::info!(
+                    job = T::NAME,
+                    duration_secs = duration.as_secs(),
+                    "starting recurring job"
+                );
                 self.run_interval_job(duration, shutdown).await
             }
             schedule @ Schedule::Daily { hour, minute } => {
-                tracing::info!(job = T::NAME, ?hour, ?minute, "starting recurring job");
+                tracing::info!(job = T::NAME, hour, minute, "starting recurring job");
                 self.run_calendar_job(schedule, shutdown).await
             }
             schedule @ Schedule::Weekly {

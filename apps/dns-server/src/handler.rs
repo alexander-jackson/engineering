@@ -254,7 +254,7 @@ where
                 (response, "upstream")
             }
             Err(e) => {
-                tracing::warn!(error = ?e, src = %request.src(), "upstream resolution failed");
+                tracing::warn!(error = %format_args!("{e:#}"), src = %request.src(), "upstream resolution failed");
 
                 let mut error_msg = Message::new(
                     request_message.metadata.id,

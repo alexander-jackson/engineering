@@ -49,7 +49,7 @@ pub fn fetch<'a>(
 
     let remote_name = remote.name().unwrap();
 
-    tracing::debug!(?remote_name, ?refs, "Fetching data for the repository");
+    tracing::debug!(remote_name, ?refs, "Fetching data for the repository");
 
     remote.fetch(refs, Some(&mut fo), None)?;
 
