@@ -21,4 +21,5 @@ RUN useradd -m -u 1000 appuser \
 WORKDIR /app
 COPY --from=builder /app/target/release/f2 ./f2
 USER appuser
+ENV LOG_FORMAT=json
 ENTRYPOINT ["./f2"]
