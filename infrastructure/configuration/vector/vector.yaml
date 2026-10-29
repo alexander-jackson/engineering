@@ -23,6 +23,12 @@ transforms:
           if err == null {
             .message = message
             del(.log.message)
+          } else {
+            message, err = string(parsed.msg)
+            if err == null {
+              .message = message
+              del(.log.msg)
+            }
           }
         } else {
           .log_format = "text"

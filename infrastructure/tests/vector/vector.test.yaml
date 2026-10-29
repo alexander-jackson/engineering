@@ -20,6 +20,22 @@ tests:
               assert!(!exists(.log.message))
               assert_eq!(.container_name, "today")
 
+  - name: json lines using `msg` have it promoted to the message
+    inputs:
+      - insert_at: parse_logs
+        type: log
+        log_fields:
+          message: '{"level":"info","msg":"Server is starting","logger":"server"}'
+    outputs:
+      - extract_from: parse_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.log_format, "json")
+              assert_eq!(.message, "Server is starting")
+              assert_eq!(.log.logger, "server")
+              assert!(!exists(.log.msg))
+
   - name: text lines have ansi codes stripped
     inputs:
       - insert_at: parse_logs
