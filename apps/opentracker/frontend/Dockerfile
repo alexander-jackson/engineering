@@ -3,6 +3,6 @@ COPY . .
 RUN yarn install
 RUN yarn build
 
-FROM nginx:1.25.4-alpine3.18 AS runtime
-COPY --from=builder ./nginx.conf /etc/nginx/nginx.conf
-COPY --from=builder ./build /usr/share/nginx/html
+FROM caddy:2.10-alpine AS runtime
+COPY --from=builder ./Caddyfile /etc/caddy/Caddyfile
+COPY --from=builder ./build /usr/share/caddy
