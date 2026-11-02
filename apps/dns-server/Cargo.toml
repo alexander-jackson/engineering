@@ -19,7 +19,7 @@ hickory-proto = "0.26.1"
 hickory-resolver = { version = "0.26.1", features = ["https-ring", "webpki-roots"] }
 hickory-server = { version = "0.26.1", features = ["tls-ring"] }
 moka = { version = "0.12.15", features = ["future"] }
-openrouter-rs = "0.20.0"
+openrouter-rs = "0.22.0"
 opentelemetry = { workspace = true }
 reqwest.workspace = true
 scraper = "0.29.0"
