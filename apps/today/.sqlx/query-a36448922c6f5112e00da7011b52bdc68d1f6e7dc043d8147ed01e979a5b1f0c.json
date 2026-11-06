@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO item_content (item_id, content, recorded_at)\n            SELECT i.id, $2, $3\n            FROM item i\n            WHERE i.item_uid = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a36448922c6f5112e00da7011b52bdc68d1f6e7dc043d8147ed01e979a5b1f0c"
+}

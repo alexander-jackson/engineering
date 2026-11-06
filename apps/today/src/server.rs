@@ -48,6 +48,7 @@ pub fn build_router(
         .route("/", get(templated))
         .route("/add", post(add_item))
         .route("/update/{item_uid}", patch(update_item))
+        .route("/update/{item_uid}/content", patch(edit_item))
         .nest_service("/assets", ServeDir::new("assets"))
         .with_state(state)
 }
@@ -134,10 +135,37 @@ async fn update_item(
     Ok(success()?)
 }
 
+#[derive(Debug, Deserialize)]
+struct EditItemRequest {
+    content: String,
+}
+
+#[tracing::instrument(skip(pool, index_cache, request))]
+async fn edit_item(
+    State(ApplicationState {
+        pool, index_cache, ..
+    }): State<ApplicationState>,
+    Path(item_uid): Path<ItemUid>,
+    Json(request): Json<EditItemRequest>,
+) -> ServerResult<Response> {
+    if request.content.trim().is_empty() {
+        return Ok(status(StatusCode::BAD_REQUEST)?);
+    }
+
+    crate::persistence::edit_item(&pool, item_uid, &request.content).await?;
+    index_cache.remove(&clock::today()).await;
+
+    tracing::info!(%item_uid, "edited an item");
+
+    Ok(success()?)
+}
+
 fn success() -> Result<Response> {
-    let res = Response::builder()
-        .status(StatusCode::OK)
-        .body(Body::empty())?;
+    status(StatusCode::OK)
+}
+
+fn status(status: StatusCode) -> Result<Response> {
+    let res = Response::builder().status(status).body(Body::empty())?;
 
     Ok(res)
 }

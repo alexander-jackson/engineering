@@ -45,12 +45,14 @@ mod tests {
         let checked_item = Item {
             item_uid: ItemUid::new(),
             content: "checked".to_owned().into(),
+            source: "checked".to_owned(),
             state: ItemState::Checked,
         };
 
         let unchecked_item = Item {
             item_uid: ItemUid::new(),
             content: "unchecked".to_owned().into(),
+            source: "unchecked".to_owned(),
             state: ItemState::Unchecked,
         };
 
@@ -66,6 +68,7 @@ mod tests {
         let deleted_item = Item {
             item_uid: ItemUid::new(),
             content: "deleted".to_owned().into(),
+            source: "deleted".to_owned(),
             state: ItemState::Deleted,
         };
 
