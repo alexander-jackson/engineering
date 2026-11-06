@@ -1,3 +1,19 @@
+{% component item_row(item) -%}
+  <li class="flex items-start gap-3 py-3 border-b border-paper-rule">
+    <input
+      type="checkbox"
+      id="{{ item.item_uid }}"
+      class="peer mt-2 h-4 w-4 shrink-0 cursor-pointer accent-[#2e2b25]"
+      {% if item.state == "Checked" %}checked{% endif %}
+    />
+    <span
+      class="cursor-text text-xl leading-snug peer-checked:line-through peer-checked:text-paper-muted [&_code]:rounded [&_code]:bg-paper-code [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.85em]"
+      data-source="{{ item.source }}"
+      >{{ item.content | safe }}</span
+    >
+  </li>
+{%- endcomponent item_row %}
+
 <!doctype html>
 <html lang="en" class="h-full">
   <head>
@@ -34,34 +50,38 @@
     <main class="max-w-xl mx-auto px-6 pt-16 pb-24">
       <h1 class="text-2xl italic text-paper-muted mb-8">{{ date }}</h1>
 
-      <ul id="items">
-        {% for item in items %}
-        <li class="flex items-start gap-3 py-3 border-b border-paper-rule">
-          <input
-            type="checkbox"
-            id="{{ item.item_uid }}"
-            class="peer mt-2 h-4 w-4 shrink-0 cursor-pointer accent-[#2e2b25]"
-            {% if item.state == "Checked" %}checked{% endif %}
-          />
-          <span
-            class="cursor-text text-xl leading-snug peer-checked:line-through peer-checked:text-paper-muted [&_code]:rounded [&_code]:bg-paper-code [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.85em]"
-            data-source="{{ item.source }}"
-            >{{ item.content | safe }}</span
-          >
-        </li>
-        {% endfor %}
-      </ul>
-
-      <form action="/add" method="post" class="mt-6">
+      <form action="/add" method="post" class="mb-6">
         <input
           type="text"
           id="add-item"
           name="content"
           placeholder="Add a task"
           autocomplete="off"
+          autofocus
           class="w-full bg-transparent border-b border-paper-rule pb-2 text-xl text-paper-ink placeholder-paper-muted focus:outline-none focus:border-paper-ink"
         />
       </form>
+
+      <div id="items">
+        <ul>
+          {% for item in open_items %}
+          {{ <item_row item={item} /> }}
+          {% endfor %}
+        </ul>
+
+        {% if completed_items | length > 0 %}
+        <details class="mt-6">
+          <summary class="cursor-pointer select-none text-paper-muted italic">
+            Completed ({{ completed_items | length }})
+          </summary>
+          <ul>
+            {% for item in completed_items %}
+            {{ <item_row item={item} /> }}
+            {% endfor %}
+          </ul>
+        </details>
+        {% endif %}
+      </div>
     </main>
   </body>
 </html>
