@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH items_with_states AS (\n                SELECT DISTINCT ON (i.id)\n                    i.created_at,\n                    i.item_uid,\n                    latest_content.content,\n                    iet.name AS state\n                FROM item i\n                JOIN item_event ie ON i.id = ie.item_id\n                JOIN item_event_type iet ON iet.id = ie.event_type_id\n                JOIN LATERAL (\n                    SELECT ic.content\n                    FROM item_content ic\n                    WHERE ic.item_id = i.id\n                    ORDER BY ic.recorded_at DESC, ic.id DESC\n                    LIMIT 1\n                ) latest_content ON TRUE\n                WHERE (i.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/London')::date = $1\n                ORDER BY i.id, i.created_at, ie.occurred_at DESC\n            )\n            SELECT item_uid, content, content AS source, state\n            FROM items_with_states\n            WHERE state != 'Deleted'\n            ORDER BY created_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_uid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "state",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "746349355fcc0e57fa9af46bf22000ffafcb986873eddf7395f138d9a94e32a4"
+}

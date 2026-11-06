@@ -44,7 +44,8 @@
             {% if item.state == "Checked" %}checked{% endif %}
           />
           <span
-            class="text-xl leading-snug peer-checked:line-through peer-checked:text-paper-muted [&_code]:rounded [&_code]:bg-paper-code [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.85em]"
+            class="cursor-text text-xl leading-snug peer-checked:line-through peer-checked:text-paper-muted [&_code]:rounded [&_code]:bg-paper-code [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.85em]"
+            data-source="{{ item.source }}"
             >{{ item.content | safe }}</span
           >
         </li>

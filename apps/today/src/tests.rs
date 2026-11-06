@@ -136,6 +136,108 @@ async fn checked_items_stay_in_the_list_marked_as_checked(pool: PgPool) -> Resul
     Ok(())
 }
 
+#[sqlx::test]
+async fn edited_content_is_shown_in_place_of_the_original(pool: PgPool) -> Result<()> {
+    let router = build_router(pool.clone())?;
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/add")
+        .header(CONTENT_TYPE, FORM_MIME_TYPE)
+        .body(Body::from("content=Task"))?;
+
+    router.clone().oneshot(request).await?;
+
+    let today = Utc::now().date_naive();
+    let items = crate::persistence::select_items(&pool, today).await?;
+    let uid = items[0].item_uid.to_string();
+
+    let request = Request::builder()
+        .method(Method::PATCH)
+        .uri(format!("/update/{uid}/content"))
+        .header(CONTENT_TYPE, "application/json")
+        .body(Body::from(r#"{"content":"Edited task"}"#))?;
+
+    let response = router.clone().oneshot(request).await?;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/")
+        .body(Body::empty())?;
+
+    let response = router.oneshot(request).await?;
+    let body = read_full_body(response).await?;
+
+    assert!(body.contains(">Edited task</span"));
+    assert!(!body.contains(">Task</span"));
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn blank_edits_are_rejected(pool: PgPool) -> Result<()> {
+    let router = build_router(pool.clone())?;
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/add")
+        .header(CONTENT_TYPE, FORM_MIME_TYPE)
+        .body(Body::from("content=Task"))?;
+
+    router.clone().oneshot(request).await?;
+
+    let today = Utc::now().date_naive();
+    let items = crate::persistence::select_items(&pool, today).await?;
+    let uid = items[0].item_uid.to_string();
+
+    let request = Request::builder()
+        .method(Method::PATCH)
+        .uri(format!("/update/{uid}/content"))
+        .header(CONTENT_TYPE, "application/json")
+        .body(Body::from(r#"{"content":"   "}"#))?;
+
+    let response = router.clone().oneshot(request).await?;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/")
+        .body(Body::empty())?;
+
+    let response = router.oneshot(request).await?;
+    let body = read_full_body(response).await?;
+
+    assert!(body.contains(">Task</span"));
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn raw_source_is_escaped_in_the_edit_attribute(pool: PgPool) -> Result<()> {
+    let router = build_router(pool)?;
+
+    let request = Request::builder()
+        .method(Method::POST)
+        .uri("/add")
+        .header(CONTENT_TYPE, FORM_MIME_TYPE)
+        .body(Body::from("content=Say+%22hi%22+%3Cb%3E"))?;
+
+    router.clone().oneshot(request).await?;
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri("/")
+        .body(Body::empty())?;
+
+    let response = router.oneshot(request).await?;
+    let body = read_full_body(response).await?;
+
+    assert!(body.contains(r#"data-source="Say &quot;hi&quot; &lt;b&gt;""#));
+
+    Ok(())
+}
+
 #[test]
 fn item_content_without_any_markdown_should_be_transparently_rendered() {
     let content = Content::from("very normal text".to_string());
