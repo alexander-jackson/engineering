@@ -1,41 +1,47 @@
+use chrono::NaiveDate;
 use serde::Serialize;
 
 use crate::persistence::{Item, ItemState};
 
 #[derive(Clone, Serialize)]
 pub struct IndexContext {
-    checked_items: Vec<Item>,
-    unchecked_items: Vec<Item>,
+    date: String,
+    items: Vec<Item>,
 }
 
-impl From<Vec<Item>> for IndexContext {
-    fn from(items: Vec<Item>) -> Self {
-        let mut checked_items = Vec::new();
-        let mut unchecked_items = Vec::new();
-
-        for item in items {
-            match item.state {
-                ItemState::Checked => checked_items.push(item),
-                ItemState::Unchecked => unchecked_items.push(item),
-                ItemState::Deleted => (), // intentionally ignored
-            }
-        }
+impl IndexContext {
+    pub fn new(date: NaiveDate, items: Vec<Item>) -> Self {
+        // Items are kept in their stored order so completed items stay in place
+        let items = items
+            .into_iter()
+            .filter(|item| item.state != ItemState::Deleted)
+            .collect();
 
         Self {
-            checked_items,
-            unchecked_items,
+            date: date.format("%A %-d %B").to_string(),
+            items,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use chrono::NaiveDate;
+
     use crate::persistence::{Item, ItemState};
     use crate::templates::IndexContext;
     use crate::uid::ItemUid;
 
     #[test]
-    fn items_are_correctly_categorised() {
+    fn date_is_formatted_for_display() {
+        let date = NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
+        let context = IndexContext::new(date, vec![]);
+
+        assert_eq!(context.date, "Friday 6 November");
+    }
+
+    #[test]
+    fn items_keep_their_order_and_state() {
         let checked_item = Item {
             item_uid: ItemUid::new(),
             content: "checked".to_owned().into(),
@@ -48,11 +54,11 @@ mod tests {
             state: ItemState::Unchecked,
         };
 
+        let date = NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
         let items = vec![checked_item.clone(), unchecked_item.clone()];
-        let context = IndexContext::from(items);
+        let context = IndexContext::new(date, items);
 
-        assert_eq!(context.checked_items, vec![checked_item]);
-        assert_eq!(context.unchecked_items, vec![unchecked_item]);
+        assert_eq!(context.items, vec![checked_item, unchecked_item]);
     }
 
     #[test]
@@ -63,17 +69,13 @@ mod tests {
             state: ItemState::Deleted,
         };
 
+        let date = NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
         let items = vec![deleted_item.clone()];
-        let context = IndexContext::from(items);
+        let context = IndexContext::new(date, items);
 
         assert!(
-            !context.checked_items.contains(&deleted_item),
-            "checked items contained a deleted item"
-        );
-
-        assert!(
-            !context.unchecked_items.contains(&deleted_item),
-            "unchecked items contained a delete item"
+            !context.items.contains(&deleted_item),
+            "items contained a deleted item"
         );
     }
 }

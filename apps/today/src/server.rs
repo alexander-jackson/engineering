@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use axum::http::header::LOCATION;
 use axum::response::Response;
 use axum::routing::{get, patch, post};
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use color_eyre::eyre::Result;
 use foundation_http_server::Server;
 use foundation_templating::{RenderedTemplate, TemplateEngine};
@@ -17,12 +17,14 @@ use sqlx::PgPool;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 
+use crate::clock;
 use crate::error::ServerResult;
 use crate::persistence::ItemState;
 use crate::templates::IndexContext;
 use crate::uid::ItemUid;
 
-pub type IndexCache = Cache<(), Arc<IndexContext>>;
+// Keyed by day so a cached page never outlives its date
+pub type IndexCache = Cache<NaiveDate, Arc<IndexContext>>;
 
 #[derive(Clone)]
 struct ApplicationState {
@@ -69,15 +71,15 @@ async fn templated(
         ..
     }): State<ApplicationState>,
 ) -> ServerResult<RenderedTemplate> {
-    let now = Utc::now().date_naive();
+    let today = clock::today();
 
-    let context = match index_cache.get(&()).await {
+    let context = match index_cache.get(&today).await {
         Some(ctx) => ctx,
         None => {
-            let items = crate::persistence::select_items(&pool, now).await?;
-            let context = Arc::new(IndexContext::from(items));
+            let items = crate::persistence::select_items(&pool, today).await?;
+            let context = Arc::new(IndexContext::new(today, items));
 
-            index_cache.insert((), Arc::clone(&context)).await;
+            index_cache.insert(today, Arc::clone(&context)).await;
 
             context
         }
@@ -104,7 +106,7 @@ async fn add_item(
     let now = Utc::now().naive_local();
 
     crate::persistence::create_item(&pool, item_uid, &content, now).await?;
-    index_cache.remove(&()).await;
+    index_cache.remove(&clock::today()).await;
 
     tracing::info!(%item_uid, "added an item");
 
@@ -125,7 +127,7 @@ async fn update_item(
     Json(request): Json<UpdateItemRequest>,
 ) -> ServerResult<Response> {
     crate::persistence::update_item(&pool, item_uid, request.state).await?;
-    index_cache.remove(&()).await;
+    index_cache.remove(&clock::today()).await;
 
     tracing::info!(%item_uid, ?request, "updated an item");
 

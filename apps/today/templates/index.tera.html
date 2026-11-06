@@ -1,40 +1,65 @@
 <!doctype html>
-<html>
+<html lang="en" class="h-full">
   <head>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="assets/style.css" />
-    <script type="text/javascript" src="assets/script.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="A daily list of things that could be done" />
     <title>Today</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              paper: {
+                bg: "#f5f1e6",
+                ink: "#2e2b25",
+                muted: "#948c79",
+                rule: "#ddd5c2",
+                code: "#ebe5d4",
+              },
+            },
+            fontFamily: {
+              serif: ["'Iowan Old Style'", "Charter", "Georgia", "serif"],
+            },
+          },
+        },
+      };
+    </script>
+    <script type="text/javascript" src="assets/script.js"></script>
   </head>
 
-  <body class="container">
-    <h1>Today</h1>
+  <body class="h-full bg-paper-bg text-paper-ink font-serif antialiased">
+    <main class="max-w-xl mx-auto px-6 pt-16 pb-24">
+      <h1 class="text-2xl italic text-paper-muted mb-8">{{ date }}</h1>
 
-    <ul id="unchecked-items">
-      {% for item in unchecked_items %}
-      <li>
-        <input type="checkbox" id="{{ item.item_uid }}" />
-        {{ item.content | safe }}
-      </li>
-      {% endfor %}
-    </ul>
-
-    <form action="/add" method="post">
-      <input type="text" id="add-item" name="content" />
-    </form>
-
-    <details>
-      <summary>Archived Items</summary>
-
-      <ul id="checked-items">
-        {% for item in checked_items %}
-        <li>
-          <input type="checkbox" id="{{ item.item_uid }}" checked />
-          {{ item.content | safe }}
+      <ul id="items">
+        {% for item in items %}
+        <li class="flex items-start gap-3 py-3 border-b border-paper-rule">
+          <input
+            type="checkbox"
+            id="{{ item.item_uid }}"
+            class="peer mt-2 h-4 w-4 shrink-0 cursor-pointer accent-[#2e2b25]"
+            {% if item.state == "Checked" %}checked{% endif %}
+          />
+          <span
+            class="text-xl leading-snug peer-checked:line-through peer-checked:text-paper-muted [&_code]:rounded [&_code]:bg-paper-code [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.85em]"
+            >{{ item.content | safe }}</span
+          >
         </li>
         {% endfor %}
       </ul>
-    </details>
+
+      <form action="/add" method="post" class="mt-6">
+        <input
+          type="text"
+          id="add-item"
+          name="content"
+          placeholder="Add a task"
+          autocomplete="off"
+          class="w-full bg-transparent border-b border-paper-rule pb-2 text-xl text-paper-ink placeholder-paper-muted focus:outline-none focus:border-paper-ink"
+        />
+      </form>
+    </main>
   </body>
 </html>

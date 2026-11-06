@@ -1,31 +1,32 @@
+const saveState = async (checkbox) => {
+  const state = checkbox.checked ? "Checked" : "Unchecked";
+
+  const response = await fetch(`/update/${checkbox.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ state }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`failed to update item: ${response.status}`);
+  }
+};
+
 const onDocumentLoad = () => {
-  const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+  const checkboxes = document.querySelectorAll("#items input[type='checkbox']");
 
   for (const checkbox of checkboxes) {
-    checkbox.onclick = async () => {
-      const state = checkbox.checked ? "Checked" : "Unchecked";
-
-      await fetch(`/update/${checkbox.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ state }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }).then(() => {
-        const checkedItems = document.getElementById("checked-items");
-        const uncheckedItems = document.getElementById("unchecked-items");
-
-        const listElement = checkbox.parentNode;
-
-        if (state === "Checked") {
-          uncheckedItems.removeChild(listElement);
-          checkedItems.appendChild(listElement);
-        } else {
-          checkedItems.removeChild(listElement);
-          uncheckedItems.appendChild(listElement);
-        }
-      });
-    };
+    checkbox.addEventListener("change", async () => {
+      try {
+        await saveState(checkbox);
+      } catch (error) {
+        // Items stay in place, so put the checkbox back to match what was saved
+        checkbox.checked = !checkbox.checked;
+        console.error(error);
+      }
+    });
   }
 };
 

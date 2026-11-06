@@ -80,18 +80,20 @@ pub async fn select_items(pool: &PgPool, date: NaiveDate) -> Result<Vec<Item>> {
         r#"
             WITH items_with_states AS (
                 SELECT DISTINCT ON (i.id)
+                    i.created_at,
                     i.item_uid,
                     i.content,
                     iet.name AS state
                 FROM item i
                 JOIN item_event ie ON i.id = ie.item_id
                 JOIN item_event_type iet ON iet.id = ie.event_type_id
-                AND i.created_at::date = $1
+                AND (i.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/London')::date = $1
                 ORDER BY i.id, i.created_at, ie.occurred_at DESC
             )
             SELECT item_uid, content, state
             FROM items_with_states
             WHERE state != 'Deleted'
+            ORDER BY created_at
         "#,
         date,
     )
