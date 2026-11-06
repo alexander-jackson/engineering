@@ -48,8 +48,21 @@
 
   <body class="h-full bg-paper-bg text-paper-ink font-serif antialiased">
     <main class="max-w-xl mx-auto px-6 pt-16 pb-24">
-      <h1 class="text-2xl italic text-paper-muted mb-8">{{ date }}</h1>
+      <nav class="flex items-center justify-between text-2xl italic text-paper-muted mb-8">
+        {% if previous %}
+        <a href="{{ previous }}" rel="prev" aria-label="Previous day" class="px-2 hover:text-paper-ink">&larr;</a>
+        {% else %}
+        <span class="px-2 opacity-30" aria-hidden="true">&larr;</span>
+        {% endif %}
+        <h1>{{ date }}</h1>
+        {% if next %}
+        <a href="{{ next }}" rel="next" aria-label="Next day" class="px-2 hover:text-paper-ink">&rarr;</a>
+        {% else %}
+        <span class="px-2 opacity-30" aria-hidden="true">&rarr;</span>
+        {% endif %}
+      </nav>
 
+      {% if is_today %}
       <form action="/add" method="post" class="mb-6">
         <input
           type="text"
@@ -61,6 +74,7 @@
           class="w-full bg-transparent border-b border-paper-rule pb-2 text-xl text-paper-ink placeholder-paper-muted focus:outline-none focus:border-paper-ink"
         />
       </form>
+      {% endif %}
 
       <div id="items">
         <ul>
