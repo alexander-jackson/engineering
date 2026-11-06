@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use axum::Router;
 use axum::body::Body;
-use axum::extract::{Form, Json, Path, State};
+use axum::extract::{Form, Json, Path, Query, State};
 use axum::http::StatusCode;
 use axum::http::header::LOCATION;
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post};
 use chrono::{NaiveDate, Utc};
 use color_eyre::eyre::Result;
 use foundation_http_server::Server;
-use foundation_templating::{RenderedTemplate, TemplateEngine};
+use foundation_templating::TemplateEngine;
 use moka::future::Cache;
 use serde::Deserialize;
 use sqlx::PgPool;
@@ -23,7 +23,8 @@ use crate::persistence::ItemState;
 use crate::templates::IndexContext;
 use crate::uid::ItemUid;
 
-// Keyed by day so a cached page never outlives its date
+// Keyed by day so a cached page never outlives its date; the contexts also embed
+// what "today" was when built, so they are all dropped on any change
 pub type IndexCache = Cache<NaiveDate, Arc<IndexContext>>;
 
 #[derive(Clone)]
@@ -63,6 +64,11 @@ pub fn build(
     Server::new(router, listener)
 }
 
+#[derive(Debug, Deserialize)]
+struct IndexQuery {
+    date: Option<NaiveDate>,
+}
+
 #[tracing::instrument(skip(template_engine, pool, index_cache))]
 async fn templated(
     State(ApplicationState {
@@ -71,16 +77,23 @@ async fn templated(
         index_cache,
         ..
     }): State<ApplicationState>,
-) -> ServerResult<RenderedTemplate> {
+    Query(IndexQuery { date }): Query<IndexQuery>,
+) -> ServerResult<Response> {
     let today = clock::today();
+    let date = date.unwrap_or(today);
 
-    let context = match index_cache.get(&today).await {
+    // Only the last week, and nothing in the future, can be viewed
+    if date > today || date < clock::earliest_viewable(today) {
+        return Ok(status(StatusCode::NOT_FOUND)?);
+    }
+
+    let context = match index_cache.get(&date).await {
         Some(ctx) => ctx,
         None => {
-            let items = crate::persistence::select_items(&pool, today).await?;
-            let context = Arc::new(IndexContext::new(today, items));
+            let items = crate::persistence::select_items(&pool, date).await?;
+            let context = Arc::new(IndexContext::new(date, today, items));
 
-            index_cache.insert(today, Arc::clone(&context)).await;
+            index_cache.insert(date, Arc::clone(&context)).await;
 
             context
         }
@@ -88,7 +101,7 @@ async fn templated(
 
     let rendered = template_engine.render_serialized("index.tera.html", &context)?;
 
-    Ok(rendered)
+    Ok(rendered.into_response())
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,7 +120,7 @@ async fn add_item(
     let now = Utc::now().naive_local();
 
     crate::persistence::create_item(&pool, item_uid, &content, now).await?;
-    index_cache.remove(&clock::today()).await;
+    index_cache.invalidate_all();
 
     tracing::info!(%item_uid, "added an item");
 
@@ -128,7 +141,7 @@ async fn update_item(
     Json(request): Json<UpdateItemRequest>,
 ) -> ServerResult<Response> {
     crate::persistence::update_item(&pool, item_uid, request.state).await?;
-    index_cache.remove(&clock::today()).await;
+    index_cache.invalidate_all();
 
     tracing::info!(%item_uid, ?request, "updated an item");
 
@@ -153,7 +166,7 @@ async fn edit_item(
     }
 
     crate::persistence::edit_item(&pool, item_uid, &request.content).await?;
-    index_cache.remove(&clock::today()).await;
+    index_cache.invalidate_all();
 
     tracing::info!(%item_uid, "edited an item");
 

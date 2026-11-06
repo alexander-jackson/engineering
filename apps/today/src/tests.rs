@@ -3,15 +3,17 @@ use axum::body::Body;
 use axum::http::header::{AsHeaderName, CONTENT_TYPE, LOCATION};
 use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
-use chrono::Utc;
+use chrono::{Days, Utc};
 use foundation_templating::TemplateEngine;
 use http_body_util::BodyExt;
 use serde_test::{Token, assert_ser_tokens};
 use sqlx::PgPool;
 use tower::ServiceExt;
 
+use crate::clock;
 use crate::persistence::Content;
 use crate::server::IndexCache;
+use crate::uid::ItemUid;
 
 const FORM_MIME_TYPE: &str = "application/x-www-form-urlencoded";
 
@@ -189,6 +191,67 @@ async fn completed_items_are_collapsed_below_open_items(pool: PgPool) -> Result<
         "the completed item was outside the completed group"
     );
     assert!(body.contains("Completed (1)"));
+
+    Ok(())
+}
+
+async fn get_index(router: Router, uri: &str) -> Result<Response> {
+    let request = Request::builder().uri(uri).body(Body::empty())?;
+
+    Ok(router.oneshot(request).await?)
+}
+
+#[sqlx::test]
+async fn previous_days_can_be_viewed(pool: PgPool) -> Result<()> {
+    let router = build_router(pool.clone())?;
+    let yesterday = clock::today() - Days::new(1);
+    let created_at = yesterday.and_hms_opt(12, 0, 0).unwrap();
+
+    crate::persistence::create_item(&pool, ItemUid::new(), "Old task", created_at).await?;
+
+    let body = read_full_body(get_index(router.clone(), "/").await?).await?;
+    assert!(!body.contains("Old task"));
+
+    let response = get_index(router, &format!("/?date={yesterday}")).await?;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = read_full_body(response).await?;
+    assert!(body.contains(">Old task</span"));
+    assert!(!body.contains("action=\"/add\""));
+    assert!(body.contains("aria-label=\"Next day\""));
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn today_has_no_next_link_and_keeps_the_add_form(pool: PgPool) -> Result<()> {
+    let router = build_router(pool)?;
+
+    let body = read_full_body(get_index(router, "/").await?).await?;
+
+    assert!(body.contains("action=\"/add\""));
+    assert!(body.contains("aria-label=\"Previous day\""));
+    assert!(!body.contains("aria-label=\"Next day\""));
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn days_outside_the_window_are_not_found(pool: PgPool) -> Result<()> {
+    let router = build_router(pool)?;
+    let today = clock::today();
+
+    let earliest = today - Days::new(clock::HISTORY_DAYS);
+    let response = get_index(router.clone(), &format!("/?date={earliest}")).await?;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = read_full_body(response).await?;
+    assert!(!body.contains("aria-label=\"Previous day\""));
+
+    for date in [earliest - Days::new(1), today + Days::new(1)] {
+        let response = get_index(router.clone(), &format!("/?date={date}")).await?;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
 
     Ok(())
 }
