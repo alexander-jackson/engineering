@@ -138,7 +138,7 @@ services:
 
   opentracker-backend:
     image: alexanderjackson/opentracker-backend
-    tag: 20261027-2109
+    tag: 20261106-0859
     routes:
       - host: opentracker.app
         prefix: /api
@@ -182,7 +182,7 @@ services:
 
   tag-updater:
     image: alexanderjackson/tag-updater
-    tag: 20261027-2109
+    tag: 20261106-0859
     routes:
       - host: tags.opentracker.app
         port: 4025
@@ -199,7 +199,7 @@ services:
 
   today:
     image: alexanderjackson/today
-    tag: 20261027-2109
+    tag: 20261106-0859
     routes:
       - host: today.opentracker.app
         port: 8000
@@ -216,7 +216,7 @@ services:
 
   palate:
     image: alexanderjackson/palate
-    tag: 20261027-2109
+    tag: 20261106-0859
     routes:
       - host: palate.opentracker.app
         port: 8000
@@ -233,7 +233,7 @@ services:
 
   lockers:
     image: alexanderjackson/lockers
-    tag: 20261027-2109
+    tag: 20261106-0859
     routes:
       - host: lockers.opentracker.app
         port: 8000
@@ -250,7 +250,7 @@ services:
 
   pgmanager:
     image: alexanderjackson/pgmanager
-    tag: 20261027-2109
+    tag: 20261106-0859
     replicas: 1
     environment:
       AWS_ROLE_ARN: arn:aws:iam::558855412466:role/pgmanager-role
@@ -265,7 +265,7 @@ services:
 
   uptime:
     image: alexanderjackson/uptime
-    tag: 20261027-2109
+    tag: 20261106-0859
     routes:
       - host: uptime.opentracker.app
         port: 8000
@@ -283,7 +283,7 @@ services:
 
   events:
     image: alexanderjackson/events
-    tag: 20261027-2109
+    tag: 20261106-0859
     routes:
       - host: events.opentracker.app
         port: 3333
@@ -300,7 +300,7 @@ services:
 
   certmanager:
     image: alexanderjackson/certmanager
-    tag: 20261027-2109
+    tag: 20261106-0859
     routes:
       - host: certificates.opentracker.app
         port: 4444
@@ -318,7 +318,7 @@ services:
 
   dns-server:
     image: alexanderjackson/dns-server
-    tag: 20261027-2109
+    tag: 20261106-0859
     routes:
       - host: dns.opentracker.app
         port: 853
