@@ -7,6 +7,7 @@ use tokio::net::TcpListener;
 
 use crate::server::IndexCache;
 
+mod clock;
 mod config;
 mod error;
 mod persistence;

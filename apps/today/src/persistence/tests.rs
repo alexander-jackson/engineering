@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::{Duration, NaiveDate, NaiveDateTime, Utc};
 use color_eyre::eyre::Result;
 use sqlx::PgPool;
 
@@ -19,7 +19,7 @@ async fn create_item(pool: &PgPool, content: &str, created_at: NaiveDateTime) ->
 fn items_are_only_returned_for_the_current_day(pool: PgPool) -> Result<()> {
     let now = Utc::now().naive_local();
     let yesterday = now - Duration::days(1);
-    let today = now.date();
+    let today = crate::clock::today();
 
     // Insert an item for the current day
     let item_uid1 = create_item(&pool, "Today", now).await?;
@@ -41,9 +41,39 @@ fn items_are_only_returned_for_the_current_day(pool: PgPool) -> Result<()> {
 }
 
 #[sqlx::test]
+fn days_change_at_london_midnight(pool: PgPool) -> Result<()> {
+    // 23:30 UTC on 1 July is already 00:30 on 2 July in London (British summer time)
+    let created_at = NaiveDate::from_ymd_opt(2026, 7, 1)
+        .unwrap()
+        .and_hms_opt(23, 30, 0)
+        .unwrap();
+    let item_uid = create_item(&pool, "Late", created_at).await?;
+
+    let first = NaiveDate::from_ymd_opt(2026, 7, 1).unwrap();
+    let second = NaiveDate::from_ymd_opt(2026, 7, 2).unwrap();
+
+    let on_first: HashSet<ItemUid> = super::select_items(&pool, first)
+        .await?
+        .iter()
+        .map(|item| item.item_uid)
+        .collect();
+
+    let on_second: HashSet<ItemUid> = super::select_items(&pool, second)
+        .await?
+        .iter()
+        .map(|item| item.item_uid)
+        .collect();
+
+    assert!(!on_first.contains(&item_uid));
+    assert!(on_second.contains(&item_uid));
+
+    Ok(())
+}
+
+#[sqlx::test]
 fn item_states_can_be_modified(pool: PgPool) -> Result<()> {
     let now = Utc::now().naive_local();
-    let today = now.date();
+    let today = crate::clock::today();
 
     // Insert an item to modify
     let item_uid = create_item(&pool, "Content", now).await?;
@@ -72,7 +102,7 @@ fn item_states_can_be_modified(pool: PgPool) -> Result<()> {
 #[sqlx::test]
 fn deleted_items_do_not_get_returned(pool: PgPool) -> Result<()> {
     let now = Utc::now().naive_local();
-    let today = now.date();
+    let today = crate::clock::today();
 
     // Create 2 items
     let item_uid1 = create_item(&pool, "First", now).await?;
