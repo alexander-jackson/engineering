@@ -6,22 +6,22 @@ use crate::persistence::{Item, ItemState};
 #[derive(Clone, Serialize)]
 pub struct IndexContext {
     date: String,
-    items: Vec<Item>,
+    open_items: Vec<Item>,
+    completed_items: Vec<Item>,
 }
 
 impl IndexContext {
     pub fn new(date: NaiveDate, items: Vec<Item>) -> Self {
-        let mut items: Vec<Item> = items
+        // Completed items are shown apart from open ones; each group keeps its stored order
+        let (completed_items, open_items): (Vec<Item>, Vec<Item>) = items
             .into_iter()
             .filter(|item| item.state != ItemState::Deleted)
-            .collect();
-
-        // Completed items move below open ones on load; the stable sort keeps their stored order within each group
-        items.sort_by_key(|item| item.state == ItemState::Checked);
+            .partition(|item| item.state == ItemState::Checked);
 
         Self {
             date: date.format("%A %-d %B").to_string(),
-            items,
+            open_items,
+            completed_items,
         }
     }
 }
@@ -43,7 +43,7 @@ mod tests {
     }
 
     #[test]
-    fn completed_items_move_below_open_items() {
+    fn completed_items_are_separated_from_open_items() {
         let checked_item = Item {
             item_uid: ItemUid::new(),
             content: "checked".to_owned().into(),
@@ -62,7 +62,8 @@ mod tests {
         let items = vec![checked_item.clone(), unchecked_item.clone()];
         let context = IndexContext::new(date, items);
 
-        assert_eq!(context.items, vec![unchecked_item, checked_item]);
+        assert_eq!(context.open_items, vec![unchecked_item]);
+        assert_eq!(context.completed_items, vec![checked_item]);
     }
 
     #[test]
@@ -88,10 +89,8 @@ mod tests {
         ];
         let context = IndexContext::new(date, items);
 
-        assert_eq!(
-            context.items,
-            vec![first_open, second_open, first_checked, second_checked]
-        );
+        assert_eq!(context.open_items, vec![first_open, second_open]);
+        assert_eq!(context.completed_items, vec![first_checked, second_checked]);
     }
 
     #[test]
@@ -107,9 +106,6 @@ mod tests {
         let items = vec![deleted_item.clone()];
         let context = IndexContext::new(date, items);
 
-        assert!(
-            !context.items.contains(&deleted_item),
-            "items contained a deleted item"
-        );
+        assert!(context.open_items.is_empty() && context.completed_items.is_empty());
     }
 }
