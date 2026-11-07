@@ -23,9 +23,11 @@ use crate::persistence::ItemState;
 use crate::templates::IndexContext;
 use crate::uid::ItemUid;
 
-// Keyed by day so a cached page never outlives its date; the contexts also embed
-// what "today" was when built, so they are all dropped on any change
-pub type IndexCache = Cache<NaiveDate, Arc<IndexContext>>;
+// Keyed by the day being viewed and what today was when it was built, as the context
+// embeds today-relative state (navigation links, the add form). Without the second
+// part a page cached on its own day would be reused as stale once the day rolled over.
+// Any change drops every entry.
+pub type IndexCache = Cache<(NaiveDate, NaiveDate), Arc<IndexContext>>;
 
 #[derive(Clone)]
 struct ApplicationState {
@@ -87,13 +89,13 @@ async fn templated(
         return Ok(status(StatusCode::NOT_FOUND)?);
     }
 
-    let context = match index_cache.get(&date).await {
+    let context = match index_cache.get(&(date, today)).await {
         Some(ctx) => ctx,
         None => {
             let items = crate::persistence::select_items(&pool, date).await?;
             let context = Arc::new(IndexContext::new(date, today, items));
 
-            index_cache.insert(date, Arc::clone(&context)).await;
+            index_cache.insert((date, today), Arc::clone(&context)).await;
 
             context
         }
