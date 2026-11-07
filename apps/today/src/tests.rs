@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::Router;
 use axum::body::Body;
 use axum::http::header::{AsHeaderName, CONTENT_TYPE, LOCATION};
@@ -13,6 +15,7 @@ use tower::ServiceExt;
 use crate::clock;
 use crate::persistence::Content;
 use crate::server::IndexCache;
+use crate::templates::IndexContext;
 use crate::uid::ItemUid;
 
 const FORM_MIME_TYPE: &str = "application/x-www-form-urlencoded";
@@ -219,6 +222,26 @@ async fn previous_days_can_be_viewed(pool: PgPool) -> Result<()> {
     assert!(body.contains(">Old task</span"));
     assert!(!body.contains("action=\"/add\""));
     assert!(body.contains("aria-label=\"Next day\""));
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn pages_cached_on_an_earlier_day_are_not_reused(pool: PgPool) -> Result<()> {
+    let template_engine = TemplateEngine::new()?;
+    let index_cache = IndexCache::new(8);
+    let router = crate::server::build_router(template_engine, pool, index_cache.clone());
+
+    // What the server would have cached for yesterday, back when it was still today
+    let yesterday = clock::today() - Days::new(1);
+    let stale = Arc::new(IndexContext::new(yesterday, yesterday, vec![]));
+    index_cache.insert((yesterday, yesterday), stale).await;
+
+    let response = get_index(router, &format!("/?date={yesterday}")).await?;
+    let body = read_full_body(response).await?;
+
+    assert!(body.contains("aria-label=\"Next day\""));
+    assert!(!body.contains("action=\"/add\""));
 
     Ok(())
 }
