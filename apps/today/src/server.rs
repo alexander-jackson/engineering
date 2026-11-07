@@ -95,7 +95,9 @@ async fn templated(
             let items = crate::persistence::select_items(&pool, date).await?;
             let context = Arc::new(IndexContext::new(date, today, items));
 
-            index_cache.insert((date, today), Arc::clone(&context)).await;
+            index_cache
+                .insert((date, today), Arc::clone(&context))
+                .await;
 
             context
         }
