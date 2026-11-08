@@ -77,24 +77,22 @@
       {% endif %}
 
       <div id="items">
-        <ul>
+        <ul id="open-items">
           {% for item in open_items %}
           {{ <item_row item={item} /> }}
           {% endfor %}
         </ul>
 
-        {% if completed_items | length > 0 %}
-        <details class="mt-6">
+        <details id="completed" class="mt-6"{% if completed_items | length == 0 %} hidden{% endif %}>
           <summary class="cursor-pointer select-none text-paper-muted italic">
             Completed ({{ completed_items | length }})
           </summary>
-          <ul>
+          <ul id="completed-items">
             {% for item in completed_items %}
             {{ <item_row item={item} /> }}
             {% endfor %}
           </ul>
         </details>
-        {% endif %}
       </div>
     </main>
   </body>

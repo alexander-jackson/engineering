@@ -86,6 +86,22 @@ const editContent = (span, uid) => {
   input.select();
 };
 
+// Moves a task into the open or completed list to match its checkbox
+const moveToMatchingList = (checkbox) => {
+  const item = checkbox.closest("li");
+  const target = document.getElementById(
+    checkbox.checked ? "completed-items" : "open-items",
+  );
+
+  target.appendChild(item);
+
+  const completed = document.getElementById("completed");
+  const count = document.getElementById("completed-items").children.length;
+
+  completed.hidden = count === 0;
+  completed.querySelector("summary").textContent = `Completed (${count})`;
+};
+
 const onDocumentLoad = () => {
   const checkboxes = document.querySelectorAll("#items input[type='checkbox']");
 
@@ -93,8 +109,9 @@ const onDocumentLoad = () => {
     checkbox.addEventListener("change", async () => {
       try {
         await saveState(checkbox);
+        moveToMatchingList(checkbox);
       } catch (error) {
-        // Items stay in place, so put the checkbox back to match what was saved
+        // The item has not moved, so put the checkbox back to match what was saved
         checkbox.checked = !checkbox.checked;
         console.error(error);
       }
