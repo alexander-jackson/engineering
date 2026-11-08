@@ -94,7 +94,7 @@ async fn can_add_items(pool: PgPool) -> Result<()> {
 }
 
 #[sqlx::test]
-async fn checked_items_stay_in_the_list_marked_as_checked(pool: PgPool) -> Result<()> {
+async fn checked_items_are_rendered_as_checked(pool: PgPool) -> Result<()> {
     let router = build_router(pool.clone())?;
 
     let request = Request::builder()
@@ -126,7 +126,7 @@ async fn checked_items_stay_in_the_list_marked_as_checked(pool: PgPool) -> Resul
     let response = router.oneshot(request).await?;
     let body = read_full_body(response).await?;
 
-    // The item should still be rendered in place, with its checkbox ticked
+    // The item should be rendered with its checkbox ticked
     let start = body
         .find(&format!("id=\"{uid}\""))
         .expect("the item should be rendered");
