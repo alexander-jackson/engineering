@@ -29,7 +29,7 @@ impl<T> Deref for Configuration<T> {
     }
 }
 
-pub fn run<T>() -> Result<Configuration<T>>
+pub async fn run<T>() -> Result<Configuration<T>>
 where
     T: for<'de> Deserialize<'de>,
 {
@@ -60,7 +60,7 @@ where
 
     #[cfg(feature = "metrics")]
     if let Some(metrics) = &config.metrics {
-        foundation_metrics::init(&application_name, metrics)?;
+        foundation_metrics::init(&application_name, metrics).await?;
     }
 
     tracing::info!(name = %application_name, "initialised application");
@@ -73,7 +73,7 @@ pub async fn run_with_bootstrap<T>() -> Result<(Configuration<T>, PgPool)>
 where
     T: for<'de> Deserialize<'de>,
 {
-    let config = run()?;
+    let config = run().await?;
     let pool = foundation_database_bootstrap::run(&config.database).await?;
 
     Ok((config, pool))

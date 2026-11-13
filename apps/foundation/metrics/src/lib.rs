@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use axum::extract::MatchedPath;
 use axum::http::{Request, Response};
+use color_eyre::eyre::Result;
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::Counter;
 use opentelemetry_otlp::{MetricExporter, WithExportConfig, WithHttpConfig};
@@ -22,9 +23,54 @@ use tower_service::Service;
 pub struct MetricsConfig {
     pub endpoint: String,
     pub interval_seconds: u64,
+    #[serde(default)]
+    pub collect_ec2_metadata: bool,
 }
 
-pub fn init(service_name: &str, config: &MetricsConfig) -> color_eyre::eyre::Result<()> {
+struct InstanceMetadata {
+    instance_id: String,
+    availability_zone: String,
+}
+
+async fn collect_ec2_metadata() -> Result<InstanceMetadata> {
+    let client = Client::new();
+
+    let base = "http://169.254.169.254/latest";
+    let token_url = format!("{base}/api/token");
+    let instance_id_url = format!("{base}/meta-data/instance-id");
+    let availability_zone_url = format!("{base}/meta-data/placement/availability-zone");
+
+    let token = client
+        .put(&token_url)
+        .header("X-aws-ec2-metadata-token-ttl-seconds", "21600")
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let instance_id = client
+        .get(&instance_id_url)
+        .header("X-aws-ec2-metadata-token", &token)
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let availability_zone = client
+        .get(&availability_zone_url)
+        .header("X-aws-ec2-metadata-token", &token)
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    Ok(InstanceMetadata {
+        instance_id,
+        availability_zone,
+    })
+}
+
+pub async fn init(service_name: &str, config: &MetricsConfig) -> Result<()> {
     let exporter = MetricExporter::builder()
         .with_http()
         .with_http_client(Client::new())
@@ -35,12 +81,24 @@ pub fn init(service_name: &str, config: &MetricsConfig) -> color_eyre::eyre::Res
         .with_interval(Duration::from_secs(config.interval_seconds))
         .build();
 
-    let resource = Resource::builder()
-        .with_service_name(service_name.to_owned())
-        .build();
+    let mut resource = Resource::builder().with_service_name(service_name.to_owned());
+
+    if config.collect_ec2_metadata {
+        match collect_ec2_metadata().await {
+            Ok(metadata) => {
+                resource = resource.with_attributes(vec![
+                    KeyValue::new("ec2.instance_id", metadata.instance_id),
+                    KeyValue::new("ec2.availability_zone", metadata.availability_zone),
+                ]);
+            }
+            Err(e) => {
+                eprintln!("Failed to collect EC2 metadata: {:?}", e);
+            }
+        }
+    }
 
     let provider = SdkMeterProvider::builder()
-        .with_resource(resource)
+        .with_resource(resource.build())
         .with_reader(reader)
         .build();
 

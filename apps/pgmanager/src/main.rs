@@ -47,7 +47,7 @@ impl PgManagerMetrics {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    let config = foundation_init::run::<Configuration>()?;
+    let config = foundation_init::run::<Configuration>().await?;
 
     let sdk_config = foundation_credentials::load().await?;
     let s3_client = aws_sdk_s3::Client::new(&sdk_config);
