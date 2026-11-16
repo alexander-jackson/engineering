@@ -350,11 +350,6 @@ services:
       GF_LOG_MODE: console
       GF_LOG_CONSOLE_FORMAT: json
     volumes:
-      data:
-        source:
-          location: filesystem
-          path: /mnt/data/grafana
-        target: /var/lib/grafana
       datasource-prometheus:
         source:
           location: s3
