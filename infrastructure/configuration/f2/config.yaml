@@ -355,6 +355,30 @@ services:
           location: filesystem
           path: /mnt/data/grafana
         target: /var/lib/grafana
+      datasource-prometheus:
+        source:
+          location: s3
+          bucket: configuration-68f6c7
+          key: grafana/provisioning/datasources/prometheus.yaml
+        target: /etc/grafana/provisioning/datasources/prometheus.yaml
+      dashboard-provider:
+        source:
+          location: s3
+          bucket: configuration-68f6c7
+          key: grafana/provisioning/dashboards/default.yaml
+        target: /etc/grafana/provisioning/dashboards/default.yaml
+      dashboard-dns-server:
+        source:
+          location: s3
+          bucket: configuration-68f6c7
+          key: grafana/dashboards/dns-server.json
+        target: /etc/grafana/dashboards/dns-server.json
+      dashboard-instance-metrics:
+        source:
+          location: s3
+          bucket: configuration-68f6c7
+          key: grafana/dashboards/instance-metrics.json
+        target: /etc/grafana/dashboards/instance-metrics.json
 
   prometheus:
     image: prom/prometheus
