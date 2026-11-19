@@ -72,7 +72,6 @@ async fn main() -> Result<()> {
                     store,
                     wait,
                     ClassifierMetrics::new(&meter),
-                    classifier_config.rollout_percentage,
                 )
                 .await?,
             ))
