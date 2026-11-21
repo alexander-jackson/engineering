@@ -15,6 +15,7 @@ use crate::args::Args;
 use crate::common::Container;
 use crate::config::{Config, Service};
 use crate::docker::api::create_and_start_container;
+use crate::health::HealthMonitor;
 use crate::ipc::MessageBus;
 use crate::load_balancer::LoadBalancer;
 use crate::reconciler::Reconciler;
@@ -80,6 +81,8 @@ async fn main() -> Result<()> {
         Arc::clone(&message_bus),
     );
 
+    let health_monitor = HealthMonitor::new(Arc::clone(&message_bus));
+
     let mut listeners = HashMap::new();
 
     for (protocol, port) in alb_config.ports.iter() {
@@ -93,6 +96,7 @@ async fn main() -> Result<()> {
     tokio::try_join!(
         load_balancer.run(listeners, tls, mtls),
         reconciler.run(),
+        health_monitor.run(),
         shutdown_signal
     )?;
 

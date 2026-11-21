@@ -1,15 +1,18 @@
 use std::sync::Arc;
 
+use std::net::Ipv4Addr;
+
 use arc_swap::ArcSwap;
 use color_eyre::eyre::{eyre, Result};
+use hyper::Uri;
 use indexmap::IndexSet;
 use tokio::sync::RwLock;
 
 use crate::common::Container;
-use crate::config::{Config, Diff, ExternalBytes, ReplicaCount, Service, ShutdownMode};
+use crate::config::{Config, Diff, ExternalBytes, Probe, ReplicaCount, Service, ShutdownMode};
 use crate::docker::api::{create_and_start_container, StartedContainerDetails};
 use crate::docker::client::DockerClient;
-use crate::ipc::MessageBus;
+use crate::ipc::{HealthCheckRequest, MessageBus};
 use crate::service_registry::ServiceRegistry;
 
 #[derive(Debug)]
@@ -103,14 +106,48 @@ impl<C: DockerClient> Reconciler<C> {
             started_containers.push(details);
         }
 
+        let probe = new_definition.liveness_probe().cloned();
+
         let mut write_lock = self.registry.write().await;
         write_lock.define(name, new_definition);
 
-        started_containers
-            .into_iter()
-            .for_each(|details| write_lock.add_container(name, details));
+        for details in &started_containers {
+            write_lock.add_container(name, details.clone());
+        }
+
+        drop(write_lock);
+
+        // Health checks are informational only, so never fail the deployment over them
+        match probe {
+            Some(probe) => {
+                for details in started_containers {
+                    self.request_health_check(name, details, &probe);
+                }
+            }
+            None => tracing::debug!(%name, "no liveness probe defined, skipping health checks"),
+        }
 
         Ok(())
+    }
+
+    fn request_health_check(&self, name: &str, details: StartedContainerDetails, probe: &Probe) {
+        let target = match health_check_target(details.addr, probe) {
+            Ok(target) => target,
+            Err(error) => {
+                tracing::warn!(%name, ?error, "failed to build health check target");
+                return;
+            }
+        };
+
+        let request = HealthCheckRequest {
+            service: name.to_owned(),
+            container_id: details.id,
+            target,
+        };
+
+        if let Err(error) = self.message_bus.send_health_check_request(request) {
+            tracing::warn!(%name, ?error, "failed to request a health check");
+        }
     }
 
     #[tracing::instrument(skip(self))]
@@ -203,6 +240,13 @@ impl<C: DockerClient> Reconciler<C> {
     }
 }
 
+fn health_check_target(addr: Ipv4Addr, probe: &Probe) -> Result<Uri> {
+    let Probe { path, port } = probe;
+    let separator = if path.starts_with('/') { "" } else { "/" };
+
+    Ok(format!("http://{addr}:{port}{separator}{path}").parse()?)
+}
+
 #[cfg(test)]
 pub mod tests {
     use std::collections::{HashMap, HashSet};
@@ -215,12 +259,14 @@ pub mod tests {
     use tokio::sync::RwLock;
 
     use crate::common::Environment;
-    use crate::config::{AlbConfig, Config, Diff, ExternalBytes, ReplicaCount, Scheme, Service};
+    use crate::config::{
+        AlbConfig, Config, Diff, ExternalBytes, Probe, Probes, ReplicaCount, Scheme, Service,
+    };
     use crate::docker::api::StartedContainerDetails;
     use crate::docker::client::DockerClient;
     use crate::docker::models::{ContainerId, ImageSummary, NetworkId};
     use crate::ipc::MessageBus;
-    use crate::reconciler::Reconciler;
+    use crate::reconciler::{health_check_target, Reconciler};
     use crate::service_registry::ServiceRegistry;
 
     #[derive(Clone, Debug, Default)]
@@ -549,6 +595,94 @@ pub mod tests {
             .iter()
             .any(|(_, img)| img == &format!("{image}:{new_tag}"));
         assert!(new_container_present, "new container should be running");
+
+        Ok(())
+    }
+
+    fn probes(path: &str, port: u16) -> Option<Probes> {
+        Some(Probes {
+            liveness: Some(Probe {
+                path: path.to_owned(),
+                port,
+            }),
+        })
+    }
+
+    #[test]
+    fn health_check_target_normalises_the_path() -> Result<()> {
+        let probe = |path: &str| Probe {
+            path: path.to_owned(),
+            port: 8000,
+        };
+
+        let expected = "http://127.0.0.1:8000/health";
+        assert_eq!(
+            health_check_target(Ipv4Addr::LOCALHOST, &probe("/health"))?,
+            expected
+        );
+        assert_eq!(
+            health_check_target(Ipv4Addr::LOCALHOST, &probe("health"))?,
+            expected
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn requests_health_check_for_started_containers() -> Result<()> {
+        let docker_client = FakeDockerClient::default();
+        let reconciler = create_reconciler(ServiceRegistry::new(), docker_client);
+
+        let service = Service {
+            image: "alexanderjackson/f2".to_owned(),
+            tag: "latest".to_owned(),
+            probes: probes("/health", 8000),
+            ..Default::default()
+        };
+
+        reconciler
+            .handle_diff(Diff::Addition {
+                name: "foobar".to_owned(),
+                definition: service,
+            })
+            .await?;
+
+        let received = reconciler
+            .message_bus
+            .receive_health_check_request()
+            .await?;
+
+        assert_eq!(received.content.service, "foobar");
+        assert_eq!(received.content.target, "http://127.0.0.1:8000/health");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn does_not_request_health_check_without_probes() -> Result<()> {
+        let docker_client = FakeDockerClient::default();
+        let reconciler = create_reconciler(ServiceRegistry::new(), docker_client);
+
+        let service = Service {
+            image: "alexanderjackson/f2".to_owned(),
+            tag: "latest".to_owned(),
+            ..Default::default()
+        };
+
+        reconciler
+            .handle_diff(Diff::Addition {
+                name: "foobar".to_owned(),
+                definition: service,
+            })
+            .await?;
+
+        let received = tokio::time::timeout(
+            std::time::Duration::from_millis(10),
+            reconciler.message_bus.receive_health_check_request(),
+        )
+        .await;
+
+        assert!(received.is_err());
 
         Ok(())
     }
