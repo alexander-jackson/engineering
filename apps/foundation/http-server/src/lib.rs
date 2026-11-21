@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use axum::Router;
 use axum::http::{Request, Response};
+use axum::routing::get;
 use color_eyre::eyre::Result;
 use foundation_shutdown::{CancellationToken, GracefulTask};
 use tokio::net::TcpListener;
@@ -60,6 +61,10 @@ impl<B> OnResponse<B> for ResponseTracingFilter {
     }
 }
 
+async fn health() -> &'static str {
+    "OK"
+}
+
 pub struct Server {
     router: Router<()>,
     listener: TcpListener,
@@ -81,6 +86,9 @@ impl GracefulTask for Server {
 
         #[cfg(feature = "metrics")]
         let router = router.route_layer(foundation_metrics::http_layer());
+
+        // Added after the metrics layer so health checks don't show up in request metrics
+        let router = router.route("/health", get(health));
 
         let trace_layer = TraceLayer::new_for_http()
             .make_span_with(SpanCreator)
@@ -128,6 +136,24 @@ mod tests {
                 eprintln!("Server error: {}", e);
             }
         })
+    }
+
+    #[tokio::test]
+    async fn serves_a_health_route_by_default() -> Result<()> {
+        let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0);
+        let listener = TcpListener::bind(addr).await?;
+        let local_addr = listener.local_addr()?;
+
+        let _handle = run_server(Server::new(Router::new(), listener));
+
+        let response = Client::new()
+            .get(format!("http://{local_addr}/health"))
+            .send()
+            .await?;
+
+        assert!(response.status().is_success());
+
+        Ok(())
     }
 
     #[tokio::test]

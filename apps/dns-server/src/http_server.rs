@@ -72,16 +72,11 @@ pub fn build_router<B: BlocklistBackend + Clone + 'static>(
         .route("/questions", get(list_questions).post(add_question))
         .route("/questions/{uid}/retire", post(retire_question))
         .route("/questions/{uid}/replace", post(replace_question))
-        .route("/health", get(health_check))
         .route(
             "/api/v1/blocklist",
             get(get_blocked_domains).put(add_blocked_domain),
         )
         .with_state(state)
-}
-
-async fn health_check() -> &'static str {
-    "OK"
 }
 
 /// Normalises user input into the form stored in the database, or `None` if it is not usable.
