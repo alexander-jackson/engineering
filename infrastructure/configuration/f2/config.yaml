@@ -238,6 +238,10 @@ services:
       - host: lockers.opentracker.app
         port: 8000
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 8000
     environment:
       LOG_FORMAT: json
     volumes:
