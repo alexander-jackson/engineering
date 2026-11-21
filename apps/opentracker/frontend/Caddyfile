@@ -7,8 +7,15 @@
 	root * /usr/share/caddy
 	encode gzip
 
-	try_files {path} {path}/ /index.html
-	file_server
+	# Handled separately so the SPA fallback doesn't answer for it
+	handle /health {
+		respond "OK" 200
+	}
+
+	handle {
+		try_files {path} {path}/ /index.html
+		file_server
+	}
 
 	log {
 		output stdout
