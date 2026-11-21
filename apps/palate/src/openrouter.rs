@@ -61,11 +61,10 @@ impl ChatModel for OpenRouterClient {
             .build()
             .wrap_err("failed to build OpenRouter request")?;
 
-        let response =
-            tokio::time::timeout(REQUEST_TIMEOUT, self.client.send_chat_completion(&request))
-                .await
-                .wrap_err("timed out waiting for OpenRouter")?
-                .wrap_err("failed to get a completion from OpenRouter")?;
+        let response = tokio::time::timeout(REQUEST_TIMEOUT, self.client.chat().create(&request))
+            .await
+            .wrap_err("timed out waiting for OpenRouter")?
+            .wrap_err("failed to get a completion from OpenRouter")?;
 
         response
             .choices
