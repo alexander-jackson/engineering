@@ -135,6 +135,10 @@ services:
       - host: opentracker.app
         port: 80
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 80
 
   opentracker-backend:
     image: alexanderjackson/opentracker-backend
@@ -144,6 +148,10 @@ services:
         prefix: /api
         port: 3025
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 3025
     environment:
       DATABASE_HOST: rds.mesh.internal
       DATABASE_NAME: opentracker
@@ -159,6 +167,10 @@ services:
       - host: forkup.app
         port: 80
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 80
     shutdown_mode: graceful
 
   forkup-backend:
@@ -169,6 +181,10 @@ services:
         prefix: /api
         port: 8083
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 8083
     environment:
       LOG_FORMAT: json
     shutdown_mode: graceful
@@ -187,6 +203,10 @@ services:
       - host: tags.opentracker.app
         port: 4025
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 4025
     environment:
       LOG_FORMAT: json
     volumes:
@@ -204,6 +224,10 @@ services:
       - host: today.opentracker.app
         port: 8000
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 8000
     environment:
       LOG_FORMAT: json
     volumes:
@@ -221,6 +245,10 @@ services:
       - host: palate.opentracker.app
         port: 8000
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 8000
     environment:
       LOG_FORMAT: json
     volumes:
@@ -274,6 +302,10 @@ services:
       - host: uptime.opentracker.app
         port: 8000
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 8000
     environment:
       AWS_ROLE_ARN: arn:aws:iam::558855412466:role/uptime-role
       LOG_FORMAT: json
@@ -292,6 +324,10 @@ services:
       - host: events.opentracker.app
         port: 3333
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 3333
     environment:
       LOG_FORMAT: json
     volumes:
@@ -309,6 +345,10 @@ services:
       - host: certificates.opentracker.app
         port: 4444
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 4444
     environment:
       AWS_ROLE_ARN: arn:aws:iam::558855412466:role/certmanager-role
       LOG_FORMAT: json
@@ -330,6 +370,10 @@ services:
       - host: dns.opentracker.app
         port: 80
     replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 80
     environment:
       LOG_FORMAT: json
     volumes:
