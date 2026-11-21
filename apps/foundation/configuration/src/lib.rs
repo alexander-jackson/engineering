@@ -167,7 +167,10 @@ mod tests {
         std::fs::create_dir_all(&dir)?;
 
         let base = dir.join("config.yaml");
-        std::fs::write(&base, "name: base\ndatabase:\n  host: localhost\n  password: ''\n")?;
+        std::fs::write(
+            &base,
+            "name: base\ndatabase:\n  host: localhost\n  password: ''\n",
+        )?;
         std::fs::write(
             dir.join("config.override.yaml"),
             "database:\n  password: hunter2\n",
