@@ -263,6 +263,11 @@ impl Service {
     pub fn liveness_probe(&self) -> Option<&Probe> {
         self.probes.as_ref()?.liveness.as_ref()
     }
+
+    /// Whether new containers must pass their liveness probe before receiving traffic.
+    pub fn requires_healthy_containers(&self) -> bool {
+        self.liveness_probe().is_some_and(|probe| probe.required)
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize)]
@@ -275,6 +280,10 @@ pub struct Probes {
 pub struct Probe {
     pub path: String,
     pub port: u16,
+    /// Whether a rollout must wait for the probe to succeed before routing traffic to new
+    /// containers. When false, the result is only logged.
+    #[serde(default)]
+    pub required: bool,
 }
 
 impl Hash for Service {
@@ -320,6 +329,15 @@ mod tests {
         let probe = service.liveness_probe().unwrap();
         assert_eq!(probe.path, "/health");
         assert_eq!(probe.port, 8000);
+        assert!(!probe.required);
+        assert!(!service.requires_healthy_containers());
+    }
+
+    #[test]
+    fn probes_can_be_required() {
+        let yaml = "image: foo\ntag: '1'\nreplicas: 1\nprobes:\n  liveness:\n    path: /health\n    port: 8000\n    required: true";
+        let service: Service = serde_yaml::from_str(yaml).unwrap();
+        assert!(service.requires_healthy_containers());
     }
 
     fn some_config() -> Config {

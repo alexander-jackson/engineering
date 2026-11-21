@@ -1,19 +1,43 @@
+use std::collections::HashMap;
+use std::net::Ipv4Addr;
 use std::sync::Arc;
 
-use std::net::Ipv4Addr;
-
 use arc_swap::ArcSwap;
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::Result;
 use hyper::Uri;
 use indexmap::IndexSet;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::common::Container;
 use crate::config::{Config, Diff, ExternalBytes, Probe, ReplicaCount, Service, ShutdownMode};
 use crate::docker::api::{create_and_start_container, StartedContainerDetails};
 use crate::docker::client::DockerClient;
-use crate::ipc::{HealthCheckRequest, MessageBus};
+use crate::docker::models::ContainerId;
+use crate::health::HealthCheckResult;
+use crate::ipc::{HealthCheckRequest, HealthCheckResponse, MessageBus};
 use crate::service_registry::ServiceRegistry;
+
+/// A new version of a service that is waiting to prove itself healthy.
+///
+/// The candidate containers are not registered with the load balancer, and the containers
+/// currently registered are left alone, until every candidate has reported as healthy.
+#[derive(Debug)]
+struct Rollout {
+    definition: Service,
+    /// Candidates which are yet to report back.
+    pending: HashMap<ContainerId, StartedContainerDetails>,
+    healthy: Vec<StartedContainerDetails>,
+}
+
+impl Rollout {
+    fn candidates(&self) -> Vec<StartedContainerDetails> {
+        self.pending
+            .values()
+            .cloned()
+            .chain(self.healthy.iter().cloned())
+            .collect()
+    }
+}
 
 #[derive(Debug)]
 pub struct Reconciler<C: DockerClient> {
@@ -22,6 +46,7 @@ pub struct Reconciler<C: DockerClient> {
     config: Arc<ArcSwap<Config>>,
     docker_client: C,
     message_bus: Arc<MessageBus>,
+    rollouts: Mutex<HashMap<String, Rollout>>,
 }
 
 impl<C: DockerClient> Reconciler<C> {
@@ -38,18 +63,30 @@ impl<C: DockerClient> Reconciler<C> {
             config,
             docker_client,
             message_bus,
+            rollouts: Mutex::default(),
         }
     }
 
     pub async fn run(&self) -> Result<()> {
-        while self
-            .message_bus
-            .receive_reconciliation_request()
-            .await
-            .is_ok()
-        {
-            tracing::info!("received signal to reconcile");
-            self.reconcile().await?;
+        loop {
+            tokio::select! {
+                request = self.message_bus.receive_reconciliation_request() => {
+                    if request.is_err() {
+                        break;
+                    }
+
+                    tracing::info!("received signal to reconcile");
+                    self.reconcile().await?;
+                }
+                response = self.message_bus.receive_health_check_response() => {
+                    let Ok(response) = response else { break };
+
+                    // A problem with one rollout shouldn't take the load balancer down
+                    if let Err(error) = self.handle_health_response(response.content).await {
+                        tracing::warn!(?error, "failed to handle a health check response");
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -117,25 +154,30 @@ impl<C: DockerClient> Reconciler<C> {
 
         drop(write_lock);
 
-        // Health checks are informational only, so never fail the deployment over them
-        match probe {
-            Some(probe) => {
-                for details in started_containers {
-                    self.request_health_check(name, details, &probe);
-                }
-            }
-            None => tracing::debug!(%name, "no liveness probe defined, skipping health checks"),
+        let Some(probe) = probe else {
+            tracing::debug!(%name, "no liveness probe defined, skipping health checks");
+            return Ok(());
+        };
+
+        for details in started_containers {
+            self.request_health_check(name, details, &probe);
         }
 
         Ok(())
     }
 
-    fn request_health_check(&self, name: &str, details: StartedContainerDetails, probe: &Probe) {
+    /// Requests a health check, returning whether the request was made.
+    fn request_health_check(
+        &self,
+        name: &str,
+        details: StartedContainerDetails,
+        probe: &Probe,
+    ) -> bool {
         let target = match health_check_target(details.addr, probe) {
             Ok(target) => target,
             Err(error) => {
                 tracing::warn!(%name, ?error, "failed to build health check target");
-                return;
+                return false;
             }
         };
 
@@ -147,36 +189,181 @@ impl<C: DockerClient> Reconciler<C> {
 
         if let Err(error) = self.message_bus.send_health_check_request(request) {
             tracing::warn!(%name, ?error, "failed to request a health check");
+            return false;
+        }
+
+        true
+    }
+
+    /// Removes containers that never made it into the registry, logging rather than failing.
+    async fn discard_containers(&self, containers: &[StartedContainerDetails]) {
+        for details in containers {
+            if let Err(error) = self.docker_client.remove_container(&details.id).await {
+                tracing::warn!(container_id = %details.id, ?error, "failed to remove container");
+            }
         }
     }
 
-    #[tracing::instrument(skip(self))]
-    async fn handle_alteration(
+    /// Abandons any rollout in progress for the service, removing its candidate containers.
+    async fn cancel_rollout(&self, name: &str) {
+        let rollout = self.rollouts.lock().await.remove(name);
+
+        if let Some(rollout) = rollout {
+            tracing::info!(%name, "cancelling rollout");
+            self.discard_containers(&rollout.candidates()).await;
+        }
+    }
+
+    /// Starts the candidate containers for a new definition and requests their health checks.
+    ///
+    /// This supersedes any rollout already in progress. Nothing is retried on failure, the
+    /// previous version stays in place until a new definition is deployed.
+    async fn start_rollout(&self, name: &str, definition: Service) -> Result<()> {
+        self.cancel_rollout(name).await;
+
+        let mut started = Vec::new();
+
+        if let Err(error) = self.start_candidates(&definition, &mut started).await {
+            tracing::warn!(%name, ?error, "failed to start containers for rollout, the previous version is kept");
+            self.discard_containers(&started).await;
+
+            return Ok(());
+        }
+
+        let Some(probe) = definition.liveness_probe().cloned() else {
+            return Ok(());
+        };
+
+        let rollout = Rollout {
+            definition,
+            pending: started
+                .iter()
+                .map(|details| (details.id.clone(), details.clone()))
+                .collect(),
+            healthy: Vec::new(),
+        };
+
+        self.rollouts.lock().await.insert(name.to_owned(), rollout);
+
+        for details in started {
+            if !self.request_health_check(name, details, &probe) {
+                tracing::warn!(%name, "failed to request health checks for rollout, the previous version is kept");
+                self.cancel_rollout(name).await;
+
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn start_candidates(
         &self,
-        name: &str,
-        old_definition: Service,
-        new_definition: Service,
+        definition: &Service,
+        started: &mut Vec<StartedContainerDetails>,
     ) -> Result<()> {
-        let running_containers = self
-            .get_running_containers(name)
-            .await
-            .ok_or_else(|| eyre!("Failed to get running containers for {name}"))?;
+        let private_key = self.config.load().get_private_key().await?;
+        let container = Container::from(definition);
 
-        let replicas = new_definition.replicas;
-
-        self.start_multiple_containers(name, new_definition, replicas)
+        for _ in 0..definition.replicas.get() {
+            let details = create_and_start_container(
+                &self.docker_client,
+                &container,
+                &definition.tag,
+                private_key.as_ref(),
+            )
             .await?;
+
+            started.push(details);
+        }
+
+        Ok(())
+    }
+
+    async fn handle_health_response(&self, response: HealthCheckResponse) -> Result<()> {
+        let HealthCheckResponse {
+            service,
+            container_id,
+            result,
+        } = response;
+
+        let mut rollouts = self.rollouts.lock().await;
+
+        let Some(rollout) = rollouts.get_mut(&service) else {
+            return Ok(());
+        };
+
+        // Responses for unknown containers belong to a rollout that was cancelled
+        let Some(details) = rollout.pending.get(&container_id).cloned() else {
+            return Ok(());
+        };
+
+        match result {
+            HealthCheckResult::Success => {
+                rollout.pending.remove(&container_id);
+                rollout.healthy.push(details);
+
+                if rollout.pending.is_empty() {
+                    drop(rollouts);
+
+                    return self.complete_rollout(&service).await;
+                }
+
+                Ok(())
+            }
+            HealthCheckResult::Failure => {
+                drop(rollouts);
+
+                tracing::warn!(%service, %container_id, "container failed its health check, the previous version is kept");
+                self.cancel_rollout(&service).await;
+
+                Ok(())
+            }
+        }
+    }
+
+    /// Routes traffic to the healthy containers and away from the previous version.
+    async fn complete_rollout(&self, name: &str) -> Result<()> {
+        let Some(rollout) = self.rollouts.lock().await.remove(name) else {
+            return Ok(());
+        };
+
+        tracing::info!(%name, "rollout is healthy");
 
         let mut write_lock = self.registry.write().await;
 
-        for details in &running_containers {
+        let previous = write_lock
+            .get_running_containers(name)
+            .cloned()
+            .unwrap_or_default();
+        let shutdown_mode = write_lock
+            .get_definition(name)
+            .map(|definition| definition.shutdown_mode)
+            .unwrap_or_default();
+
+        write_lock.define(name, rollout.definition);
+
+        for details in rollout.healthy {
+            write_lock.add_container(name, details);
+        }
+
+        for details in &previous {
             write_lock.remove_container_by_id(name, &details.id);
         }
 
         drop(write_lock);
 
-        for details in &running_containers {
-            match old_definition.shutdown_mode {
+        self.shut_down_containers(&previous, shutdown_mode).await?;
+        self.docker_client.prune_images().await
+    }
+
+    async fn shut_down_containers(
+        &self,
+        containers: &IndexSet<StartedContainerDetails>,
+        shutdown_mode: ShutdownMode,
+    ) -> Result<()> {
+        for details in containers {
+            match shutdown_mode {
                 ShutdownMode::Graceful => {
                     self.docker_client.stop_container(&details.id).await?;
                     self.docker_client.remove_container(&details.id).await?;
@@ -191,7 +378,45 @@ impl<C: DockerClient> Reconciler<C> {
     }
 
     #[tracing::instrument(skip(self))]
+    async fn handle_alteration(
+        &self,
+        name: &str,
+        old_definition: Service,
+        new_definition: Service,
+    ) -> Result<()> {
+        if new_definition.requires_healthy_containers() {
+            return self.start_rollout(name, new_definition).await;
+        }
+
+        // Anything still being rolled out is superseded by this definition
+        self.cancel_rollout(name).await;
+
+        // There may be none if a rollout that was cancelled above never became healthy
+        let running_containers = self.get_running_containers(name).await.unwrap_or_default();
+
+        let replicas = new_definition.replicas;
+
+        self.start_multiple_containers(name, new_definition, replicas)
+            .await?;
+
+        let mut write_lock = self.registry.write().await;
+
+        for details in &running_containers {
+            write_lock.remove_container_by_id(name, &details.id);
+        }
+
+        drop(write_lock);
+
+        self.shut_down_containers(&running_containers, old_definition.shutdown_mode)
+            .await
+    }
+
+    #[tracing::instrument(skip(self))]
     async fn handle_addition(&self, name: String, definition: Service) -> Result<()> {
+        if definition.requires_healthy_containers() {
+            return self.start_rollout(&name, definition).await;
+        }
+
         let replicas = definition.replicas;
 
         self.start_multiple_containers(&name, definition, replicas)
@@ -202,6 +427,8 @@ impl<C: DockerClient> Reconciler<C> {
 
     #[tracing::instrument(skip(self))]
     async fn handle_removal(&self, name: String) -> Result<()> {
+        self.cancel_rollout(&name).await;
+
         let running_containers = self.get_running_containers(&name).await;
 
         // Remove them from the LB
@@ -241,7 +468,7 @@ impl<C: DockerClient> Reconciler<C> {
 }
 
 fn health_check_target(addr: Ipv4Addr, probe: &Probe) -> Result<Uri> {
-    let Probe { path, port } = probe;
+    let Probe { path, port, .. } = probe;
     let separator = if path.starts_with('/') { "" } else { "/" };
 
     Ok(format!("http://{addr}:{port}{separator}{path}").parse()?)
@@ -265,6 +492,8 @@ pub mod tests {
     use crate::docker::api::StartedContainerDetails;
     use crate::docker::client::DockerClient;
     use crate::docker::models::{ContainerId, ImageSummary, NetworkId};
+    use crate::health::HealthCheckResult;
+    use crate::ipc::HealthCheckResponse;
     use crate::ipc::MessageBus;
     use crate::reconciler::{health_check_target, Reconciler};
     use crate::service_registry::ServiceRegistry;
@@ -604,6 +833,7 @@ pub mod tests {
             liveness: Some(Probe {
                 path: path.to_owned(),
                 port,
+                required: false,
             }),
         })
     }
@@ -613,6 +843,7 @@ pub mod tests {
         let probe = |path: &str| Probe {
             path: path.to_owned(),
             port: 8000,
+            required: false,
         };
 
         let expected = "http://127.0.0.1:8000/health";
@@ -683,6 +914,215 @@ pub mod tests {
         .await;
 
         assert!(received.is_err());
+
+        Ok(())
+    }
+
+    fn required_service(tag: &str) -> Service {
+        let mut probes = probes("/health", 8000);
+        probes.as_mut().unwrap().liveness.as_mut().unwrap().required = true;
+
+        Service {
+            image: "myapp".to_owned(),
+            tag: tag.to_owned(),
+            probes,
+            ..Default::default()
+        }
+    }
+
+    async fn registered<C: DockerClient>(
+        reconciler: &Reconciler<C>,
+        name: &str,
+    ) -> Vec<ContainerId> {
+        reconciler
+            .get_running_containers(name)
+            .await
+            .map(|containers| containers.iter().map(|c| c.id.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    async fn docker_containers(client: &FakeDockerClient) -> Vec<ContainerId> {
+        let lock = client.state.read().await;
+
+        lock.containers.iter().map(|(id, _)| id.clone()).collect()
+    }
+
+    async fn respond(
+        reconciler: &Reconciler<FakeDockerClient>,
+        service: &str,
+        container_id: ContainerId,
+        result: HealthCheckResult,
+    ) -> Result<()> {
+        reconciler
+            .handle_health_response(HealthCheckResponse {
+                service: service.to_owned(),
+                container_id,
+                result,
+            })
+            .await
+    }
+
+    /// Takes the container the reconciler has asked to be health checked next.
+    async fn next_checked(reconciler: &Reconciler<FakeDockerClient>) -> Result<ContainerId> {
+        let request = reconciler
+            .message_bus
+            .receive_health_check_request()
+            .await?;
+
+        Ok(request.content.container_id)
+    }
+
+    /// An existing, registered, container running the `v1` tag of `myapp`.
+    async fn registry_with_running_service(
+        client: &FakeDockerClient,
+        name: &str,
+    ) -> Result<(ServiceRegistry, ContainerId)> {
+        let id = client
+            .create_container("myapp:v1", &None, &HashMap::new(), None, &[])
+            .await?;
+
+        let mut registry = ServiceRegistry::new();
+        registry.define(name, required_service("v1"));
+        registry.add_container(
+            name,
+            StartedContainerDetails {
+                id: id.clone(),
+                addr: Ipv4Addr::LOCALHOST,
+            },
+        );
+
+        Ok((registry, id))
+    }
+
+    #[tokio::test]
+    async fn required_additions_are_only_routed_once_healthy() -> Result<()> {
+        let docker_client = FakeDockerClient::default();
+        let reconciler = create_reconciler(ServiceRegistry::new(), docker_client.clone());
+
+        reconciler
+            .handle_addition("foobar".to_owned(), required_service("v1"))
+            .await?;
+
+        let candidate = next_checked(&reconciler).await?;
+
+        assert!(registered(&reconciler, "foobar").await.is_empty());
+        assert_eq!(
+            docker_containers(&docker_client).await,
+            vec![candidate.clone()]
+        );
+
+        respond(
+            &reconciler,
+            "foobar",
+            candidate.clone(),
+            HealthCheckResult::Success,
+        )
+        .await?;
+
+        assert_eq!(registered(&reconciler, "foobar").await, vec![candidate]);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn previous_version_is_replaced_once_the_new_one_is_healthy() -> Result<()> {
+        let docker_client = FakeDockerClient::default();
+        let (registry, old) = registry_with_running_service(&docker_client, "foobar").await?;
+        let reconciler = create_reconciler(registry, docker_client.clone());
+
+        reconciler
+            .handle_alteration("foobar", required_service("v1"), required_service("v2"))
+            .await?;
+
+        let candidate = next_checked(&reconciler).await?;
+
+        // Nothing has moved until the candidate reports back
+        assert_eq!(registered(&reconciler, "foobar").await, vec![old.clone()]);
+        assert!(docker_containers(&docker_client).await.contains(&old));
+
+        respond(
+            &reconciler,
+            "foobar",
+            candidate.clone(),
+            HealthCheckResult::Success,
+        )
+        .await?;
+
+        assert_eq!(
+            registered(&reconciler, "foobar").await,
+            vec![candidate.clone()]
+        );
+        assert_eq!(docker_containers(&docker_client).await, vec![candidate]);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn unhealthy_rollouts_keep_the_previous_version() -> Result<()> {
+        let docker_client = FakeDockerClient::default();
+        let (registry, old) = registry_with_running_service(&docker_client, "foobar").await?;
+        let reconciler = create_reconciler(registry, docker_client.clone());
+
+        reconciler
+            .handle_alteration("foobar", required_service("v1"), required_service("v2"))
+            .await?;
+
+        let first = next_checked(&reconciler).await?;
+        respond(
+            &reconciler,
+            "foobar",
+            first.clone(),
+            HealthCheckResult::Failure,
+        )
+        .await?;
+
+        // The candidate is gone, the previous version is still serving
+        assert_eq!(registered(&reconciler, "foobar").await, vec![old.clone()]);
+        assert_eq!(docker_containers(&docker_client).await, vec![old.clone()]);
+
+        // Nothing is retried
+        assert!(reconciler.rollouts.lock().await.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn newer_definitions_supersede_a_rollout_in_progress() -> Result<()> {
+        let docker_client = FakeDockerClient::default();
+        let (registry, old) = registry_with_running_service(&docker_client, "foobar").await?;
+        let reconciler = create_reconciler(registry, docker_client.clone());
+
+        reconciler
+            .handle_alteration("foobar", required_service("v1"), required_service("v2"))
+            .await?;
+        let superseded = next_checked(&reconciler).await?;
+
+        reconciler
+            .handle_alteration("foobar", required_service("v2"), required_service("v3"))
+            .await?;
+        let current = next_checked(&reconciler).await?;
+
+        // The first candidate was removed, and its late response changes nothing
+        assert!(!docker_containers(&docker_client)
+            .await
+            .contains(&superseded));
+        respond(
+            &reconciler,
+            "foobar",
+            superseded,
+            HealthCheckResult::Success,
+        )
+        .await?;
+        assert_eq!(registered(&reconciler, "foobar").await, vec![old]);
+
+        respond(
+            &reconciler,
+            "foobar",
+            current.clone(),
+            HealthCheckResult::Success,
+        )
+        .await?;
+        assert_eq!(registered(&reconciler, "foobar").await, vec![current]);
 
         Ok(())
     }

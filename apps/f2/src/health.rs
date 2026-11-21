@@ -9,7 +9,7 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 
-use crate::ipc::{HealthCheckRequest, MessageBus};
+use crate::ipc::{HealthCheckRequest, HealthCheckResponse, MessageBus};
 
 const HEALTH_CHECK_PERIOD: Duration = Duration::from_secs(2);
 const HEALTH_CHECK_SUCCESS_THRESHOLD: u32 = 3;
@@ -78,7 +78,8 @@ impl HealthCheck {
 
 /// Runs health checks for containers as requested over the [`MessageBus`].
 ///
-/// For now the results are only logged, nothing acts on them.
+/// Results are logged and sent back over the bus as a [`HealthCheckResponse`], it is up to the
+/// requester to decide what to do with them.
 pub struct HealthMonitor {
     message_bus: Arc<MessageBus>,
 }
@@ -90,6 +91,8 @@ impl HealthMonitor {
 
     pub async fn run(&self) -> Result<()> {
         while let Ok(message) = self.message_bus.receive_health_check_request().await {
+            let message_bus = Arc::clone(&self.message_bus);
+
             // Each check runs in its own task so a slow one doesn't delay the others
             tokio::spawn(async move {
                 let request = message.content;
@@ -100,7 +103,8 @@ impl HealthMonitor {
                 );
                 let result = Self::check(&request, configuration).await;
 
-                Self::on_result(&request, result);
+                Self::on_result(&request, &result);
+                Self::respond(&message_bus, &request, result);
             });
         }
 
@@ -116,7 +120,24 @@ impl HealthMonitor {
             .await
     }
 
-    fn on_result(request: &HealthCheckRequest, result: Result<HealthCheckResult>) {
+    /// Reports the outcome to the requester, an errored check counts as a failure.
+    fn respond(
+        message_bus: &MessageBus,
+        request: &HealthCheckRequest,
+        result: Result<HealthCheckResult>,
+    ) {
+        let response = HealthCheckResponse {
+            service: request.service.clone(),
+            container_id: request.container_id.clone(),
+            result: result.unwrap_or(HealthCheckResult::Failure),
+        };
+
+        if let Err(error) = message_bus.send_health_check_response(response) {
+            tracing::warn!(service = %request.service, ?error, "failed to send a health check response");
+        }
+    }
+
+    fn on_result(request: &HealthCheckRequest, result: &Result<HealthCheckResult>) {
         let HealthCheckRequest {
             service,
             container_id,
@@ -156,7 +177,7 @@ mod tests {
 
     use crate::docker::models::ContainerId;
     use crate::health::{HealthCheck, HealthCheckConfiguration, HealthCheckResult, HealthMonitor};
-    use crate::ipc::HealthCheckRequest;
+    use crate::ipc::{HealthCheckRequest, MessageBus};
 
     async fn spawn_server<F: Fn(u32) -> StatusCode + Copy + Send + Sync + 'static>(
         behaviour: F,
@@ -299,6 +320,30 @@ mod tests {
         let result = HealthMonitor::check(&request, configuration).await?;
 
         assert_eq!(result, HealthCheckResult::Success);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn monitor_responds_to_the_requester() -> Result<()> {
+        let message_bus = MessageBus::new();
+
+        let request = HealthCheckRequest {
+            service: "foobar".to_owned(),
+            container_id: ContainerId("abc123".to_owned()),
+            target: Uri::from_static("http://127.0.0.1:8080/"),
+        };
+
+        HealthMonitor::respond(&message_bus, &request, Ok(HealthCheckResult::Success));
+        HealthMonitor::respond(&message_bus, &request, Err(Report::msg("boom")));
+
+        let first = message_bus.receive_health_check_response().await?;
+        let second = message_bus.receive_health_check_response().await?;
+
+        assert_eq!(first.content.service, "foobar");
+        assert_eq!(first.content.container_id, request.container_id);
+        assert_eq!(first.content.result, HealthCheckResult::Success);
+        assert_eq!(second.content.result, HealthCheckResult::Failure);
 
         Ok(())
     }

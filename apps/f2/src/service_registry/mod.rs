@@ -25,6 +25,10 @@ impl ServiceRegistry {
         self.definitions.insert(service.to_string(), definition);
     }
 
+    pub fn get_definition(&self, service: &str) -> Option<&Service> {
+        self.definitions.get(service)
+    }
+
     pub fn undefine(&mut self, service: &str) {
         self.definitions.remove(service);
     }

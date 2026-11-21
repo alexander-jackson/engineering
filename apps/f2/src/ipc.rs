@@ -6,6 +6,7 @@ use hyper::Uri;
 use uuid::Uuid;
 
 use crate::docker::models::ContainerId;
+use crate::health::HealthCheckResult;
 
 pub struct Message<T> {
     pub identifier: Uuid,
@@ -23,6 +24,14 @@ pub struct HealthCheckRequest {
     pub service: String,
     pub container_id: ContainerId,
     pub target: Uri,
+}
+
+/// The outcome of a [`HealthCheckRequest`].
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HealthCheckResponse {
+    pub service: String,
+    pub container_id: ContainerId,
+    pub result: HealthCheckResult,
 }
 
 #[derive(Debug)]
@@ -44,6 +53,7 @@ pub struct MessageBus {
     reconciliation: ChannelPair<ReconciliationRequest>,
     resolver: ChannelPair<CertificateUpdateRequest>,
     health: ChannelPair<HealthCheckRequest>,
+    health_response: ChannelPair<HealthCheckResponse>,
 }
 
 impl MessageBus {
@@ -56,6 +66,7 @@ impl MessageBus {
             reconciliation: reconciliation_pair,
             resolver: resolver_pair,
             health: health_pair,
+            health_response: ChannelPair::new(),
         };
 
         Arc::new(message_bus)
@@ -112,6 +123,23 @@ impl MessageBus {
         Ok(identifier)
     }
 
+    pub fn send_health_check_response(&self, response: HealthCheckResponse) -> Result<Uuid> {
+        let identifier = Uuid::new_v4();
+        let message = Message {
+            identifier,
+            content: response,
+        };
+
+        tracing::debug!(%identifier, "sending health check response");
+
+        self.health_response
+            .sender
+            .send(message)
+            .map_err(|_| eyre!("Failed to send health check response"))?;
+
+        Ok(identifier)
+    }
+
     pub async fn receive_reconciliation_request(
         &self,
     ) -> Result<Message<ReconciliationRequest>, flume::RecvError> {
@@ -141,6 +169,16 @@ impl MessageBus {
 
         Ok(received)
     }
+
+    pub async fn receive_health_check_response(
+        &self,
+    ) -> Result<Message<HealthCheckResponse>, flume::RecvError> {
+        let received = self.health_response.receiver.recv_async().await?;
+
+        tracing::debug!(%received.identifier, "received health check response");
+
+        Ok(received)
+    }
 }
 
 #[cfg(test)]
@@ -150,7 +188,8 @@ mod tests {
     use hyper::Uri;
 
     use crate::docker::models::ContainerId;
-    use crate::ipc::{HealthCheckRequest, MessageBus};
+    use crate::health::HealthCheckResult;
+    use crate::ipc::{HealthCheckRequest, HealthCheckResponse, MessageBus};
 
     #[tokio::test]
     async fn can_send_and_receive_reconciliation_requests() -> Result<()> {
@@ -191,6 +230,25 @@ mod tests {
 
         assert_eq!(sent, received.identifier);
         assert_eq!(received.content, request);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn can_send_and_receive_health_check_responses() -> Result<()> {
+        let message_bus = MessageBus::new();
+
+        let response = HealthCheckResponse {
+            service: "foobar".to_owned(),
+            container_id: ContainerId("abc123".to_owned()),
+            result: HealthCheckResult::Success,
+        };
+
+        let sent = message_bus.send_health_check_response(response.clone())?;
+        let received = message_bus.receive_health_check_response().await?;
+
+        assert_eq!(sent, received.identifier);
+        assert_eq!(received.content, response);
 
         Ok(())
     }
