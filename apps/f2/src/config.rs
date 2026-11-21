@@ -254,6 +254,27 @@ pub struct Service {
     pub shutdown_mode: ShutdownMode,
     #[serde(default)]
     pub args: Vec<String>,
+    #[serde(default)]
+    pub probes: Option<Probes>,
+}
+
+impl Service {
+    /// The liveness probe for this service, if one has been defined.
+    pub fn liveness_probe(&self) -> Option<&Probe> {
+        self.probes.as_ref()?.liveness.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize)]
+pub struct Probes {
+    pub liveness: Option<Probe>,
+}
+
+/// An HTTP endpoint on a container that can be requested to check on its health.
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+pub struct Probe {
+    pub path: String,
+    pub port: u16,
 }
 
 impl Hash for Service {
@@ -286,6 +307,19 @@ mod tests {
         let route: Route =
             serde_yaml::from_str("host: example.com\nport: 853\nprotocol: tcp").unwrap();
         assert_eq!(route.protocol, Protocol::Tcp);
+    }
+
+    #[test]
+    fn probes_are_optional() {
+        let yaml = "image: foo\ntag: '1'\nreplicas: 1";
+        let service: Service = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(service.liveness_probe(), None);
+
+        let yaml = "image: foo\ntag: '1'\nreplicas: 1\nprobes:\n  liveness:\n    path: /health\n    port: 8000";
+        let service: Service = serde_yaml::from_str(yaml).unwrap();
+        let probe = service.liveness_probe().unwrap();
+        assert_eq!(probe.path, "/health");
+        assert_eq!(probe.port, 8000);
     }
 
     fn some_config() -> Config {
