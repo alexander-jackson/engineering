@@ -12,7 +12,7 @@ use rustls::server::{ClientHello, ResolvesServerCert};
 use rustls::sign::CertifiedKey;
 
 use crate::config::{Config, TlsSecrets};
-use crate::ipc::MessageBus;
+use crate::ipc::{CertificateUpdateRequest, Receiver};
 
 type Configuration = HashMap<String, TlsSecrets>;
 type Domains = HashMap<String, Arc<CertifiedKey>>;
@@ -36,15 +36,11 @@ async fn resolve_and_parse_certificates(config: &Configuration) -> Result<Domain
 }
 
 async fn poll_for_certificate_updates(
-    message_bus: Arc<MessageBus>,
+    requests: Receiver<CertificateUpdateRequest>,
     config: &Configuration,
     domains: Arc<ArcSwap<Domains>>,
 ) -> Result<()> {
-    while message_bus
-        .receive_certificate_update_request()
-        .await
-        .is_ok()
-    {
+    while requests.recv().await.is_ok() {
         let span = tracing::info_span!("certificate_update");
         let _enter = span.enter();
 
@@ -68,7 +64,10 @@ async fn poll_for_certificate_updates(
 }
 
 impl CertificateResolver {
-    pub async fn new(config: Arc<Configuration>, message_bus: Arc<MessageBus>) -> Result<Self> {
+    pub async fn new(
+        config: Arc<Configuration>,
+        requests: Receiver<CertificateUpdateRequest>,
+    ) -> Result<Self> {
         let domains = resolve_and_parse_certificates(&config).await?;
         let domains = Arc::new(ArcSwap::from_pointee(domains));
 
@@ -78,7 +77,7 @@ impl CertificateResolver {
 
         tokio::spawn({
             async move {
-                poll_for_certificate_updates(message_bus, &config, domains)
+                poll_for_certificate_updates(requests, &config, domains)
                     .await
                     .unwrap_or_else(|error| {
                         tracing::error!(%error, "failed to poll for certificate updates");
@@ -163,7 +162,7 @@ mod tests {
     use rustls::pki_types::CertificateDer;
 
     use crate::config::{AlbConfig, Config, ExternalBytes, MtlsConfig, Scheme, TlsSecrets};
-    use crate::ipc::MessageBus;
+    use crate::ipc::{channel, CertificateUpdateRequest, Sender};
     use crate::load_balancer::tls::{CertificateResolver, DynamicAuthenticationLevelResolver};
 
     const PRIMARY_DOMAIN: &str = "primary.example.com";
@@ -290,11 +289,11 @@ mod tests {
     /// for certificate update requests and the resolver itself.
     async fn build_resolver(
         config: HashMap<String, TlsSecrets>,
-    ) -> Result<(Arc<MessageBus>, CertificateResolver)> {
-        let message_bus = MessageBus::new();
-        let resolver = CertificateResolver::new(Arc::new(config), Arc::clone(&message_bus)).await?;
+    ) -> Result<(Sender<CertificateUpdateRequest>, CertificateResolver)> {
+        let (sender, receiver) = channel();
+        let resolver = CertificateResolver::new(Arc::new(config), receiver).await?;
 
-        Ok((message_bus, resolver))
+        Ok((sender, resolver))
     }
 
     #[tokio::test]
@@ -320,14 +319,14 @@ mod tests {
         let key_path = stage_resource(temp_dir.path(), "certificates/old.key").await?;
 
         let config = build_resolver_config(&[(PRIMARY_DOMAIN, &certificate_path, &key_path)]);
-        let (message_bus, resolver) = build_resolver(config).await?;
+        let (updates, resolver) = build_resolver(config).await?;
 
         // copy the new certificates over
         tokio::fs::copy("resources/certificates/new.crt", &certificate_path).await?;
         tokio::fs::copy("resources/certificates/new.key", &key_path).await?;
 
         // inform the resolver about a certificate update
-        message_bus.send_certificate_update_request()?;
+        updates.send(CertificateUpdateRequest)?;
 
         // check that the resolver returns the new certificate, after a little bit of time
         tokio::time::sleep(Duration::from_millis(5)).await;
@@ -358,7 +357,7 @@ mod tests {
             (SECONDARY_DOMAIN, &second_certificate_path, &second_key_path),
         ]);
 
-        let (message_bus, resolver) = build_resolver(config).await?;
+        let (updates, resolver) = build_resolver(config).await?;
 
         // copy the new certificates over for both domains
         tokio::fs::copy("resources/certificates/new.crt", &first_certificate_path).await?;
@@ -368,7 +367,7 @@ mod tests {
         tokio::fs::copy("resources/certificates/new.key", &second_key_path).await?;
 
         // inform the resolver about a certificate update
-        message_bus.send_certificate_update_request()?;
+        updates.send(CertificateUpdateRequest)?;
 
         // check that the resolver returns the new certificates
         tokio::time::sleep(Duration::from_millis(5)).await;

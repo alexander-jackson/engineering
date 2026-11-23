@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
@@ -9,7 +8,7 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 
-use crate::ipc::{HealthCheckRequest, HealthCheckResponse, MessageBus};
+use crate::ipc::{HealthCheckRequest, HealthCheckResponse, Receiver, Sender};
 
 const HEALTH_CHECK_PERIOD: Duration = Duration::from_secs(2);
 const HEALTH_CHECK_SUCCESS_THRESHOLD: u32 = 3;
@@ -76,22 +75,29 @@ impl HealthCheck {
     }
 }
 
-/// Runs health checks for containers as requested over the [`MessageBus`].
+/// Runs health checks for containers as requested over its inbox.
 ///
-/// Results are logged and sent back over the bus as a [`HealthCheckResponse`], it is up to the
-/// requester to decide what to do with them.
+/// Results are logged and sent back as a [`HealthCheckResponse`], it is up to the requester to
+/// decide what to do with them.
 pub struct HealthMonitor {
-    message_bus: Arc<MessageBus>,
+    requests: Receiver<HealthCheckRequest>,
+    responses: Sender<HealthCheckResponse>,
 }
 
 impl HealthMonitor {
-    pub fn new(message_bus: Arc<MessageBus>) -> Self {
-        Self { message_bus }
+    pub fn new(
+        requests: Receiver<HealthCheckRequest>,
+        responses: Sender<HealthCheckResponse>,
+    ) -> Self {
+        Self {
+            requests,
+            responses,
+        }
     }
 
     pub async fn run(&self) -> Result<()> {
-        while let Ok(message) = self.message_bus.receive_health_check_request().await {
-            let message_bus = Arc::clone(&self.message_bus);
+        while let Ok(message) = self.requests.recv().await {
+            let responses = self.responses.clone();
 
             // Each check runs in its own task so a slow one doesn't delay the others
             tokio::spawn(async move {
@@ -104,7 +110,7 @@ impl HealthMonitor {
                 let result = Self::check(&request, configuration).await;
 
                 Self::on_result(&request, &result);
-                Self::respond(&message_bus, &request, result);
+                Self::respond(&responses, &request, result);
             });
         }
 
@@ -122,7 +128,7 @@ impl HealthMonitor {
 
     /// Reports the outcome to the requester, an errored check counts as a failure.
     fn respond(
-        message_bus: &MessageBus,
+        responses: &Sender<HealthCheckResponse>,
         request: &HealthCheckRequest,
         result: Result<HealthCheckResult>,
     ) {
@@ -132,7 +138,7 @@ impl HealthMonitor {
             result: result.unwrap_or(HealthCheckResult::Failure),
         };
 
-        if let Err(error) = message_bus.send_health_check_response(response) {
+        if let Err(error) = responses.send(response) {
             tracing::warn!(service = %request.service, ?error, "failed to send a health check response");
         }
     }
@@ -142,6 +148,7 @@ impl HealthMonitor {
             service,
             container_id,
             target,
+            ..
         } = request;
 
         match result {
@@ -177,7 +184,7 @@ mod tests {
 
     use crate::docker::models::ContainerId;
     use crate::health::{HealthCheck, HealthCheckConfiguration, HealthCheckResult, HealthMonitor};
-    use crate::ipc::{HealthCheckRequest, MessageBus};
+    use crate::ipc::{channel, HealthCheckRequest};
 
     async fn spawn_server<F: Fn(u32) -> StatusCode + Copy + Send + Sync + 'static>(
         behaviour: F,
@@ -326,7 +333,7 @@ mod tests {
 
     #[tokio::test]
     async fn monitor_responds_to_the_requester() -> Result<()> {
-        let message_bus = MessageBus::new();
+        let (sender, responses) = channel();
 
         let request = HealthCheckRequest {
             service: "foobar".to_owned(),
@@ -334,11 +341,11 @@ mod tests {
             target: Uri::from_static("http://127.0.0.1:8080/"),
         };
 
-        HealthMonitor::respond(&message_bus, &request, Ok(HealthCheckResult::Success));
-        HealthMonitor::respond(&message_bus, &request, Err(Report::msg("boom")));
+        HealthMonitor::respond(&sender, &request, Ok(HealthCheckResult::Success));
+        HealthMonitor::respond(&sender, &request, Err(Report::msg("boom")));
 
-        let first = message_bus.receive_health_check_response().await?;
-        let second = message_bus.receive_health_check_response().await?;
+        let first = responses.recv().await?;
+        let second = responses.recv().await?;
 
         assert_eq!(first.content.service, "foobar");
         assert_eq!(first.content.container_id, request.container_id);

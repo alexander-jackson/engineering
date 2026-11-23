@@ -14,7 +14,9 @@ use crate::docker::api::{create_and_start_container, StartedContainerDetails};
 use crate::docker::client::DockerClient;
 use crate::docker::models::ContainerId;
 use crate::health::HealthCheckResult;
-use crate::ipc::{HealthCheckRequest, HealthCheckResponse, MessageBus};
+use crate::ipc::{
+    HealthCheckRequest, HealthCheckResponse, Receiver, ReconciliationRequest, Sender,
+};
 use crate::service_registry::ServiceRegistry;
 
 /// A new version of a service that is waiting to prove itself healthy.
@@ -45,7 +47,9 @@ pub struct Reconciler<C: DockerClient> {
     config_location: Arc<ExternalBytes>,
     config: Arc<ArcSwap<Config>>,
     docker_client: C,
-    message_bus: Arc<MessageBus>,
+    reconciliations: Receiver<ReconciliationRequest>,
+    health_checks: Sender<HealthCheckRequest>,
+    health_responses: Receiver<HealthCheckResponse>,
     rollouts: Mutex<HashMap<String, Rollout>>,
 }
 
@@ -55,14 +59,18 @@ impl<C: DockerClient> Reconciler<C> {
         config_location: ExternalBytes,
         config: Arc<ArcSwap<Config>>,
         docker_client: C,
-        message_bus: Arc<MessageBus>,
+        reconciliations: Receiver<ReconciliationRequest>,
+        health_checks: Sender<HealthCheckRequest>,
+        health_responses: Receiver<HealthCheckResponse>,
     ) -> Self {
         Self {
             registry,
             config_location: Arc::new(config_location),
             config,
             docker_client,
-            message_bus,
+            reconciliations,
+            health_checks,
+            health_responses,
             rollouts: Mutex::default(),
         }
     }
@@ -70,7 +78,7 @@ impl<C: DockerClient> Reconciler<C> {
     pub async fn run(&self) -> Result<()> {
         loop {
             tokio::select! {
-                request = self.message_bus.receive_reconciliation_request() => {
+                request = self.reconciliations.recv() => {
                     if request.is_err() {
                         break;
                     }
@@ -78,7 +86,7 @@ impl<C: DockerClient> Reconciler<C> {
                     tracing::info!("received signal to reconcile");
                     self.reconcile().await?;
                 }
-                response = self.message_bus.receive_health_check_response() => {
+                response = self.health_responses.recv() => {
                     let Ok(response) = response else { break };
 
                     // A problem with one rollout shouldn't take the load balancer down
@@ -187,7 +195,7 @@ impl<C: DockerClient> Reconciler<C> {
             target,
         };
 
-        if let Err(error) = self.message_bus.send_health_check_request(request) {
+        if let Err(error) = self.health_checks.send(request) {
             tracing::warn!(%name, ?error, "failed to request a health check");
             return false;
         }
@@ -493,8 +501,7 @@ pub mod tests {
     use crate::docker::client::DockerClient;
     use crate::docker::models::{ContainerId, ImageSummary, NetworkId};
     use crate::health::HealthCheckResult;
-    use crate::ipc::HealthCheckResponse;
-    use crate::ipc::MessageBus;
+    use crate::ipc::{channel, HealthCheckRequest, HealthCheckResponse, Receiver};
     use crate::reconciler::{health_check_target, Reconciler};
     use crate::service_registry::ServiceRegistry;
 
@@ -577,7 +584,7 @@ pub mod tests {
     fn create_reconciler<C: DockerClient>(
         registry: ServiceRegistry,
         docker_client: C,
-    ) -> Reconciler<C> {
+    ) -> (Reconciler<C>, Receiver<HealthCheckRequest>) {
         let config = Config {
             alb: AlbConfig {
                 addr: Ipv4Addr::LOCALHOST,
@@ -592,15 +599,23 @@ pub mod tests {
 
         let config = ArcSwap::from_pointee(config);
 
-        Reconciler::new(
+        let (_, reconciliations) = channel();
+        let (health_checks, requests) = channel();
+        let (_, health_responses) = channel();
+
+        let reconciler = Reconciler::new(
             Arc::new(RwLock::new(registry)),
             ExternalBytes::Filesystem {
                 path: PathBuf::new(),
             },
             Arc::new(config),
             docker_client,
-            MessageBus::new(),
-        )
+            reconciliations,
+            health_checks,
+            health_responses,
+        );
+
+        (reconciler, requests)
     }
 
     #[tokio::test]
@@ -617,7 +632,7 @@ pub mod tests {
         };
 
         let docker_client = FakeDockerClient::default();
-        let reconciler = create_reconciler(registry, docker_client.clone());
+        let (reconciler, _checks) = create_reconciler(registry, docker_client.clone());
 
         reconciler
             .handle_diff(Diff::Addition {
@@ -667,7 +682,7 @@ pub mod tests {
             },
         );
 
-        let reconciler = create_reconciler(registry, docker_client.clone());
+        let (reconciler, _checks) = create_reconciler(registry, docker_client.clone());
 
         let diff = Diff::Removal {
             name: service.to_owned(),
@@ -723,7 +738,7 @@ pub mod tests {
             },
         );
 
-        let reconciler = create_reconciler(registry, docker_client.clone());
+        let (reconciler, _checks) = create_reconciler(registry, docker_client.clone());
 
         let diff = Diff::Alteration {
             name: service.to_owned(),
@@ -797,7 +812,7 @@ pub mod tests {
             },
         );
 
-        let reconciler = create_reconciler(registry, docker_client.clone());
+        let (reconciler, _checks) = create_reconciler(registry, docker_client.clone());
 
         reconciler
             .handle_diff(Diff::Alteration {
@@ -862,7 +877,7 @@ pub mod tests {
     #[tokio::test]
     async fn requests_health_check_for_started_containers() -> Result<()> {
         let docker_client = FakeDockerClient::default();
-        let reconciler = create_reconciler(ServiceRegistry::new(), docker_client);
+        let (reconciler, checks) = create_reconciler(ServiceRegistry::new(), docker_client);
 
         let service = Service {
             image: "alexanderjackson/f2".to_owned(),
@@ -878,10 +893,7 @@ pub mod tests {
             })
             .await?;
 
-        let received = reconciler
-            .message_bus
-            .receive_health_check_request()
-            .await?;
+        let received = checks.recv().await?;
 
         assert_eq!(received.content.service, "foobar");
         assert_eq!(received.content.target, "http://127.0.0.1:8000/health");
@@ -892,7 +904,7 @@ pub mod tests {
     #[tokio::test]
     async fn does_not_request_health_check_without_probes() -> Result<()> {
         let docker_client = FakeDockerClient::default();
-        let reconciler = create_reconciler(ServiceRegistry::new(), docker_client);
+        let (reconciler, checks) = create_reconciler(ServiceRegistry::new(), docker_client);
 
         let service = Service {
             image: "alexanderjackson/f2".to_owned(),
@@ -907,11 +919,8 @@ pub mod tests {
             })
             .await?;
 
-        let received = tokio::time::timeout(
-            std::time::Duration::from_millis(10),
-            reconciler.message_bus.receive_health_check_request(),
-        )
-        .await;
+        let received =
+            tokio::time::timeout(std::time::Duration::from_millis(10), checks.recv()).await;
 
         assert!(received.is_err());
 
@@ -963,11 +972,8 @@ pub mod tests {
     }
 
     /// Takes the container the reconciler has asked to be health checked next.
-    async fn next_checked(reconciler: &Reconciler<FakeDockerClient>) -> Result<ContainerId> {
-        let request = reconciler
-            .message_bus
-            .receive_health_check_request()
-            .await?;
+    async fn next_checked(checks: &Receiver<HealthCheckRequest>) -> Result<ContainerId> {
+        let request = checks.recv().await?;
 
         Ok(request.content.container_id)
     }
@@ -997,13 +1003,13 @@ pub mod tests {
     #[tokio::test]
     async fn required_additions_are_only_routed_once_healthy() -> Result<()> {
         let docker_client = FakeDockerClient::default();
-        let reconciler = create_reconciler(ServiceRegistry::new(), docker_client.clone());
+        let (reconciler, checks) = create_reconciler(ServiceRegistry::new(), docker_client.clone());
 
         reconciler
             .handle_addition("foobar".to_owned(), required_service("v1"))
             .await?;
 
-        let candidate = next_checked(&reconciler).await?;
+        let candidate = next_checked(&checks).await?;
 
         assert!(registered(&reconciler, "foobar").await.is_empty());
         assert_eq!(
@@ -1028,13 +1034,13 @@ pub mod tests {
     async fn previous_version_is_replaced_once_the_new_one_is_healthy() -> Result<()> {
         let docker_client = FakeDockerClient::default();
         let (registry, old) = registry_with_running_service(&docker_client, "foobar").await?;
-        let reconciler = create_reconciler(registry, docker_client.clone());
+        let (reconciler, checks) = create_reconciler(registry, docker_client.clone());
 
         reconciler
             .handle_alteration("foobar", required_service("v1"), required_service("v2"))
             .await?;
 
-        let candidate = next_checked(&reconciler).await?;
+        let candidate = next_checked(&checks).await?;
 
         // Nothing has moved until the candidate reports back
         assert_eq!(registered(&reconciler, "foobar").await, vec![old.clone()]);
@@ -1061,13 +1067,13 @@ pub mod tests {
     async fn unhealthy_rollouts_keep_the_previous_version() -> Result<()> {
         let docker_client = FakeDockerClient::default();
         let (registry, old) = registry_with_running_service(&docker_client, "foobar").await?;
-        let reconciler = create_reconciler(registry, docker_client.clone());
+        let (reconciler, checks) = create_reconciler(registry, docker_client.clone());
 
         reconciler
             .handle_alteration("foobar", required_service("v1"), required_service("v2"))
             .await?;
 
-        let first = next_checked(&reconciler).await?;
+        let first = next_checked(&checks).await?;
         respond(
             &reconciler,
             "foobar",
@@ -1090,17 +1096,17 @@ pub mod tests {
     async fn newer_definitions_supersede_a_rollout_in_progress() -> Result<()> {
         let docker_client = FakeDockerClient::default();
         let (registry, old) = registry_with_running_service(&docker_client, "foobar").await?;
-        let reconciler = create_reconciler(registry, docker_client.clone());
+        let (reconciler, checks) = create_reconciler(registry, docker_client.clone());
 
         reconciler
             .handle_alteration("foobar", required_service("v1"), required_service("v2"))
             .await?;
-        let superseded = next_checked(&reconciler).await?;
+        let superseded = next_checked(&checks).await?;
 
         reconciler
             .handle_alteration("foobar", required_service("v2"), required_service("v3"))
             .await?;
-        let current = next_checked(&reconciler).await?;
+        let current = next_checked(&checks).await?;
 
         // The first candidate was removed, and its late response changes nothing
         assert!(!docker_containers(&docker_client)
