@@ -16,7 +16,7 @@ use crate::common::Container;
 use crate::config::{Config, Service};
 use crate::docker::api::create_and_start_container;
 use crate::health::HealthMonitor;
-use crate::ipc::MessageBus;
+use crate::ipc::channel;
 use crate::load_balancer::LoadBalancer;
 use crate::reconciler::Reconciler;
 
@@ -71,17 +71,21 @@ async fn main() -> Result<()> {
     .await?;
 
     let service_registry = Arc::new(RwLock::new(service_registry));
-    let message_bus = MessageBus::new();
+    let (reconciliations, reconciliation_requests) = channel();
+    let (health_checks, health_check_requests) = channel();
+    let (health_responses, health_check_responses) = channel();
 
     let reconciler = Reconciler::new(
         Arc::clone(&service_registry),
         args.config_location.clone(),
         Arc::clone(&config),
         docker_client,
-        Arc::clone(&message_bus),
+        reconciliation_requests,
+        health_checks,
+        health_check_responses,
     );
 
-    let health_monitor = HealthMonitor::new(Arc::clone(&message_bus));
+    let health_monitor = HealthMonitor::new(health_check_requests, health_responses);
 
     let mut listeners = HashMap::new();
 
@@ -90,7 +94,7 @@ async fn main() -> Result<()> {
         listeners.insert(protocol.clone(), listener);
     }
 
-    let load_balancer = LoadBalancer::new(service_registry, config, message_bus);
+    let load_balancer = LoadBalancer::new(service_registry, config, reconciliations);
     let shutdown_signal = handle_shutdown_signal();
 
     tokio::try_join!(

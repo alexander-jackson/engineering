@@ -26,7 +26,7 @@ use tokio::task::JoinSet;
 use tokio_rustls::TlsAcceptor;
 
 use crate::config::{Config, MtlsConfig, Scheme, TlsConfig};
-use crate::ipc::MessageBus;
+use crate::ipc::{channel, CertificateUpdateRequest, Receiver, ReconciliationRequest, Sender};
 use crate::load_balancer::tls::CertificateResolver;
 use crate::service_registry::ServiceRegistry;
 
@@ -40,15 +40,18 @@ pub struct LoadBalancer {
     client: Client<HttpConnector, Incoming>,
     rng: Arc<Mutex<SmallRng>>,
     config: Arc<ArcSwap<Config>>,
-    message_bus: Arc<MessageBus>,
+    reconciliations: Sender<ReconciliationRequest>,
+    certificate_updates: Sender<CertificateUpdateRequest>,
+    certificate_update_requests: Receiver<CertificateUpdateRequest>,
 }
 
 impl LoadBalancer {
     pub fn new(
         service_registry: Arc<RwLock<ServiceRegistry>>,
         config: Arc<ArcSwap<Config>>,
-        message_bus: Arc<MessageBus>,
+        reconciliations: Sender<ReconciliationRequest>,
     ) -> Self {
+        let (certificate_updates, certificate_update_requests) = channel();
         let client = Client::builder(TokioExecutor::new()).build_http();
         let rng = Arc::new(Mutex::new(rand::make_rng()));
 
@@ -57,7 +60,9 @@ impl LoadBalancer {
             client,
             rng,
             config,
-            message_bus,
+            reconciliations,
+            certificate_updates,
+            certificate_update_requests,
         }
     }
 
@@ -68,27 +73,30 @@ impl LoadBalancer {
         mtls: Option<MtlsConfig>,
     ) -> Result<()> {
         let reconciliation_path = Arc::from(self.config.load().alb.reconciliation.as_str());
-        let message_bus = Arc::clone(&self.message_bus);
+        let reconciliations = self.reconciliations.clone();
+        let certificate_updates = self.certificate_updates.clone();
 
         // Pre-clone Arcs needed after `service_factory` moves `self`
         let service_registry = Arc::clone(&self.service_registry);
         let rng = Arc::clone(&self.rng);
         let self_config = Arc::clone(&self.config);
-        let self_message_bus = Arc::clone(&self.message_bus);
+        let certificate_update_requests = self.certificate_update_requests;
 
         let service_factory = move |_| {
             let service_registry = Arc::clone(&self.service_registry);
             let rng = Arc::clone(&self.rng);
             let client = self.client.clone();
             let reconciliation_path = Arc::clone(&reconciliation_path);
-            let message_bus = Arc::clone(&message_bus);
+            let reconciliations = reconciliations.clone();
+            let certificate_updates = certificate_updates.clone();
 
             service_fn(move |req| {
                 let service_registry = Arc::clone(&service_registry);
                 let rng = Arc::clone(&rng);
                 let client = client.clone();
                 let reconciliation_path = Arc::clone(&reconciliation_path);
-                let message_bus = Arc::clone(&message_bus);
+                let reconciliations = reconciliations.clone();
+                let certificate_updates = certificate_updates.clone();
 
                 async move {
                     proxy::handle_request(
@@ -96,7 +104,8 @@ impl LoadBalancer {
                         rng,
                         client,
                         reconciliation_path,
-                        message_bus,
+                        reconciliations,
+                        certificate_updates,
                         req,
                     )
                     .await
@@ -114,8 +123,21 @@ impl LoadBalancer {
             tasks.spawn(server.run(listener));
         }
 
+        // One resolver serves every TLS listener so that a certificate update reaches all of them
+        let wants_tls =
+            listeners.contains_key(&Scheme::Https) || listeners.contains_key(&Scheme::Tls);
+        let certificate_resolver = match tls.as_ref() {
+            Some(tls) if wants_tls => {
+                let config = Arc::new(tls.domains.clone());
+                let resolver = CertificateResolver::new(config, certificate_update_requests);
+
+                Some(Arc::new(resolver.await?))
+            }
+            _ => None,
+        };
+
         if let Some(listener) = listeners.remove(&Scheme::Https) {
-            if let Some(tls) = tls.as_ref() {
+            if let Some(certificate_resolver) = certificate_resolver.as_ref() {
                 let client_cert_verifier: Arc<dyn ClientCertVerifier> = match &mtls {
                     Some(config) => {
                         let bytes = config.anchor.resolve().await?;
@@ -132,11 +154,6 @@ impl LoadBalancer {
                     None => Arc::new(NoClientAuth),
                 };
 
-                let config = Arc::new(tls.domains.clone());
-
-                let certificate_resolver = Arc::new(
-                    CertificateResolver::new(config, Arc::clone(&self_message_bus)).await?,
-                );
                 let authentication_level_resolver =
                     DynamicAuthenticationLevelResolver::new(Arc::clone(&self_config));
 
@@ -144,7 +161,7 @@ impl LoadBalancer {
                 let server = Server::new(
                     authentication_level_resolver,
                     client_cert_verifier,
-                    certificate_resolver,
+                    certificate_resolver.clone(),
                     service_factory,
                     server_configuration,
                 );
@@ -156,15 +173,10 @@ impl LoadBalancer {
         }
 
         if let Some(listener) = listeners.remove(&Scheme::Tls) {
-            if let Some(tls) = tls.as_ref() {
-                let config = Arc::new(tls.domains.clone());
-                let certificate_resolver = Arc::new(
-                    CertificateResolver::new(config, Arc::clone(&self_message_bus)).await?,
-                );
-
+            if let Some(certificate_resolver) = certificate_resolver.as_ref() {
                 let server_config = rustls::ServerConfig::builder()
                     .with_no_client_auth()
-                    .with_cert_resolver(certificate_resolver);
+                    .with_cert_resolver(certificate_resolver.clone());
 
                 let acceptor = TlsAcceptor::from(Arc::new(server_config));
                 let proxy =

@@ -16,7 +16,7 @@ use rand::Rng;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::config::Protocol;
-use crate::ipc::MessageBus;
+use crate::ipc::{CertificateUpdateRequest, ReconciliationRequest, Sender};
 use crate::service_registry::ServiceRegistry;
 
 pub async fn handle_request<B>(
@@ -24,7 +24,8 @@ pub async fn handle_request<B>(
     rng: Arc<Mutex<SmallRng>>,
     client: Client<HttpConnector, B>,
     reconciliation_path: Arc<str>,
-    message_bus: Arc<MessageBus>,
+    reconciliations: Sender<ReconciliationRequest>,
+    certificate_updates: Sender<CertificateUpdateRequest>,
     req: Request<B>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>>
 where
@@ -42,7 +43,7 @@ where
                     "informing the reconciler that a PUT request was received",
                 );
 
-                message_bus.send_reconciliation_request()?;
+                reconciliations.send(ReconciliationRequest)?;
                 return Ok(Response::builder().status(200).body(empty())?);
             }
             Some(suffix) if suffix.path() == "/certificates" => {
@@ -50,7 +51,7 @@ where
                     "informing the certificate resolver that a PUT request was received"
                 );
 
-                message_bus.send_certificate_update_request()?;
+                certificate_updates.send(CertificateUpdateRequest)?;
                 return Ok(Response::builder().status(200).body(empty())?);
             }
             _ => {}
@@ -147,7 +148,7 @@ mod tests {
     use rand::rngs::SmallRng;
     use tokio::sync::{Mutex, RwLock};
 
-    use crate::ipc::MessageBus;
+    use crate::ipc::{channel, CertificateUpdateRequest, ReconciliationRequest};
     use crate::load_balancer::proxy::{extract_host, handle_request, map_request};
     use crate::service_registry::ServiceRegistry;
 
@@ -157,26 +158,21 @@ mod tests {
         Arc<Mutex<SmallRng>>,
         Client<HttpConnector, Empty<Bytes>>,
         Arc<str>,
-        Arc<MessageBus>,
     ) {
         let service_registry = Arc::new(RwLock::new(ServiceRegistry::default()));
         let rng = Arc::new(Mutex::new(rand::make_rng()));
         let client = Client::builder(TokioExecutor::new()).build_http();
         let reconciliation_path = Arc::from("/reconciliation");
-        let message_bus = MessageBus::new();
 
-        (
-            service_registry,
-            rng,
-            client,
-            reconciliation_path,
-            Arc::clone(&message_bus),
-        )
+        (service_registry, rng, client, reconciliation_path)
     }
 
     #[tokio::test]
     async fn can_cause_reconciliation() -> Result<()> {
-        let (service_registry, rng, client, reconciliation_path, message_bus) = get_dependencies();
+        let (service_registry, rng, client, reconciliation_path) = get_dependencies();
+        let (reconciliations, reconciliation_requests) = channel::<ReconciliationRequest>();
+        let (certificate_updates, _certificate_update_requests) =
+            channel::<CertificateUpdateRequest>();
 
         let req = Request::builder()
             .method("PUT")
@@ -189,18 +185,16 @@ mod tests {
             rng,
             client,
             reconciliation_path,
-            Arc::clone(&message_bus),
+            reconciliations,
+            certificate_updates,
             req,
         )
         .await?;
 
         assert_eq!(response.status(), 200, "expected a 200 OK response");
 
-        let message = tokio::time::timeout(
-            Duration::from_millis(1),
-            message_bus.receive_reconciliation_request(),
-        )
-        .await?;
+        let message =
+            tokio::time::timeout(Duration::from_millis(1), reconciliation_requests.recv()).await?;
 
         assert!(message.is_ok(), "expected a message from the channel");
 
@@ -209,7 +203,10 @@ mod tests {
 
     #[tokio::test]
     async fn can_cause_certificate_updates() -> Result<()> {
-        let (service_registry, rng, client, reconciliation_path, message_bus) = get_dependencies();
+        let (service_registry, rng, client, reconciliation_path) = get_dependencies();
+        let (reconciliations, _reconciliation_requests) = channel::<ReconciliationRequest>();
+        let (certificate_updates, certificate_update_requests) =
+            channel::<CertificateUpdateRequest>();
 
         let req = Request::builder()
             .method("PUT")
@@ -222,18 +219,17 @@ mod tests {
             rng,
             client,
             reconciliation_path,
-            Arc::clone(&message_bus),
+            reconciliations,
+            certificate_updates,
             req,
         )
         .await?;
 
         assert_eq!(response.status(), 200, "expected a 200 OK response");
 
-        let message = tokio::time::timeout(
-            Duration::from_millis(1),
-            message_bus.receive_certificate_update_request(),
-        )
-        .await?;
+        let message =
+            tokio::time::timeout(Duration::from_millis(1), certificate_update_requests.recv())
+                .await?;
 
         assert!(message.is_ok(), "expected a message from the channel");
 

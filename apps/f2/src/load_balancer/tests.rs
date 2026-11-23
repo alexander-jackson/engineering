@@ -19,7 +19,7 @@ use tokio::sync::RwLock;
 use crate::config::{AlbConfig, Config, Protocol, Route, Scheme, Service};
 use crate::docker::api::StartedContainerDetails;
 use crate::docker::models::ContainerId;
-use crate::ipc::MessageBus;
+use crate::ipc::channel;
 use crate::load_balancer::LoadBalancer;
 use crate::service_registry::ServiceRegistry;
 
@@ -102,11 +102,12 @@ async fn spawn_load_balancer(service_registry: ServiceRegistry) -> Result<Socket
     };
 
     let config = Arc::new(ArcSwap::from_pointee(config));
-    let message_bus = MessageBus::new();
+    let (reconciliations, reconciliation_requests) = channel();
 
     tokio::spawn(async move {
-        let message_bus = Arc::clone(&message_bus);
-        let load_balancer = LoadBalancer::new(service_registry, config, message_bus);
+        // Keep the receiving end open for as long as the load balancer runs
+        let _reconciliation_requests = reconciliation_requests;
+        let load_balancer = LoadBalancer::new(service_registry, config, reconciliations);
 
         let listeners = HashMap::from([(Scheme::Http, listener)]);
 

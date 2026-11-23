@@ -1,7 +1,12 @@
-use std::sync::Arc;
+//! Typed channels for components of `f2` to talk to each other without calling each other.
+//!
+//! Every component owns the [`Receiver`] for the messages it accepts, and hands out [`Sender`]s
+//! to whoever is allowed to talk to it. Answers travel back over a channel of their own.
+
+use std::any::type_name;
+use std::fmt;
 
 use color_eyre::eyre::{eyre, Result};
-use flume::{Receiver, Sender};
 use hyper::Uri;
 use uuid::Uuid;
 
@@ -34,150 +39,71 @@ pub struct HealthCheckResponse {
     pub result: HealthCheckResult,
 }
 
-#[derive(Debug)]
-pub struct ChannelPair<T> {
-    sender: Sender<Message<T>>,
-    receiver: Receiver<Message<T>>,
+pub struct Sender<T> {
+    inner: flume::Sender<Message<T>>,
 }
 
-impl<T> ChannelPair<T> {
-    pub fn new() -> Self {
-        let (sender, receiver) = flume::unbounded();
+pub struct Receiver<T> {
+    inner: flume::Receiver<Message<T>>,
+}
 
-        ChannelPair { sender, receiver }
+/// Creates an unbounded channel for messages of type `T`.
+pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
+    let (sender, receiver) = flume::unbounded();
+
+    (Sender { inner: sender }, Receiver { inner: receiver })
+}
+
+impl<T> Sender<T> {
+    pub fn send(&self, content: T) -> Result<Uuid> {
+        let identifier = Uuid::new_v4();
+        let message = Message {
+            identifier,
+            content,
+        };
+
+        tracing::debug!(%identifier, message = type_name::<T>(), "sending message");
+
+        self.inner
+            .send(message)
+            .map_err(|_| eyre!("Failed to send {}", type_name::<T>()))?;
+
+        Ok(identifier)
     }
 }
 
-#[derive(Debug)]
-pub struct MessageBus {
-    reconciliation: ChannelPair<ReconciliationRequest>,
-    resolver: ChannelPair<CertificateUpdateRequest>,
-    health: ChannelPair<HealthCheckRequest>,
-    health_response: ChannelPair<HealthCheckResponse>,
+impl<T> Receiver<T> {
+    /// Waits for the next message, erroring once every [`Sender`] has been dropped.
+    pub async fn recv(&self) -> Result<Message<T>, flume::RecvError> {
+        let received = self.inner.recv_async().await?;
+
+        tracing::debug!(
+            identifier = %received.identifier,
+            message = type_name::<T>(),
+            "received message",
+        );
+
+        Ok(received)
+    }
 }
 
-impl MessageBus {
-    pub fn new() -> Arc<Self> {
-        let reconciliation_pair = ChannelPair::<ReconciliationRequest>::new();
-        let resolver_pair = ChannelPair::<CertificateUpdateRequest>::new();
-        let health_pair = ChannelPair::<HealthCheckRequest>::new();
-
-        let message_bus = MessageBus {
-            reconciliation: reconciliation_pair,
-            resolver: resolver_pair,
-            health: health_pair,
-            health_response: ChannelPair::new(),
-        };
-
-        Arc::new(message_bus)
+impl<T> Clone for Sender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
     }
+}
 
-    pub fn send_reconciliation_request(&self) -> Result<Uuid> {
-        let identifier = Uuid::new_v4();
-        let message = Message {
-            identifier,
-            content: ReconciliationRequest,
-        };
-
-        tracing::debug!(%identifier, "sending reconciliation request");
-
-        self.reconciliation
-            .sender
-            .send(message)
-            .map_err(|_| eyre!("Failed to send reconciliation request"))?;
-
-        Ok(identifier)
+impl<T> fmt::Debug for Sender<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Sender<{}>", type_name::<T>())
     }
+}
 
-    pub fn send_certificate_update_request(&self) -> Result<Uuid> {
-        let identifier = Uuid::new_v4();
-        let message = Message {
-            identifier,
-            content: CertificateUpdateRequest,
-        };
-
-        tracing::debug!(%identifier, "sending certificate update request");
-
-        self.resolver
-            .sender
-            .send(message)
-            .map_err(|_| eyre!("Failed to send certificate update request"))?;
-
-        Ok(identifier)
-    }
-
-    pub fn send_health_check_request(&self, request: HealthCheckRequest) -> Result<Uuid> {
-        let identifier = Uuid::new_v4();
-        let message = Message {
-            identifier,
-            content: request,
-        };
-
-        tracing::debug!(%identifier, "sending health check request");
-
-        self.health
-            .sender
-            .send(message)
-            .map_err(|_| eyre!("Failed to send health check request"))?;
-
-        Ok(identifier)
-    }
-
-    pub fn send_health_check_response(&self, response: HealthCheckResponse) -> Result<Uuid> {
-        let identifier = Uuid::new_v4();
-        let message = Message {
-            identifier,
-            content: response,
-        };
-
-        tracing::debug!(%identifier, "sending health check response");
-
-        self.health_response
-            .sender
-            .send(message)
-            .map_err(|_| eyre!("Failed to send health check response"))?;
-
-        Ok(identifier)
-    }
-
-    pub async fn receive_reconciliation_request(
-        &self,
-    ) -> Result<Message<ReconciliationRequest>, flume::RecvError> {
-        let received = self.reconciliation.receiver.recv_async().await?;
-
-        tracing::debug!(%received.identifier, "received reconciliation request");
-
-        Ok(received)
-    }
-
-    pub async fn receive_certificate_update_request(
-        &self,
-    ) -> Result<Message<CertificateUpdateRequest>, flume::RecvError> {
-        let received = self.resolver.receiver.recv_async().await?;
-
-        tracing::debug!(%received.identifier, "received certificate update request");
-
-        Ok(received)
-    }
-
-    pub async fn receive_health_check_request(
-        &self,
-    ) -> Result<Message<HealthCheckRequest>, flume::RecvError> {
-        let received = self.health.receiver.recv_async().await?;
-
-        tracing::debug!(%received.identifier, "received health check request");
-
-        Ok(received)
-    }
-
-    pub async fn receive_health_check_response(
-        &self,
-    ) -> Result<Message<HealthCheckResponse>, flume::RecvError> {
-        let received = self.health_response.receiver.recv_async().await?;
-
-        tracing::debug!(%received.identifier, "received health check response");
-
-        Ok(received)
+impl<T> fmt::Debug for Receiver<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Receiver<{}>", type_name::<T>())
     }
 }
 
@@ -185,71 +111,49 @@ impl MessageBus {
 mod tests {
     use color_eyre::eyre::Result;
 
-    use hyper::Uri;
-
-    use crate::docker::models::ContainerId;
-    use crate::health::HealthCheckResult;
-    use crate::ipc::{HealthCheckRequest, HealthCheckResponse, MessageBus};
+    use crate::ipc::{channel, ReconciliationRequest};
 
     #[tokio::test]
-    async fn can_send_and_receive_reconciliation_requests() -> Result<()> {
-        let message_bus = MessageBus::new();
+    async fn can_send_and_receive_messages() -> Result<()> {
+        let (sender, receiver) = channel();
 
-        let sent = message_bus.send_reconciliation_request()?;
-        let received = message_bus.receive_reconciliation_request().await?;
+        let sent = sender.send("hello")?;
+        let received = receiver.recv().await?;
 
         assert_eq!(sent, received.identifier);
+        assert_eq!(received.content, "hello");
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn can_send_and_receive_certificate_update_requests() -> Result<()> {
-        let message_bus = MessageBus::new();
+    async fn messages_are_received_in_the_order_they_were_sent() -> Result<()> {
+        let (sender, receiver) = channel();
 
-        let sent = message_bus.send_certificate_update_request()?;
-        let received = message_bus.receive_certificate_update_request().await?;
+        sender.send(1)?;
+        sender.clone().send(2)?;
 
-        assert_eq!(sent, received.identifier);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn can_send_and_receive_health_check_requests() -> Result<()> {
-        let message_bus = MessageBus::new();
-
-        let request = HealthCheckRequest {
-            service: "foobar".to_owned(),
-            container_id: ContainerId("abc123".to_owned()),
-            target: Uri::from_static("http://127.0.0.1:8080/"),
-        };
-
-        let sent = message_bus.send_health_check_request(request.clone())?;
-        let received = message_bus.receive_health_check_request().await?;
-
-        assert_eq!(sent, received.identifier);
-        assert_eq!(received.content, request);
+        assert_eq!(receiver.recv().await?.content, 1);
+        assert_eq!(receiver.recv().await?.content, 2);
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn can_send_and_receive_health_check_responses() -> Result<()> {
-        let message_bus = MessageBus::new();
+    async fn sending_fails_once_the_receiver_is_dropped() {
+        let (sender, receiver) = channel::<ReconciliationRequest>();
 
-        let response = HealthCheckResponse {
-            service: "foobar".to_owned(),
-            container_id: ContainerId("abc123".to_owned()),
-            result: HealthCheckResult::Success,
-        };
+        drop(receiver);
 
-        let sent = message_bus.send_health_check_response(response.clone())?;
-        let received = message_bus.receive_health_check_response().await?;
+        assert!(sender.send(ReconciliationRequest).is_err());
+    }
 
-        assert_eq!(sent, received.identifier);
-        assert_eq!(received.content, response);
+    #[tokio::test]
+    async fn receiving_fails_once_every_sender_is_dropped() {
+        let (sender, receiver) = channel::<ReconciliationRequest>();
 
-        Ok(())
+        drop(sender);
+
+        assert!(receiver.recv().await.is_err());
     }
 }
