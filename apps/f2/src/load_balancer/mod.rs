@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use color_eyre::eyre::Result;
+use foundation_shutdown::{CancellationToken, GracefulTask};
 use http::{Request, Response};
 use http_body_util::combinators::BoxBody;
 use hyper::body::{Bytes, Incoming};
@@ -43,6 +44,9 @@ pub struct LoadBalancer {
     reconciliations: Sender<ReconciliationRequest>,
     certificate_updates: Sender<CertificateUpdateRequest>,
     certificate_update_requests: Receiver<CertificateUpdateRequest>,
+    listeners: HashMap<Scheme, TcpListener>,
+    tls: Option<TlsConfig>,
+    mtls: Option<MtlsConfig>,
 }
 
 impl LoadBalancer {
@@ -50,6 +54,9 @@ impl LoadBalancer {
         service_registry: Arc<RwLock<ServiceRegistry>>,
         config: Arc<ArcSwap<Config>>,
         reconciliations: Sender<ReconciliationRequest>,
+        listeners: HashMap<Scheme, TcpListener>,
+        tls: Option<TlsConfig>,
+        mtls: Option<MtlsConfig>,
     ) -> Self {
         let (certificate_updates, certificate_update_requests) = channel();
         let client = Client::builder(TokioExecutor::new()).build_http();
@@ -63,15 +70,20 @@ impl LoadBalancer {
             reconciliations,
             certificate_updates,
             certificate_update_requests,
+            listeners,
+            tls,
+            mtls,
         }
     }
 
-    pub async fn run(
-        self,
-        mut listeners: HashMap<Scheme, TcpListener>,
-        tls: Option<TlsConfig>,
-        mtls: Option<MtlsConfig>,
-    ) -> Result<()> {
+}
+
+impl GracefulTask for LoadBalancer {
+    async fn run_until_shutdown(self, shutdown: CancellationToken) -> Result<()> {
+        let mut listeners = self.listeners;
+        let tls = self.tls;
+        let mtls = self.mtls;
+
         let reconciliation_path = Arc::from(self.config.load().alb.reconciliation.as_str());
         let reconciliations = self.reconciliations.clone();
         let certificate_updates = self.certificate_updates.clone();
@@ -190,9 +202,15 @@ impl LoadBalancer {
 
         tracing::info!("waiting for all servers to complete");
 
-        tasks.join_all().await;
-
-        tracing::info!("all servers have completed");
+        tokio::select! {
+            _ = shutdown.cancelled() => {
+                // Dropping the set stops the accept loops, connections already accepted carry on
+                tracing::info!("shutting down the load balancer, no longer accepting connections");
+            }
+            _ = tasks.join_all() => {
+                tracing::info!("all servers have completed");
+            }
+        }
 
         Ok(())
     }

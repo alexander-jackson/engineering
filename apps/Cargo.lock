@@ -2032,6 +2032,7 @@ dependencies = [
  "color-eyre",
  "flume 0.12.0",
  "foundation-logging",
+ "foundation-shutdown",
  "futures",
  "hex",
  "http 1.5.0",

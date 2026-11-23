@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use color_eyre::eyre::Result;
+use foundation_shutdown::{CancellationToken, GracefulTask};
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
 use hyper::header::HOST;
@@ -107,12 +108,18 @@ async fn spawn_load_balancer(service_registry: ServiceRegistry) -> Result<Socket
     tokio::spawn(async move {
         // Keep the receiving end open for as long as the load balancer runs
         let _reconciliation_requests = reconciliation_requests;
-        let load_balancer = LoadBalancer::new(service_registry, config, reconciliations);
-
         let listeners = HashMap::from([(Scheme::Http, listener)]);
+        let load_balancer = LoadBalancer::new(
+            service_registry,
+            config,
+            reconciliations,
+            listeners,
+            None,
+            None,
+        );
 
         load_balancer
-            .run(listeners, None, None)
+            .run_until_shutdown(CancellationToken::new())
             .await
             .expect("Failed to run load balancer");
     });
@@ -398,6 +405,45 @@ async fn http_requests_ignore_routes_for_other_protocols() -> Result<()> {
         .body(Full::default())?;
 
     assert_eq!(get_response_body(&client, request).await?, reply);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn stops_accepting_connections_when_asked_to_shut_down() -> Result<()> {
+    let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).await?;
+    let addr = listener.local_addr()?;
+
+    let config = Config {
+        alb: AlbConfig {
+            addr: Ipv4Addr::LOCALHOST,
+            ports: HashMap::from([(Scheme::Http, addr.port())]),
+            reconciliation: String::from("/reconciliation"),
+            tls: None,
+            mtls: None,
+        },
+        secrets: None,
+        services: HashMap::new(),
+    };
+
+    let (reconciliations, _reconciliation_requests) = channel();
+    let load_balancer = LoadBalancer::new(
+        Arc::new(RwLock::new(ServiceRegistry::new())),
+        Arc::new(ArcSwap::from_pointee(config)),
+        reconciliations,
+        HashMap::from([(Scheme::Http, listener)]),
+        None,
+        None,
+    );
+
+    let shutdown = CancellationToken::new();
+    let handle = tokio::spawn(load_balancer.run_until_shutdown(shutdown.clone()));
+
+    shutdown.cancel();
+    tokio::time::timeout(std::time::Duration::from_secs(1), handle).await???;
+
+    // The listener is dropped along with the accept loop, so nothing should be listening
+    assert!(tokio::net::TcpStream::connect(addr).await.is_err());
 
     Ok(())
 }

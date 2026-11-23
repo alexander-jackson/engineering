@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
+use foundation_shutdown::{CancellationToken, GracefulTask};
 use http_body_util::combinators::BoxBody;
 use hyper::body::Bytes;
 use hyper::Uri;
@@ -95,28 +96,6 @@ impl HealthMonitor {
         }
     }
 
-    pub async fn run(&self) -> Result<()> {
-        while let Ok(message) = self.requests.recv().await {
-            let responses = self.responses.clone();
-
-            // Each check runs in its own task so a slow one doesn't delay the others
-            tokio::spawn(async move {
-                let request = message.content;
-                let configuration = HealthCheckConfiguration::new(
-                    HEALTH_CHECK_PERIOD,
-                    HEALTH_CHECK_SUCCESS_THRESHOLD,
-                    HEALTH_CHECK_FAILURE_THRESHOLD,
-                );
-                let result = Self::check(&request, configuration).await;
-
-                Self::on_result(&request, &result);
-                Self::respond(&responses, &request, result);
-            });
-        }
-
-        Ok(())
-    }
-
     async fn check(
         request: &HealthCheckRequest,
         configuration: HealthCheckConfiguration,
@@ -165,6 +144,41 @@ impl HealthMonitor {
     }
 }
 
+impl GracefulTask for HealthMonitor {
+    async fn run_until_shutdown(self, shutdown: CancellationToken) -> Result<()> {
+        loop {
+            let message = tokio::select! {
+                _ = shutdown.cancelled() => {
+                    tracing::info!("shutting down the health monitor");
+                    break;
+                }
+                message = self.requests.recv() => match message {
+                    Ok(message) => message,
+                    Err(_) => break,
+                },
+            };
+
+            let responses = self.responses.clone();
+
+            // Each check runs in its own task so a slow one doesn't delay the others
+            tokio::spawn(async move {
+                let request = message.content;
+                let configuration = HealthCheckConfiguration::new(
+                    HEALTH_CHECK_PERIOD,
+                    HEALTH_CHECK_SUCCESS_THRESHOLD,
+                    HEALTH_CHECK_FAILURE_THRESHOLD,
+                );
+                let result = Self::check(&request, configuration).await;
+
+                Self::on_result(&request, &result);
+                Self::respond(&responses, &request, result);
+            });
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
@@ -174,6 +188,7 @@ mod tests {
     use std::time::Duration;
 
     use color_eyre::eyre::{Report, Result};
+    use foundation_shutdown::{CancellationToken, GracefulTask};
     use http_body_util::Full;
     use hyper::body::Bytes;
     use hyper::service::service_fn;
@@ -351,6 +366,21 @@ mod tests {
         assert_eq!(first.content.container_id, request.container_id);
         assert_eq!(first.content.result, HealthCheckResult::Success);
         assert_eq!(second.content.result, HealthCheckResult::Failure);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn monitor_stops_when_asked_to_shut_down() -> Result<()> {
+        let (_requests, requests_rx) = channel();
+        let (responses, _responses_rx) = channel();
+        let shutdown = CancellationToken::new();
+
+        let monitor = HealthMonitor::new(requests_rx, responses);
+        let handle = tokio::spawn(monitor.run_until_shutdown(shutdown.clone()));
+
+        shutdown.cancel();
+        tokio::time::timeout(Duration::from_secs(1), handle).await???;
 
         Ok(())
     }
