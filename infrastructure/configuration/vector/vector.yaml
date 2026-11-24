@@ -46,3 +46,19 @@ sinks:
       codec: json
     inputs:
       - parse_logs
+
+  beaver:
+    type: http
+    uri: http://beaver:7000/logs
+    compression: gzip
+    batch:
+      max_events: 1000
+      timeout_secs: 5
+    buffer:
+      type: disk
+      max_size: 536870912
+      when_full: block
+    encoding:
+      codec: json
+    inputs:
+      - parse_logs
