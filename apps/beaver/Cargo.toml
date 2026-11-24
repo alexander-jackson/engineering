@@ -13,6 +13,7 @@ foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
 http = "1.5.0"
 jiff = { version = "1.0.2", features = ["serde"] }
+opentelemetry.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0.154"
 serde_urlencoded = "0.7.1"
