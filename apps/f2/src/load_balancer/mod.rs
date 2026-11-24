@@ -75,7 +75,6 @@ impl LoadBalancer {
             mtls,
         }
     }
-
 }
 
 impl GracefulTask for LoadBalancer {
