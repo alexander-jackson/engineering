@@ -945,6 +945,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "beaver"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "color-eyre",
+ "foundation-http-server",
+ "foundation-init",
+ "foundation-shutdown",
+ "reqwest 0.13.5",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "bit-vec"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

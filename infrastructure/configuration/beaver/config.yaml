@@ -1,0 +1,6 @@
+addr: 0.0.0.0
+port: 7000
+
+metrics:
+  endpoint: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics
+  interval_seconds: 30

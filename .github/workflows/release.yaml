@@ -27,6 +27,7 @@ jobs:
         id: detect
         run: |
           ALL_APPS='[
+            {"name":"beaver",              "path":"beaver"},
             {"name":"certmanager",         "path":"certmanager"},
             {"name":"dns-server",          "path":"dns-server"},
             {"name":"events",              "path":"events"},
