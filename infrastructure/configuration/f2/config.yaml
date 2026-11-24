@@ -97,6 +97,15 @@ alb:
           location: s3
           bucket: configuration-68f6c7
           key: f2/certificates/dns.opentracker.app/privkey.pem
+      logs.opentracker.app:
+        cert_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/logs.opentracker.app/fullchain.pem
+        key_file:
+          location: s3
+          bucket: configuration-68f6c7
+          key: f2/certificates/logs.opentracker.app/privkey.pem
       forkup.app:
         cert_file:
           location: s3
@@ -120,6 +129,7 @@ alb:
       - certificates.opentracker.app
       - grafana.opentracker.app
       - dns.opentracker.app
+      - logs.opentracker.app
 
 secrets:
   private_key:
@@ -445,6 +455,9 @@ services:
   beaver:
     image: alexanderjackson/beaver
     tag: 20261124-0936
+    routes:
+      - host: logs.opentracker.app
+        port: 7000
     replicas: 1
     probes:
       liveness:
