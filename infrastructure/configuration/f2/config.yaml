@@ -441,3 +441,21 @@ services:
           location: filesystem
           path: /mnt/data/prometheus
         target: /prometheus
+
+  beaver:
+    image: alexanderjackson/beaver
+    tag: 20261124-0537
+    replicas: 1
+    probes:
+      liveness:
+        path: /health
+        port: 7000
+    environment:
+      LOG_FORMAT: json
+    volumes:
+      config:
+        source:
+          location: s3
+          bucket: configuration-68f6c7
+          key: beaver/config.yaml
+        target: /app/config/beaver.yaml
