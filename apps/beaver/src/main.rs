@@ -1,5 +1,7 @@
 use std::net::SocketAddrV4;
+use std::time::Instant;
 
+use axum::extract::rejection::JsonRejection;
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -15,10 +17,12 @@ use tower_http::decompression::RequestDecompressionLayer;
 use tower_http::services::ServeDir;
 
 use crate::configuration::Configuration;
+use crate::metrics::IngestMetrics;
 use crate::store::{LogRecord, LogStore, QueryError};
 use crate::templates::IndexContext;
 
 mod configuration;
+mod metrics;
 mod store;
 mod templates;
 
@@ -26,6 +30,7 @@ mod templates;
 struct ApplicationState {
     store: LogStore,
     template_engine: TemplateEngine,
+    ingest_metrics: IngestMetrics,
 }
 
 #[derive(Debug, Deserialize)]
@@ -38,6 +43,7 @@ async fn index(
     State(ApplicationState {
         store,
         template_engine,
+        ..
     }): State<ApplicationState>,
     Query(IndexQuery { q }): Query<IndexQuery>,
 ) -> Response {
@@ -76,24 +82,43 @@ async fn index(
 }
 
 async fn ingest(
-    State(ApplicationState { store, .. }): State<ApplicationState>,
-    Json(logs): Json<Vec<LogRecord>>,
-) -> StatusCode {
+    State(ApplicationState {
+        store,
+        ingest_metrics,
+        ..
+    }): State<ApplicationState>,
+    logs: Result<Json<Vec<LogRecord>>, JsonRejection>,
+) -> Response {
+    let Json(logs) = match logs {
+        Ok(logs) => logs,
+        Err(rejection) => {
+            ingest_metrics.invalid();
+            return rejection.into_response();
+        }
+    };
+
     let count = logs.len();
+    let start = Instant::now();
 
     match store.insert(logs).await {
         Ok(()) => {
+            ingest_metrics.stored(count, start.elapsed());
             tracing::info!(count, "stored logs from vector");
-            StatusCode::NO_CONTENT
+            StatusCode::NO_CONTENT.into_response()
         }
         Err(error) => {
+            ingest_metrics.failed(start.elapsed());
             tracing::error!(?error, count, "failed to store logs");
-            StatusCode::INTERNAL_SERVER_ERROR
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
 }
 
-fn router(store: LogStore, template_engine: TemplateEngine) -> Router {
+fn router(
+    store: LogStore,
+    template_engine: TemplateEngine,
+    ingest_metrics: IngestMetrics,
+) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/logs", post(ingest))
@@ -102,6 +127,7 @@ fn router(store: LogStore, template_engine: TemplateEngine) -> Router {
         .with_state(ApplicationState {
             store,
             template_engine,
+            ingest_metrics,
         })
 }
 
@@ -114,7 +140,8 @@ async fn main() -> Result<()> {
 
     let store = LogStore::new(config.query)?;
     let template_engine = TemplateEngine::new()?;
-    let server = Server::new(router(store, template_engine), listener);
+    let ingest_metrics = IngestMetrics::new(&opentelemetry::global::meter("beaver"));
+    let server = Server::new(router(store, template_engine, ingest_metrics), listener);
 
     ShutdownCoordinator::new().with_task(server).run().await?;
 
@@ -137,6 +164,7 @@ mod tests {
     use flate2::write::GzEncoder;
 
     use crate::configuration::QueryConfiguration;
+    use crate::metrics::IngestMetrics;
     use crate::router;
     use crate::store::{LogRecord, LogStore};
 
@@ -162,7 +190,11 @@ mod tests {
     }
 
     fn app(store: &LogStore) -> Result<Router> {
-        Ok(router(store.clone(), TemplateEngine::new()?))
+        Ok(router(
+            store.clone(),
+            TemplateEngine::new()?,
+            IngestMetrics::new(&opentelemetry::global::meter("test")),
+        ))
     }
 
     async fn get_page(store: &LogStore, uri: &str) -> Result<(StatusCode, String)> {
