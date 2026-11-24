@@ -36,6 +36,51 @@ transforms:
         }
       }
 
+  normalise_logs:
+    type: remap
+    inputs:
+      - parse_logs
+    drop_on_error: false
+    source: |
+      image = string(.image) ?? ""
+      parts = parse_regex(image, r'^(?P<name>.+?)(?::(?P<tag>[^:/]+))?$') ?? {}
+
+      level = null
+      target = null
+      fields = {}
+
+      if is_object(.log) {
+        fields = object(.log) ?? {}
+
+        if is_string(fields.level) {
+          level = upcase(string(fields.level) ?? "")
+          del(fields.level)
+        }
+
+        if is_string(fields.target) {
+          target = fields.target
+          del(fields.target)
+        } else if is_string(fields.logger) {
+          target = fields.logger
+          del(fields.logger)
+        }
+      }
+
+      . = {
+        "timestamp": .timestamp,
+        "image_name": string(parts.name) ?? image,
+        "image_tag": string(parts.tag) ?? "latest",
+        "container_name": .container_name,
+        "container_id": .container_id,
+        "container_created": .container_created_at,
+        "host": .host,
+        "stream": .stream,
+        "level": level,
+        "target": target,
+        "message": .message,
+        "fields": fields,
+      }
+
 sinks:
   s3:
     type: aws_s3
@@ -61,4 +106,4 @@ sinks:
     encoding:
       codec: json
     inputs:
-      - parse_logs
+      - normalise_logs
