@@ -201,6 +201,15 @@ resource "aws_security_group_rule" "allow_outbound_subnet_postgres" {
   cidr_blocks       = [data.aws_subnet.self.cidr_block]
 }
 
+locals {
+  deploy_script = templatefile("${path.module}/scripts/deploy-version.sh", {
+    vector_tag    = var.logging.vector_tag
+    port_flags    = local.port_flags
+    config_bucket = var.configuration.bucket
+    config_key    = var.configuration.key
+  })
+}
+
 resource "aws_instance" "this" {
   ami           = var.instance.ami
   instance_type = var.instance.type
@@ -214,6 +223,7 @@ resource "aws_instance" "this" {
     vector_tag          = var.logging.vector_tag
     extra_volume_device = var.extra_ebs_volume != null ? var.extra_ebs_volume.device_name : ""
     port_flags          = local.port_flags
+    deploy_script       = local.deploy_script
   })
 
   vpc_security_group_ids = [aws_security_group.this.id]

@@ -74,19 +74,20 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docke
 sudo apt update
 sudo apt install -y docker-ce
 
-# Download the `vector` configuration and get it running
+# Download the `vector` configuration
 aws s3 cp s3://configuration-68f6c7/vector/vector.yaml /home/ubuntu/vector.yaml
-sudo docker run -d -v /var/run/docker.sock:/var/run/docker.sock -v /home/ubuntu/vector.yaml:/etc/vector/vector.yaml timberio/vector:${vector_tag}
 
 # Allow the `ubuntu` user to run `docker` commands (for SSH access)
 sudo usermod -aG docker ubuntu
 
 sudo docker network create --driver bridge internal
-sudo docker run \
-    -d \
-    -v /var/run/docker.sock:/var/run/docker.sock \
-    -v /tmp:/tmp \
-    -v /mnt:/mnt \
-    --network internal \
-    ${port_flags} \
-    alexanderjackson/f2:${tag} -- --config s3://${config_bucket}/${config_key}
+
+# Install the deploy script at a known location
+cat > /home/ubuntu/deploy-version.sh <<'DEPLOY_SCRIPT_EOF'
+${deploy_script}
+DEPLOY_SCRIPT_EOF
+chown ubuntu:ubuntu /home/ubuntu/deploy-version.sh
+chmod 755 /home/ubuntu/deploy-version.sh
+
+# Start vector and f2
+/home/ubuntu/deploy-version.sh ${tag}
