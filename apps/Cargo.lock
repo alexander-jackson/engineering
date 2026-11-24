@@ -953,9 +953,10 @@ dependencies = [
  "foundation-http-server",
  "foundation-init",
  "foundation-shutdown",
- "reqwest 0.13.5",
+ "http-body-util",
  "serde",
  "tokio",
+ "tower",
 ]
 
 [[package]]
