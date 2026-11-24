@@ -1,4 +1,4 @@
-# Run: docker run --rm -v ./infrastructure/configuration/vector:/etc/vector/config -v ./infrastructure/tests/vector:/etc/vector/tests timberio/vector:0.55.0-alpine test /etc/vector/config/vector.yaml /etc/vector/tests/vector.test.yaml
+# Run: docker run --rm -v ./infrastructure/configuration/vector:/etc/vector/config -v ./infrastructure/tests/vector:/etc/vector/tests timberio/vector:0.60.0-alpine test /etc/vector/config/vector.yaml /etc/vector/tests/vector.test.yaml
 tests:
   - name: json lines are parsed into `.log`
     inputs:
@@ -79,3 +79,103 @@ tests:
               assert_eq!(.log_format, "json")
               assert_eq!(.message, "{\"level\":\"INFO\",\"count\":3}")
               assert_eq!(.log.count, 3)
+
+  - name: tracing logs are normalised to the schema
+    inputs:
+      - insert_at: normalise_logs
+        type: log
+        log_fields:
+          timestamp: "2026-11-23T10:00:00Z"
+          image: alexanderjackson/dns-server:20261121-0830
+          container_name: happy_turing
+          container_id: abc123
+          container_created_at: "2026-11-21T08:30:00Z"
+          host: ip-10-0-0-1
+          stream: stdout
+          label: ignored
+          log_format: json
+          source_type: docker_logs
+          message: hello
+          log:
+            level: INFO
+            target: dns_server::resolver
+            user: alex
+            span:
+              name: request
+    outputs:
+      - extract_from: normalise_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.image_name, "alexanderjackson/dns-server")
+              assert_eq!(.image_tag, "20261121-0830")
+              assert_eq!(.container_name, "happy_turing")
+              assert_eq!(.container_id, "abc123")
+              assert_eq!(.host, "ip-10-0-0-1")
+              assert_eq!(.stream, "stdout")
+              assert_eq!(.level, "INFO")
+              assert_eq!(.target, "dns_server::resolver")
+              assert_eq!(.message, "hello")
+              assert_eq!(.fields.user, "alex")
+              assert_eq!(.fields.span.name, "request")
+              assert!(!exists(.fields.level))
+              assert!(!exists(.fields.target))
+              assert!(!exists(.label))
+              assert!(!exists(.log_format))
+              assert!(!exists(.source_type))
+              assert!(!exists(.log))
+
+  - name: lower case levels and `logger` are normalised
+    inputs:
+      - insert_at: normalise_logs
+        type: log
+        log_fields:
+          image: caddy:2.8
+          message: served request
+          log:
+            level: info
+            logger: http.log.access
+            status: 200
+    outputs:
+      - extract_from: normalise_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.image_name, "caddy")
+              assert_eq!(.image_tag, "2.8")
+              assert_eq!(.level, "INFO")
+              assert_eq!(.target, "http.log.access")
+              assert_eq!(.fields.status, 200)
+              assert!(!exists(.fields.logger))
+
+  - name: registry ports are not mistaken for tags
+    inputs:
+      - insert_at: normalise_logs
+        type: log
+        log_fields:
+          image: registry.local:5000/team/app:v1
+          message: hi
+    outputs:
+      - extract_from: normalise_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.image_name, "registry.local:5000/team/app")
+              assert_eq!(.image_tag, "v1")
+
+  - name: text logs have no level and empty fields
+    inputs:
+      - insert_at: normalise_logs
+        type: log
+        log_fields:
+          image: prom/prometheus:v3.0.0
+          message: plain text line
+    outputs:
+      - extract_from: normalise_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.message, "plain text line")
+              assert_eq!(.level, null)
+              assert_eq!(.target, null)
+              assert_eq!(.fields, {})
