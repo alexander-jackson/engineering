@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Query the logs held in memory" />
+    <title>Beaver</title>
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              paper: {
+                bg: "#f5f1e6",
+                ink: "#2e2b25",
+                muted: "#948c79",
+                rule: "#ddd5c2",
+                code: "#ebe5d4",
+                error: "#9b3d2e",
+              },
+            },
+            fontFamily: {
+              serif: ["'Iowan Old Style'", "Charter", "Georgia", "serif"],
+            },
+          },
+        },
+      };
+    </script>
+    <script type="text/javascript" src="assets/script.js" defer></script>
+  </head>
+
+  <body class="h-full bg-paper-bg text-paper-ink font-serif antialiased">
+    <main class="max-w-5xl mx-auto px-6 pt-16 pb-24">
+      <header class="flex items-baseline justify-between text-2xl italic text-paper-muted mb-8">
+        <h1>Beaver</h1>
+        <span class="text-base">{{ total_rows }} in memory</span>
+      </header>
+
+      <form action="/" method="get" id="query-form" class="mb-4">
+        <textarea
+          name="q"
+          id="query"
+          rows="5"
+          spellcheck="false"
+          autofocus
+          class="w-full rounded bg-paper-code p-3 font-mono text-sm text-paper-ink border border-paper-rule focus:outline-none focus:border-paper-ink"
+        >{{ query }}</textarea>
+
+        <div class="mt-3 flex items-center gap-4">
+          <button
+            type="submit"
+            class="rounded border border-paper-ink px-4 py-1 text-lg hover:bg-paper-ink hover:text-paper-bg"
+          >
+            Run
+          </button>
+          <span class="text-sm italic text-paper-muted">Cmd or Ctrl + Enter</span>
+        </div>
+      </form>
+
+      <div class="mb-8 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-paper-muted">
+        <span class="italic">Examples</span>
+        {% for example in examples %}
+        <a href="{{ example.href }}" class="underline decoration-paper-rule hover:text-paper-ink">{{ example.title }}</a>
+        {% endfor %}
+      </div>
+
+      {% if error %}
+      <pre class="mb-8 whitespace-pre-wrap rounded border border-paper-error p-3 font-mono text-sm text-paper-error">{{ error }}</pre>
+      {% endif %}
+
+      {% if result %}
+      <p class="mb-2 text-sm italic text-paper-muted">
+        {{ result.row_count }} {% if result.row_count == 1 %}row{% else %}rows{% endif %} in {{ result.elapsed_ms }} ms{% if result.truncated %}, truncated to the first {{ result.row_count }}{% endif %}
+      </p>
+
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse text-left font-mono text-sm">
+          <thead>
+            <tr class="border-b border-paper-ink">
+              {% for column in result.columns %}
+              <th class="whitespace-nowrap px-2 py-1 font-semibold">{{ column }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in result.rows %}
+            <tr class="border-b border-paper-rule align-top">
+              {% for cell in row %}
+              {% if cell.null %}
+              <td class="px-2 py-1 italic text-paper-muted">NULL</td>
+              {% else %}
+              <td class="max-w-xl whitespace-pre-wrap break-words px-2 py-1">{{ cell.value }}</td>
+              {% endif %}
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      <details class="mt-12 text-sm">
+        <summary class="cursor-pointer select-none italic text-paper-muted">Schema</summary>
+        <table class="mt-3 border-collapse text-left font-mono">
+          <tbody>
+            {% for column in schema %}
+            <tr class="border-b border-paper-rule">
+              <td class="py-1 pr-6">{{ column.name }}</td>
+              <td class="py-1 pr-6 text-paper-muted">{{ column.kind }}</td>
+              <td class="py-1 font-serif italic text-paper-muted">{{ column.note }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="mt-3 italic text-paper-muted">
+          Only SELECT queries over the logs still held in memory are supported. Nested values in
+          <code class="font-mono">fields</code> can be read with <code class="font-mono">fields->>'$.status'</code>.
+        </p>
+      </details>
+    </main>
+  </body>
+</html>

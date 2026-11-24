@@ -10,15 +10,19 @@ duckdb = { version = "1.20001.0", features = ["bundled", "json"] }
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server", features = ["metrics"] }
 foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["metrics"] }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
+foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
 http = "1.5.0"
 jiff = { version = "1.0.2", features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0.154"
+serde_urlencoded = "0.7.1"
+thiserror = "2.0.21"
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
-tower-http = { version = "0.7.1", features = ["decompression-gzip"] }
+tower-http = { version = "0.7.1", features = ["decompression-gzip", "fs"] }
 tracing.workspace = true
 
 [dev-dependencies]
 flate2 = "1.1.11"
 http-body-util = "0.1.5"
+serde_urlencoded = "0.7.1"
 tower = { version = "0.5.3", features = ["util"] }
