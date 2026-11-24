@@ -12,11 +12,11 @@ use crate::error::ServerError;
 static KEY: Lazy<String> = Lazy::new(|| std::env::var("JWT_KEY").unwrap());
 
 fn get_encoding_key() -> EncodingKey {
-    EncodingKey::from_secret(KEY.as_bytes())
+    EncodingKey::from_secret(KEY.as_bytes()).expect("failed to parse the encoding key")
 }
 
 fn get_decoding_key() -> DecodingKey {
-    DecodingKey::from_secret(KEY.as_bytes())
+    DecodingKey::from_secret(KEY.as_bytes()).expect("failed to parse the decoding key")
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
