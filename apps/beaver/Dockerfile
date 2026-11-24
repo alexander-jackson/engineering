@@ -22,5 +22,7 @@ RUN apt-get update \
 RUN useradd -m -u 1000 appuser
 WORKDIR /app
 COPY --from=builder /app/target/release/beaver ./beaver
+COPY --from=builder /app/beaver/templates ./templates
+COPY --from=builder /app/beaver/assets ./assets
 USER appuser
 CMD ["./beaver", "--config", "/app/config/beaver.yaml"]
