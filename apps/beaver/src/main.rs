@@ -10,7 +10,12 @@ use tokio::net::TcpListener;
 
 #[derive(Deserialize)]
 struct Configuration {
-    addr: Ipv4Addr,
+    server: ServerConfiguration,
+}
+
+#[derive(Deserialize)]
+struct ServerConfiguration {
+    host: Ipv4Addr,
     port: u16,
 }
 
@@ -26,7 +31,7 @@ fn router() -> Router {
 async fn main() -> Result<()> {
     let config = foundation_init::run::<Configuration>()?;
 
-    let addr = SocketAddrV4::new(config.addr, config.port);
+    let addr = SocketAddrV4::new(config.server.host, config.server.port);
     let listener = TcpListener::bind(addr).await?;
 
     let server = Server::new(router(), listener);
@@ -38,21 +43,24 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    use color_eyre::eyre::Result;
+
+    use crate::router;
 
     #[tokio::test]
     async fn serves_hello_world() -> Result<()> {
-        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)).await?;
-        let addr = listener.local_addr()?;
+        let request = Request::get("/").body(Body::empty())?;
+        let response = router().oneshot(request).await?;
 
-        tokio::spawn(async move { axum::serve(listener, router()).await });
+        assert_eq!(response.status(), StatusCode::OK);
 
-        let body = reqwest::get(format!("http://{addr}/"))
-            .await?
-            .text()
-            .await?;
-
-        assert_eq!(body, "Hello, World!");
+        let body = response.into_body().collect().await?.to_bytes();
+        assert_eq!(&body[..], b"Hello, World!");
 
         Ok(())
     }
