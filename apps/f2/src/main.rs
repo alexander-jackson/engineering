@@ -3,12 +3,12 @@ use std::net::SocketAddrV4;
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::Result;
 use docker::client::{Client, DockerClient};
+use foundation_shutdown::ShutdownCoordinator;
 use rsa::RsaPrivateKey;
 use service_registry::ServiceRegistry;
 use tokio::net::TcpListener;
-use tokio::signal::unix::SignalKind;
 use tokio::sync::RwLock;
 
 use crate::args::Args;
@@ -94,41 +94,25 @@ async fn main() -> Result<()> {
         listeners.insert(protocol.clone(), listener);
     }
 
-    let load_balancer = LoadBalancer::new(service_registry, config, reconciliations);
-    let shutdown_signal = handle_shutdown_signal();
+    let load_balancer = LoadBalancer::new(
+        service_registry,
+        config,
+        reconciliations,
+        listeners,
+        tls,
+        mtls,
+    );
 
-    tokio::try_join!(
-        load_balancer.run(listeners, tls, mtls),
-        reconciler.run(),
-        health_monitor.run(),
-        shutdown_signal
-    )?;
+    ShutdownCoordinator::new()
+        .with_task(load_balancer)
+        .with_task(reconciler)
+        .with_task(health_monitor)
+        .run()
+        .await?;
 
     tracing::info!("shutting down gracefully, all components have completed their tasks");
 
     Ok(())
-}
-
-async fn handle_shutdown_signal() -> Result<()> {
-    let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
-    let terminate = async {
-        tokio::signal::unix::signal(SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
-
-    Err(eyre!("shutdown signal received, exiting..."))
 }
 
 async fn start_services<C: DockerClient>(

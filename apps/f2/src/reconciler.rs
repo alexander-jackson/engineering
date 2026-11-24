@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use color_eyre::eyre::Result;
+use foundation_shutdown::{CancellationToken, GracefulTask};
 use hyper::Uri;
 use indexmap::IndexSet;
 use tokio::sync::{Mutex, RwLock};
@@ -73,31 +74,6 @@ impl<C: DockerClient> Reconciler<C> {
             health_responses,
             rollouts: Mutex::default(),
         }
-    }
-
-    pub async fn run(&self) -> Result<()> {
-        loop {
-            tokio::select! {
-                request = self.reconciliations.recv() => {
-                    if request.is_err() {
-                        break;
-                    }
-
-                    tracing::info!("received signal to reconcile");
-                    self.reconcile().await?;
-                }
-                response = self.health_responses.recv() => {
-                    let Ok(response) = response else { break };
-
-                    // A problem with one rollout shouldn't take the load balancer down
-                    if let Err(error) = self.handle_health_response(response.content).await {
-                        tracing::warn!(?error, "failed to handle a health check response");
-                    }
-                }
-            }
-        }
-
-        Ok(())
     }
 
     async fn reconcile(&self) -> Result<()> {
@@ -475,6 +451,37 @@ impl<C: DockerClient> Reconciler<C> {
     }
 }
 
+impl<C: DockerClient + Send + Sync + 'static> GracefulTask for Reconciler<C> {
+    async fn run_until_shutdown(self, shutdown: CancellationToken) -> Result<()> {
+        loop {
+            tokio::select! {
+                _ = shutdown.cancelled() => {
+                    tracing::info!("shutting down the reconciler");
+                    break;
+                }
+                request = self.reconciliations.recv() => {
+                    if request.is_err() {
+                        break;
+                    }
+
+                    tracing::info!("received signal to reconcile");
+                    self.reconcile().await?;
+                }
+                response = self.health_responses.recv() => {
+                    let Ok(response) = response else { break };
+
+                    // A problem with one rollout shouldn't take the load balancer down
+                    if let Err(error) = self.handle_health_response(response.content).await {
+                        tracing::warn!(?error, "failed to handle a health check response");
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 fn health_check_target(addr: Ipv4Addr, probe: &Probe) -> Result<Uri> {
     let Probe { path, port, .. } = probe;
     let separator = if path.starts_with('/') { "" } else { "/" };
@@ -491,6 +498,7 @@ pub mod tests {
 
     use arc_swap::ArcSwap;
     use color_eyre::eyre::Result;
+    use foundation_shutdown::{CancellationToken, GracefulTask};
     use tokio::sync::RwLock;
 
     use crate::common::Environment;
@@ -1129,6 +1137,20 @@ pub mod tests {
         )
         .await?;
         assert_eq!(registered(&reconciler, "foobar").await, vec![current]);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn reconciler_stops_when_asked_to_shut_down() -> Result<()> {
+        let (reconciler, _checks) =
+            create_reconciler(ServiceRegistry::new(), FakeDockerClient::default());
+        let shutdown = CancellationToken::new();
+
+        let handle = tokio::spawn(reconciler.run_until_shutdown(shutdown.clone()));
+
+        shutdown.cancel();
+        tokio::time::timeout(std::time::Duration::from_secs(1), handle).await???;
 
         Ok(())
     }

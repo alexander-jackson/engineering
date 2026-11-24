@@ -1,8 +1,8 @@
 use std::future::Future;
 
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Report, Result};
 use tokio::signal::unix::SignalKind;
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, JoinSet};
 
 pub use tokio_util::sync::CancellationToken;
 
@@ -15,14 +15,14 @@ pub trait GracefulTask: Send + 'static {
 
 pub struct ShutdownCoordinator {
     token: CancellationToken,
-    handles: Vec<JoinHandle<Result<()>>>,
+    tasks: JoinSet<Result<()>>,
 }
 
 impl ShutdownCoordinator {
     pub fn new() -> Self {
         Self {
             token: CancellationToken::new(),
-            handles: Vec::new(),
+            tasks: JoinSet::new(),
         }
     }
 
@@ -72,19 +72,34 @@ impl ShutdownCoordinator {
         T: GracefulTask,
     {
         let token = self.token();
-        let handle = tokio::spawn(async move { task.run_until_shutdown(token).await });
-        self.handles.push(handle);
+        self.tasks
+            .spawn(async move { task.run_until_shutdown(token).await });
         self
     }
 
-    pub async fn run(self) -> Result<()> {
+    /// Waits for every task added with [`Self::with_task`] to finish.
+    ///
+    /// If a task fails (or panics) the others are asked to shut down, rather than being left
+    /// running without it. Once they have all stopped, the first error is returned.
+    pub async fn run(mut self) -> Result<()> {
         self.listen_for_signals();
 
-        for handle in self.handles {
-            handle.await??;
+        let mut first_error = None;
+
+        while let Some(joined) = self.tasks.join_next().await {
+            let outcome = joined.map_err(Report::from).and_then(|result| result);
+
+            if let Err(error) = outcome {
+                if first_error.is_none() {
+                    tracing::warn!(%error, "a task failed, shutting down the others");
+                }
+
+                self.token.cancel();
+                first_error.get_or_insert(error);
+            }
         }
 
-        Ok(())
+        first_error.map_or(Ok(()), Err)
     }
 }
 
@@ -266,6 +281,36 @@ mod tests {
         let result = coordinator.run().await;
 
         assert!(result.is_err());
+    }
+
+    struct WaitsForShutdown {
+        stopped: Arc<Mutex<bool>>,
+    }
+
+    impl GracefulTask for WaitsForShutdown {
+        async fn run_until_shutdown(self, shutdown: CancellationToken) -> Result<()> {
+            shutdown.cancelled().await;
+            *self.stopped.lock().unwrap() = true;
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failing_task_shuts_down_the_others() {
+        let stopped = Arc::new(Mutex::new(false));
+
+        let coordinator = ShutdownCoordinator::new()
+            .with_task(WaitsForShutdown {
+                stopped: Arc::clone(&stopped),
+            })
+            .with_task(FailingTask);
+
+        let result = tokio::time::timeout(Duration::from_secs(1), coordinator.run())
+            .await
+            .expect("the coordinator should not wait on a task that was never told to stop");
+
+        assert_eq!(result.unwrap_err().to_string(), "task failed");
+        assert!(*stopped.lock().unwrap());
     }
 
     struct ImmediateTask {
