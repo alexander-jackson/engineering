@@ -130,7 +130,7 @@ secrets:
 services:
   opentracker-frontend:
     image: alexanderjackson/opentracker-frontend
-    tag: 20261121-0903
+    tag: 20261124-0145
     routes:
       - host: opentracker.app
         port: 80
