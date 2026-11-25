@@ -368,9 +368,7 @@ resource "aws_route53_record" "records" {
   for_each = toset([
     "", // root record
     "certificates",
-    "events",
     "grafana",
-    "lockers",
     "logs",
     "palate",
     "tags",

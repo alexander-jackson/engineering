@@ -52,24 +52,6 @@ alb:
           location: s3
           bucket: configuration-68f6c7
           key: f2/certificates/uptime.opentracker.app/privkey.pem
-      lockers.opentracker.app:
-        cert_file:
-          location: s3
-          bucket: configuration-68f6c7
-          key: f2/certificates/lockers.opentracker.app/fullchain.pem
-        key_file:
-          location: s3
-          bucket: configuration-68f6c7
-          key: f2/certificates/lockers.opentracker.app/privkey.pem
-      events.opentracker.app:
-        cert_file:
-          location: s3
-          bucket: configuration-68f6c7
-          key: f2/certificates/events.opentracker.app/fullchain.pem
-        key_file:
-          location: s3
-          bucket: configuration-68f6c7
-          key: f2/certificates/events.opentracker.app/privkey.pem
       certificates.opentracker.app:
         cert_file:
           location: s3
@@ -124,8 +106,6 @@ alb:
       - palate.opentracker.app
       - today.opentracker.app
       - uptime.opentracker.app
-      - lockers.opentracker.app
-      - events.opentracker.app
       - certificates.opentracker.app
       - grafana.opentracker.app
       - dns.opentracker.app
@@ -269,27 +249,6 @@ services:
           key: palate/config.yaml
         target: /app/config/palate.yaml
 
-  lockers:
-    image: alexanderjackson/lockers
-    tag: 20261124-1324
-    routes:
-      - host: lockers.opentracker.app
-        port: 8000
-    replicas: 1
-    probes:
-      liveness:
-        path: /health
-        port: 8000
-    environment:
-      LOG_FORMAT: json
-    volumes:
-      config:
-        source:
-          location: s3
-          bucket: configuration-68f6c7
-          key: lockers/config.yaml
-        target: /app/config/lockers.yaml
-
   pgmanager:
     image: alexanderjackson/pgmanager
     tag: 20261124-1324
@@ -326,27 +285,6 @@ services:
           bucket: configuration-68f6c7
           key: uptime/config.yaml
         target: /app/config/uptime.yaml
-
-  events:
-    image: alexanderjackson/events
-    tag: 20261124-1324
-    routes:
-      - host: events.opentracker.app
-        port: 3333
-    replicas: 1
-    probes:
-      liveness:
-        path: /health
-        port: 3333
-    environment:
-      LOG_FORMAT: json
-    volumes:
-      config:
-        source:
-          location: s3
-          bucket: configuration-68f6c7
-          key: events/config.yaml
-        target: /app/config/events.yaml
 
   certmanager:
     image: alexanderjackson/certmanager
