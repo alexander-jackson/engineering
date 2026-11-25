@@ -24,14 +24,12 @@ All applications in `apps/`:
 
 1. **certmanager** - TLS certificate management via ACME (Let's Encrypt) with Route53 DNS-01 validation and S3 storage
 2. **dns-server** - DNS resolver with ad/tracker blocking, supports DNS-over-TLS
-3. **events** - Event scheduling/display web application with PostgreSQL persistence
-4. **lockers** - Locker/resource management web application with PostgreSQL persistence
-5. **opentracker/backend** - Fitness/workout tracking API (older pattern; uses dotenvy instead of foundation-init)
-6. **pgmanager** - PostgreSQL backup management tool (S3 and filesystem storage)
-7. **tag-updater** - Updates Docker image tags in infrastructure repositories via Git operations
-8. **today** - Daily task/notes web application with PostgreSQL persistence
-9. **uptime** - Uptime monitoring service with certificate expiry tracking and SNS alerts
-10. **utils/application-bootstrap** - Utility for bootstrapping new applications
+3. **opentracker/backend** - Fitness/workout tracking API (older pattern; uses dotenvy instead of foundation-init)
+4. **pgmanager** - PostgreSQL backup management tool (S3 and filesystem storage)
+5. **tag-updater** - Updates Docker image tags in infrastructure repositories via Git operations
+6. **today** - Daily task/notes web application with PostgreSQL persistence
+7. **uptime** - Uptime monitoring service with certificate expiry tracking and SNS alerts
+8. **utils/application-bootstrap** - Utility for bootstrapping new applications
 
 ### Foundation Libraries
 
@@ -116,7 +114,7 @@ Most applications use the `foundation-init` crate which provides a unified initi
 - Bearer token authentication patterns (see tag-updater)
 
 ### Database Integration
-- Applications using PostgreSQL: `certmanager`, `events`, `lockers`, `opentracker`, `today`, `uptime`
+- Applications using PostgreSQL: `certmanager`, `opentracker`, `today`, `uptime`
 - Connection via `database.mesh.internal` (private Route53 record)
 - Database bootstrapping via `foundation-database-bootstrap`
 - Migrations in `apps/{app}/migrations/`
@@ -215,8 +213,6 @@ Release process:
 
 Applications with SQL migrations:
 - **certmanager**: `apps/certmanager/migrations/` (1 migration)
-- **events**: `apps/events/migrations/` (2 migrations)
-- **lockers**: `apps/lockers/migrations/` (1 migration)
 - **opentracker**: `apps/opentracker/backend/migrations/` (12 migrations)
 - **today**: `apps/today/migrations/` (5 migrations)
 - **uptime**: `apps/uptime/migrations/` (6 migrations)
