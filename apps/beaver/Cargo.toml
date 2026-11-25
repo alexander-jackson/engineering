@@ -4,11 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+aws-credential-types = "1.2.14"
 axum.workspace = true
 color-eyre = { version = "0.6.5", default-features = false }
-duckdb = { version = "1.20001.0", features = ["bundled", "json"] }
+duckdb = { version = "1.20001.0", features = ["bundled", "json", "parquet"] }
+foundation-credentials = { version = "0.1.0", path = "../foundation/credentials" }
 foundation-http-server = { version = "0.1.0", path = "../foundation/http-server", features = ["metrics"] }
 foundation-init = { version = "0.1.0", path = "../foundation/init", features = ["metrics"] }
+foundation-recurring-job = { version = "0.1.0", path = "../foundation/recurring-job" }
 foundation-shutdown = { version = "0.1.0", path = "../foundation/shutdown" }
 foundation-templating = { version = "0.1.0", path = "../foundation/templating" }
 http = "1.5.0"
@@ -26,4 +29,5 @@ tracing.workspace = true
 flate2 = "1.1.11"
 http-body-util = "0.1.5"
 serde_urlencoded = "0.7.1"
+tempfile = "3.27.0"
 tower = { version = "0.5.3", features = ["util"] }

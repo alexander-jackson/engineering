@@ -402,6 +402,7 @@ services:
         path: /health
         port: 7000
     environment:
+      AWS_ROLE_ARN: arn:aws:iam::558855412466:role/beaver-role
       LOG_FORMAT: json
     volumes:
       config:

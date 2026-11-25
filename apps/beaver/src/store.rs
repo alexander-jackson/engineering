@@ -7,7 +7,7 @@ use jiff::Timestamp;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::configuration::QueryConfiguration;
+use crate::configuration::{QueryConfiguration, StorageConfiguration};
 
 const SCHEMA: &str = "
     CREATE TABLE logs (
@@ -52,19 +52,150 @@ pub struct LogRecord {
 pub struct LogStore {
     connection: Arc<Mutex<Connection>>,
     limits: QueryConfiguration,
+    destination: Option<Arc<Destination>>,
+}
+
+/// Where flushed logs are written, as DuckDB sees it.
+struct Destination {
+    /// An `s3://` URL or an absolute directory, without a trailing slash.
+    location: String,
+    /// Set for S3, which needs credentials to be supplied through [`LogStore::set_s3_credentials`].
+    region: Option<String>,
+}
+
+/// Temporary credentials DuckDB uses to reach S3.
+pub struct S3Credentials {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: Option<String>,
 }
 
 impl LogStore {
+    /// Creates a store which can only run queries against its own tables.
+    #[cfg(test)]
     pub fn new(limits: QueryConfiguration) -> Result<Self> {
-        // Queries are user-written, so the database can't reach files or the network
-        let config = Config::default().enable_external_access(false)?;
-        let connection = Connection::open_in_memory_with_flags(config)?;
+        Self::with_storage(limits, None)
+    }
+
+    /// Creates a store which can also flush logs to `storage`, and nowhere else.
+    pub fn with_storage(
+        limits: QueryConfiguration,
+        storage: Option<&StorageConfiguration>,
+    ) -> Result<Self> {
+        let (connection, destination) = match storage {
+            None => {
+                // Queries are user-written, so the database can't reach files or the network
+                let config = Config::default().enable_external_access(false)?;
+                (Connection::open_in_memory_with_flags(config)?, None)
+            }
+            Some(storage) => {
+                let connection = Connection::open_in_memory()?;
+                let destination = restrict_to_destination(&connection, storage)?;
+                (connection, Some(Arc::new(destination)))
+            }
+        };
+
         connection.execute_batch(SCHEMA)?;
 
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
             limits,
+            destination,
         })
+    }
+
+    /// Replaces the credentials DuckDB uses for S3, which are temporary and so need renewing.
+    ///
+    /// Settings are locked once the store is created, but secrets can still be replaced.
+    pub async fn set_s3_credentials(&self, credentials: S3Credentials) -> Result<()> {
+        let destination = self
+            .destination
+            .clone()
+            .ok_or_else(|| eyre!("no storage is configured"))?;
+        let connection = self.clone_connection()?;
+
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let Some(region) = &destination.region else {
+                return Ok(());
+            };
+
+            let session_token = credentials
+                .session_token
+                .as_deref()
+                .map(|token| format!(", SESSION_TOKEN {}", quote(token)))
+                .unwrap_or_default();
+
+            connection.execute_batch(&format!(
+                "CREATE OR REPLACE SECRET {S3_SECRET} (TYPE s3, KEY_ID {}, SECRET {}{session_token}, REGION {}, SCOPE {})",
+                quote(&credentials.access_key_id),
+                quote(&credentials.secret_access_key),
+                quote(region),
+                quote(&destination.location),
+            ))?;
+            Ok(())
+        })
+        .await?
+    }
+
+    /// Writes logs older than `before` (or every log, if `None`) to storage, then removes them.
+    ///
+    /// Files are Hive partitioned by `date` and `hour` and sorted by `image_name, timestamp`.
+    /// The copy and delete share a transaction, so logs which arrive while it runs aren't
+    /// part of its snapshot and are kept for the next flush. If the copy fails nothing is
+    /// removed, so the logs are retried.
+    ///
+    /// Returns the number of logs flushed.
+    pub async fn flush(&self, before: Option<Timestamp>) -> Result<usize> {
+        let destination = self
+            .destination
+            .clone()
+            .ok_or_else(|| eyre!("no storage is configured"))?;
+        let mut connection = self.clone_connection()?;
+
+        tokio::task::spawn_blocking(move || -> Result<usize> {
+            let condition = match before {
+                Some(before) => format!("timestamp < {}::TIMESTAMPTZ", quote(&before.to_string())),
+                None => "true".to_owned(),
+            };
+
+            let transaction = connection.transaction()?;
+            let count: usize = transaction.query_row(
+                &format!("SELECT count(*) FROM logs WHERE {condition}"),
+                [],
+                |row| row.get(0),
+            )?;
+
+            if count == 0 {
+                return Ok(0);
+            }
+
+            // The timestamp is in UTC, which is also what the partitions are named in
+            transaction.execute_batch(&format!(
+                "COPY (
+                    SELECT *,
+                        strftime(timestamp::TIMESTAMP, '%Y-%m-%d') AS date,
+                        strftime(timestamp::TIMESTAMP, '%H') AS hour
+                    FROM logs
+                    WHERE {condition}
+                    ORDER BY image_name, timestamp
+                ) TO {} (FORMAT parquet, PARTITION_BY (date, hour), FILENAME_PATTERN 'flush-{{uuid}}', APPEND)",
+                quote(&destination.location),
+            ))?;
+            transaction.execute(&format!("DELETE FROM logs WHERE {condition}"), [])?;
+            transaction.commit()?;
+
+            Ok(count)
+        })
+        .await?
+    }
+
+    fn clone_connection(&self) -> Result<Connection> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| eyre!("connection poisoned"))?;
+
+        Ok(connection.try_clone()?)
     }
 
     /// Inserts a batch atomically, on a blocking thread as DuckDB is synchronous.
@@ -139,6 +270,72 @@ impl LogStore {
             }
         }
     }
+}
+
+const S3_SECRET: &str = "beaver_s3";
+
+/// Quotes text as a SQL string literal, for statements which can't take parameters.
+fn quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+/// Limits what DuckDB can reach to the storage location, then locks the settings.
+///
+/// Queries are user-written, so after this they can read and write only under the
+/// location they're flushed to. Everything else (other files, other buckets, other
+/// hosts) is refused. The order matters: the S3 secret has to exist before external access
+/// is disabled, as secrets can't be created from nothing afterwards.
+fn restrict_to_destination(
+    connection: &Connection,
+    storage: &StorageConfiguration,
+) -> Result<Destination> {
+    let (location, region, ca_certificate_file) = match storage {
+        StorageConfiguration::S3 {
+            bucket,
+            prefix,
+            region,
+            ca_certificate_file,
+        } => {
+            let location = format!("s3://{bucket}/{}", prefix.trim_matches('/'));
+            let location = location.trim_end_matches('/').to_owned();
+
+            connection.execute_batch("INSTALL httpfs; LOAD httpfs;")?;
+            connection.execute_batch(&format!(
+                "CREATE SECRET {S3_SECRET} (TYPE s3, KEY_ID 'unset', SECRET 'unset', REGION {}, SCOPE {});
+                 SET ca_cert_file = {};",
+                quote(region),
+                quote(&location),
+                quote(ca_certificate_file),
+            ))?;
+
+            (location, Some(region.clone()), Some(ca_certificate_file))
+        }
+        StorageConfiguration::Filesystem { path } => {
+            std::fs::create_dir_all(path)?;
+            let location = std::fs::canonicalize(path)?
+                .to_string_lossy()
+                .trim_end_matches('/')
+                .to_owned();
+
+            (location, None, None)
+        }
+    };
+
+    // The directory form covers everything beneath the location, but the location itself,
+    // which is what is copied to, is only matched as an exact path
+    let mut paths = vec![quote(&location)];
+    paths.extend(ca_certificate_file.map(|file| quote(file)));
+
+    connection.execute_batch(&format!(
+        "SET allowed_directories = [{}];
+         SET allowed_paths = [{}];
+         SET enable_external_access = false;
+         SET lock_configuration = true;",
+        quote(&format!("{location}/")),
+        paths.join(", "),
+    ))?;
+
+    Ok(Destination { location, region })
 }
 
 /// The outcome of a query, with every value rendered as text and `None` for `NULL`.
@@ -279,7 +476,7 @@ mod tests {
     use jiff::Timestamp;
     use serde_json::json;
 
-    use crate::configuration::QueryConfiguration;
+    use crate::configuration::{QueryConfiguration, StorageConfiguration};
     use crate::store::{LogRecord, LogStore, QueryError};
 
     fn timestamp(value: &str) -> Result<Timestamp> {
@@ -626,6 +823,316 @@ mod tests {
         assert!(matches!(error, QueryError::TimedOut(timeout) if timeout.as_millis() == 50));
         assert!(error.to_string().contains("50 ms"));
         assert!(started.elapsed() < std::time::Duration::from_millis(400));
+
+        Ok(())
+    }
+
+    fn storage(directory: &std::path::Path) -> StorageConfiguration {
+        StorageConfiguration::Filesystem {
+            path: directory.to_path_buf(),
+        }
+    }
+
+    fn record_at(timestamp_text: &str, image_name: &str) -> Result<LogRecord> {
+        let mut record = record()?;
+        record.timestamp = timestamp(timestamp_text)?;
+        record.image_name = image_name.to_owned();
+        Ok(record)
+    }
+
+    /// Reads flushed files with a separate database, as the store itself can't see them.
+    fn flushed<T: duckdb::types::FromSql>(directory: &std::path::Path, sql: &str) -> Result<T> {
+        let connection = duckdb::Connection::open_in_memory()?;
+        let pattern = format!("{}/**/*.parquet", directory.display());
+        let sql = sql.replace(
+            "FLUSHED",
+            &format!("read_parquet('{pattern}', hive_partitioning = true)"),
+        );
+
+        Ok(connection.query_row(&sql, [], |row| row.get(0))?)
+    }
+
+    fn files(directory: &std::path::Path) -> Result<Vec<String>> {
+        let mut found = Vec::new();
+        let mut pending = vec![directory.to_path_buf()];
+
+        while let Some(path) = pending.pop() {
+            for entry in std::fs::read_dir(path)? {
+                let path = entry?.path();
+
+                if path.is_dir() {
+                    pending.push(path);
+                } else {
+                    let relative = path.strip_prefix(directory)?;
+                    found.push(relative.to_string_lossy().into_owned());
+                }
+            }
+        }
+
+        found.sort();
+        Ok(found)
+    }
+
+    #[tokio::test]
+    async fn flush_writes_hive_partitions_and_removes_the_logs() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let store = LogStore::with_storage(
+            QueryConfiguration::default(),
+            Some(&storage(directory.path())),
+        )?;
+
+        store
+            .insert(vec![
+                record_at("2026-11-24T10:30:00Z", "a/one")?,
+                record_at("2026-11-24T10:45:00Z", "a/one")?,
+                record_at("2026-11-24T11:15:00Z", "a/one")?,
+                record_at("2026-11-25T00:05:00Z", "a/one")?,
+            ])
+            .await?;
+
+        let flushed_count = store
+            .flush(Some(timestamp("2026-11-24T11:00:00Z")?))
+            .await?;
+        let found = files(directory.path())?;
+
+        assert_eq!(flushed_count, 2);
+        assert_eq!(store.count().await?, 2);
+        assert_eq!(found.len(), 1);
+        assert!(
+            found[0].starts_with("date=2026-11-24/hour=10/flush-")
+                && found[0].ends_with(".parquet"),
+            "{found:?}"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flush_without_a_cutoff_takes_everything() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let store = LogStore::with_storage(
+            QueryConfiguration::default(),
+            Some(&storage(directory.path())),
+        )?;
+
+        store
+            .insert(vec![
+                record_at("2026-11-24T10:30:00Z", "a/one")?,
+                record_at("2026-11-25T00:05:00Z", "a/one")?,
+            ])
+            .await?;
+
+        assert_eq!(store.flush(None).await?, 2);
+        assert_eq!(store.count().await?, 0);
+        assert_eq!(
+            files(directory.path())?
+                .iter()
+                .map(|file| file.split("/flush-").next().unwrap_or_default().to_owned())
+                .collect::<Vec<_>>(),
+            ["date=2026-11-24/hour=10", "date=2026-11-25/hour=00"]
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flushed_files_are_sorted_and_keep_every_column() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let store = LogStore::with_storage(
+            QueryConfiguration::default(),
+            Some(&storage(directory.path())),
+        )?;
+
+        store
+            .insert(vec![
+                record_at("2026-11-24T10:30:00Z", "b/two")?,
+                record_at("2026-11-24T10:10:00Z", "b/two")?,
+                record_at("2026-11-24T10:20:00Z", "a/one")?,
+            ])
+            .await?;
+        store.flush(None).await?;
+
+        let order = flushed::<String>(
+            directory.path(),
+            "SELECT string_agg(image_name || ' ' || strftime(timestamp::TIMESTAMP, '%M'), ',') FROM FLUSHED",
+        )?;
+        let user = flushed::<String>(
+            directory.path(),
+            "SELECT any_value(fields->>'$.user') FROM FLUSHED",
+        )?;
+        let columns = flushed::<i64>(
+            directory.path(),
+            "SELECT count(*) FROM (DESCRIBE SELECT * FROM FLUSHED)",
+        )?;
+
+        assert_eq!(order, "a/one 20,b/two 10,b/two 30");
+        assert_eq!(user, "alex");
+        // The twelve log columns, plus `date` and `hour` from the paths rather than the file
+        assert_eq!(columns, 14);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flushing_again_adds_files_instead_of_replacing_them() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let store = LogStore::with_storage(
+            QueryConfiguration::default(),
+            Some(&storage(directory.path())),
+        )?;
+
+        store
+            .insert(vec![record_at("2026-11-24T10:30:00Z", "a/one")?])
+            .await?;
+        store.flush(None).await?;
+        store
+            .insert(vec![record_at("2026-11-24T10:40:00Z", "a/one")?])
+            .await?;
+        store.flush(None).await?;
+
+        assert_eq!(files(directory.path())?.len(), 2);
+        assert_eq!(
+            flushed::<i64>(directory.path(), "SELECT count(*) FROM FLUSHED")?,
+            2
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flushing_nothing_writes_nothing() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let store = LogStore::with_storage(
+            QueryConfiguration::default(),
+            Some(&storage(directory.path())),
+        )?;
+
+        store
+            .insert(vec![record_at("2026-11-24T12:00:00Z", "a/one")?])
+            .await?;
+
+        assert_eq!(
+            store
+                .flush(Some(timestamp("2026-11-24T11:00:00Z")?))
+                .await?,
+            0
+        );
+        assert_eq!(store.count().await?, 1);
+        assert!(files(directory.path())?.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn a_failed_flush_keeps_the_logs() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let location = directory.path().join("logs");
+        let store =
+            LogStore::with_storage(QueryConfiguration::default(), Some(&storage(&location)))?;
+
+        store
+            .insert(vec![record_at("2026-11-24T10:30:00Z", "a/one")?])
+            .await?;
+
+        // Writing beneath a file can't work
+        std::fs::remove_dir(&location)?;
+        std::fs::write(&location, "not a directory")?;
+
+        assert!(store.flush(None).await.is_err());
+        assert_eq!(store.count().await?, 1);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn flushing_requires_storage() -> Result<()> {
+        let store = LogStore::new(QueryConfiguration::default())?;
+
+        assert!(store.flush(None).await.is_err());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn queries_can_only_reach_the_storage_location() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let store = LogStore::with_storage(
+            QueryConfiguration::default(),
+            Some(&storage(directory.path())),
+        )?;
+
+        store
+            .insert(vec![record_at("2026-11-24T10:30:00Z", "a/one")?])
+            .await?;
+        store.flush(None).await?;
+
+        let pattern = format!("{}/**/*.parquet", directory.path().display());
+        let result = store
+            .query(&format!("SELECT count(*) FROM read_parquet('{pattern}')"))
+            .await?;
+        assert_eq!(result.rows, [[Some("1".to_owned())]]);
+
+        for sql in [
+            "SELECT * FROM read_csv('Cargo.toml')",
+            "SELECT * FROM read_text('/etc/hosts')",
+            "SELECT * FROM read_parquet('s3://some-bucket/x.parquet')",
+            "SELECT * FROM read_text('http://169.254.169.254/latest/meta-data/')",
+            "SET enable_external_access = true",
+            "COPY (SELECT 1) TO '/tmp/beaver-escape.csv'",
+        ] {
+            let error = store.query(sql).await.unwrap_err();
+            assert!(
+                matches!(error, QueryError::Invalid(_) | QueryError::Rejected(_)),
+                "{sql:?} gave {error:?}"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Needs network access to install `httpfs`, so it only runs with `--ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn s3_storage_restricts_queries_to_its_prefix() -> Result<()> {
+        use crate::store::S3Credentials;
+
+        let storage = StorageConfiguration::S3 {
+            bucket: "logging-4acb18".to_owned(),
+            prefix: "parquet".to_owned(),
+            region: "eu-west-1".to_owned(),
+            ca_certificate_file: "/etc/ssl/cert.pem".to_owned(),
+        };
+        let store = LogStore::with_storage(QueryConfiguration::default(), Some(&storage))?;
+
+        // Credentials are replaced after the settings are locked
+        store
+            .set_s3_credentials(S3Credentials {
+                access_key_id: "key".to_owned(),
+                secret_access_key: "secret".to_owned(),
+                session_token: Some("token".to_owned()),
+            })
+            .await?;
+
+        // Inside the prefix the request is allowed, so it is only cut short or refused by
+        // S3 as the keys are fake, rather than being refused by the configuration
+        let inside = store
+            .query("SELECT * FROM read_parquet('s3://logging-4acb18/parquet/x.parquet')")
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(!inside.contains("disabled by configuration"), "{inside}");
+
+        for sql in [
+            "SELECT * FROM read_parquet('s3://logging-4acb18/other/x.parquet')",
+            "SELECT * FROM read_parquet('s3://another-bucket/x.parquet')",
+            "SELECT * FROM read_text('http://169.254.169.254/latest/meta-data/')",
+        ] {
+            let error = store.query(sql).await.unwrap_err().to_string();
+            assert!(
+                error.contains("disabled by configuration"),
+                "{sql:?} gave {error}"
+            );
+        }
 
         Ok(())
     }
