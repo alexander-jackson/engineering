@@ -2,6 +2,26 @@ module "application_role" {
   source = "./modules/application-role"
 
   for_each = {
+    beaver = jsonencode({
+      Statement = [
+        {
+          Action   = ["s3:PutObject", "s3:AbortMultipartUpload", "s3:GetObject"]
+          Effect   = "Allow"
+          Resource = format("%s/parquet/*", module.logging_bucket.arn)
+        },
+        {
+          Action   = ["s3:ListBucket"]
+          Effect   = "Allow"
+          Resource = module.logging_bucket.arn
+          Condition = {
+            StringLike = {
+              "s3:prefix" = ["parquet", "parquet/*"]
+            }
+          }
+        },
+      ]
+    })
+
     certmanager = jsonencode({
       Statement = [
         {

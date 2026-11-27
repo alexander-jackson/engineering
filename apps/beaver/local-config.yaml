@@ -6,6 +6,10 @@ query:
   timeout_millis: 500
   max_rows: 1000
 
+storage:
+  location: filesystem
+  path: ./data/parquet
+
 telemetry:
   enabled: false
   endpoint: "http://localhost:4318/v1/traces"

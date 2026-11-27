@@ -1148,12 +1148,15 @@ dependencies = [
 name = "beaver"
 version = "0.1.0"
 dependencies = [
+ "aws-credential-types",
  "axum",
  "color-eyre",
  "duckdb",
  "flate2",
+ "foundation-credentials",
  "foundation-http-server",
  "foundation-init",
+ "foundation-recurring-job",
  "foundation-shutdown",
  "foundation-templating",
  "http 1.5.0",
@@ -1163,6 +1166,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tower",

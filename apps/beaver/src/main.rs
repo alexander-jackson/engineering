@@ -8,6 +8,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use color_eyre::eyre::Result;
 use foundation_http_server::Server;
+use foundation_recurring_job::RecurringJob;
 use foundation_shutdown::ShutdownCoordinator;
 use foundation_templating::TemplateEngine;
 use http::StatusCode;
@@ -17,11 +18,13 @@ use tower_http::decompression::RequestDecompressionLayer;
 use tower_http::services::ServeDir;
 
 use crate::configuration::Configuration;
+use crate::flush::FlushJob;
 use crate::metrics::IngestMetrics;
 use crate::store::{LogRecord, LogStore, QueryError};
 use crate::templates::IndexContext;
 
 mod configuration;
+mod flush;
 mod metrics;
 mod store;
 mod templates;
@@ -138,12 +141,41 @@ async fn main() -> Result<()> {
     let addr = SocketAddrV4::new(config.server.host, config.server.port);
     let listener = TcpListener::bind(addr).await?;
 
-    let store = LogStore::new(config.query)?;
+    let store = LogStore::with_storage(config.query, config.storage.as_ref())?;
     let template_engine = TemplateEngine::new()?;
     let ingest_metrics = IngestMetrics::new(&opentelemetry::global::meter("beaver"));
-    let server = Server::new(router(store, template_engine, ingest_metrics), listener);
+    let server = Server::new(
+        router(store.clone(), template_engine, ingest_metrics),
+        listener,
+    );
 
-    ShutdownCoordinator::new().with_task(server).run().await?;
+    let mut coordinator = ShutdownCoordinator::new().with_task(server);
+
+    let flusher = match &config.storage {
+        Some(storage) => {
+            let credentials = if storage.is_s3() {
+                foundation_credentials::load().await?.credentials_provider()
+            } else {
+                None
+            };
+
+            let flusher = FlushJob::new(store, credentials);
+            coordinator = coordinator.with_task(RecurringJob::new(flusher.clone()));
+            Some(flusher)
+        }
+        None => {
+            tracing::warn!("no storage is configured, so logs are only kept in memory");
+            None
+        }
+    };
+
+    coordinator.run().await?;
+
+    // The server has stopped accepting logs by now, so this writes the last of them
+    if let Some(flusher) = flusher {
+        let flushed = flusher.flush_everything().await?;
+        tracing::info!(flushed, "flushed remaining logs before shutting down");
+    }
 
     Ok(())
 }

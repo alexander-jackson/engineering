@@ -6,6 +6,12 @@ query:
   timeout_millis: 500
   max_rows: 1000
 
+storage:
+  location: s3
+  bucket: logging-4acb18
+  prefix: parquet
+  region: eu-west-1
+
 metrics:
   endpoint: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics
   interval_seconds: 30
