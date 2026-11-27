@@ -324,6 +324,7 @@ services:
         port: 80
     environment:
       LOG_FORMAT: json
+      RUST_LOG: info,hickory_server::server=warn
     volumes:
       config:
         source:
