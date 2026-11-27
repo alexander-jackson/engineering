@@ -7,6 +7,7 @@ use hickory_server::net::runtime::Time;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
 use hickory_server::zone_handler::MessageResponseBuilder;
 use opentelemetry::KeyValue;
+use tracing::Instrument;
 
 use crate::blocklist::{BlockSource, Blocklist};
 use crate::cache::ResponseCache;
@@ -118,6 +119,57 @@ where
     async fn handle_request<R: ResponseHandler, T: Time>(
         &self,
         request: &Request,
+        response_handle: R,
+    ) -> ResponseInfo {
+        let (name, query_type) = match request.request_info() {
+            Ok(request_info) => (
+                Some(request_info.query.name().to_string()),
+                Some(request_info.query.query_type().to_string()),
+            ),
+            Err(_) => (None, None),
+        };
+
+        // Every event emitted while handling the request inherits these fields, which is what
+        // links `received DNS query` to `handled DNS query` (and anything in between).
+        let span = tracing::info_span!(
+            "dns_request",
+            request_id = request.metadata.id,
+            src = %request.src(),
+            protocol = %request.protocol(),
+            name = name.as_deref(),
+            query_type = query_type.as_deref(),
+        );
+
+        async {
+            let start = Instant::now();
+            let info = self.handle_query(request, response_handle).await;
+
+            // Replaces the unstructured `request:... response:...` lines hickory logs itself.
+            let counts = info.counts();
+            tracing::info!(
+                response_code = %info.response_code,
+                answers = counts.answers,
+                authorities = counts.authorities,
+                additionals = counts.additionals,
+                duration_ms = start.elapsed().as_millis() as u64,
+                "handled DNS query"
+            );
+
+            info
+        }
+        .instrument(span)
+        .await
+    }
+}
+
+impl<U, B> DnsRequestHandler<U, B>
+where
+    U: Upstream + 'static,
+    B: Blocklist + 'static,
+{
+    async fn handle_query<R: ResponseHandler>(
+        &self,
+        request: &Request,
         mut response_handle: R,
     ) -> ResponseInfo {
         self.metrics.requests.add(1, &[]);
@@ -147,12 +199,7 @@ where
         };
 
         let domain_name = request_info.query.name().to_string();
-        tracing::info!(
-            name = %domain_name,
-            query_type = ?request_info.query.query_type(),
-            src = %request.src(),
-            "received DNS query"
-        );
+        tracing::info!("received DNS query");
 
         if let Some(source) = self.blocklist.is_blocked(&domain_name).await {
             let block_type = match source {
@@ -160,12 +207,7 @@ where
                 BlockSource::Remote => "remote-block",
             };
 
-            tracing::info!(
-                name = %domain_name,
-                src = %request.src(),
-                block_type,
-                "blocked domain query"
-            );
+            tracing::info!(block_type, "blocked domain query");
 
             return self
                 .refuse(request, response_handle, block_type, start)
@@ -181,12 +223,7 @@ where
             } else {
                 "cache-hit"
             };
-            tracing::debug!(
-                name = %domain_name,
-                src = %request.src(),
-                negative = is_negative,
-                "returning cached response"
-            );
+            tracing::debug!(negative = is_negative, "returning cached response");
 
             if !is_negative
                 && self
@@ -197,7 +234,7 @@ where
                     )
                     .await
             {
-                tracing::info!(name = %domain_name, src = %request.src(), "classifier blocked domain query");
+                tracing::info!("classifier blocked domain query");
 
                 return self
                     .refuse(request, response_handle, "classifier-block", start)
@@ -243,7 +280,6 @@ where
         {
             Ok(response) => {
                 tracing::debug!(
-                    src = %request.src(),
                     answer_count = response.answers.len(),
                     "upstream resolution successful"
                 );
@@ -254,7 +290,7 @@ where
                 (response, "upstream")
             }
             Err(e) => {
-                tracing::warn!(error = %format_args!("{e:#}"), src = %request.src(), "upstream resolution failed");
+                tracing::warn!(error = %format_args!("{e:#}"), "upstream resolution failed");
 
                 let mut error_msg = Message::new(
                     request_message.metadata.id,
@@ -281,7 +317,7 @@ where
                 )
                 .await
         {
-            tracing::info!(name = %domain_name, src = %request.src(), "classifier blocked domain query");
+            tracing::info!("classifier blocked domain query");
 
             return self
                 .refuse(request, response_handle, "classifier-block", start)
