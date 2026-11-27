@@ -136,7 +136,7 @@ where
             request_id = request.metadata.id,
             src = %request.src(),
             protocol = %request.protocol(),
-            name = name.as_deref(),
+            domain = name.as_deref(),
             query_type = query_type.as_deref(),
         );
 
