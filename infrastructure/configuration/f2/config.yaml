@@ -397,6 +397,8 @@ services:
     routes:
       - host: logs.opentracker.app
         port: 7000
+      - host: beaver.mesh.internal
+        port: 7000
     replicas: 1
     probes:
       liveness:
