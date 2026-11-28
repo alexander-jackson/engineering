@@ -25,6 +25,12 @@ jobs:
             -v ./infrastructure/configuration/vector:/etc/vector \
             "$VECTOR_IMAGE" validate --no-environment /etc/vector/vector.yaml
 
+      - name: Validate host metrics configuration
+        run: |
+          docker run --rm \
+            -v ./infrastructure/configuration/vector:/etc/vector \
+            "$VECTOR_IMAGE" validate --no-environment /etc/vector/host-metrics.yaml
+
       - name: Run unit tests
         run: |
           docker run --rm \

@@ -307,8 +307,12 @@ module "secondary" {
   }
 
   logging = {
-    bucket     = module.logging_bucket.name
-    vector_tag = "0.60.0-alpine"
+    bucket         = module.logging_bucket.name
+    vector_version = "0.60.0"
+  }
+
+  host_metrics = {
+    config_key = "vector/host-metrics.yaml"
   }
 
   hackathon = {

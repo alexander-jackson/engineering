@@ -203,10 +203,10 @@ resource "aws_security_group_rule" "allow_outbound_subnet_postgres" {
 
 locals {
   deploy_script = templatefile("${path.module}/scripts/deploy-version.sh", {
-    vector_tag    = var.logging.vector_tag
-    port_flags    = local.port_flags
-    config_bucket = var.configuration.bucket
-    config_key    = var.configuration.key
+    vector_version = var.logging.vector_version
+    port_flags     = local.port_flags
+    config_bucket  = var.configuration.bucket
+    config_key     = var.configuration.key
   })
 }
 
@@ -217,13 +217,14 @@ resource "aws_instance" "this" {
   subnet_id     = var.instance.subnet_id
 
   user_data = templatefile("${path.module}/scripts/setup.sh", {
-    tag                 = var.configuration.image_tag
-    config_bucket       = var.configuration.bucket
-    config_key          = var.configuration.key
-    vector_tag          = var.logging.vector_tag
-    extra_volume_device = var.extra_ebs_volume != null ? var.extra_ebs_volume.device_name : ""
-    port_flags          = local.port_flags
-    deploy_script       = local.deploy_script
+    tag                     = var.configuration.image_tag
+    config_bucket           = var.configuration.bucket
+    config_key              = var.configuration.key
+    vector_version          = var.logging.vector_version
+    host_metrics_config_key = var.host_metrics != null ? var.host_metrics.config_key : ""
+    extra_volume_device     = var.extra_ebs_volume != null ? var.extra_ebs_volume.device_name : ""
+    port_flags              = local.port_flags
+    deploy_script           = local.deploy_script
   })
 
   vpc_security_group_ids = [aws_security_group.this.id]
