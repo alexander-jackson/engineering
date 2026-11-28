@@ -289,9 +289,9 @@ resource "aws_key_pair" "main" {
   public_key = file("./keys/id_rsa.pub")
 }
 
-module "secondary" {
+module "primary" {
   source = "./modules/f2-instance"
-  name   = "secondary"
+  name   = "primary"
 
   instance = {
     type      = "t4g.micro"
@@ -303,7 +303,7 @@ module "secondary" {
   configuration = {
     bucket    = module.config_bucket.name
     key       = "f2/config.yaml"
-    image_tag = "20261027-2024"
+    image_tag = "20261127-0412"
   }
 
   logging = {
@@ -380,7 +380,7 @@ resource "aws_route53_record" "records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.secondary.public_ip]
+  records = [module.primary.public_ip]
 }
 
 resource "aws_route53_record" "dns_server_record" {
@@ -388,7 +388,7 @@ resource "aws_route53_record" "dns_server_record" {
   name    = "dns"
   type    = "A"
   ttl     = 300
-  records = [module.secondary.public_ip]
+  records = [module.primary.public_ip]
 }
 
 resource "aws_route53_record" "forkup_records" {
@@ -400,7 +400,7 @@ resource "aws_route53_record" "forkup_records" {
   name    = each.key
   type    = "A"
   ttl     = 300
-  records = [module.secondary.public_ip]
+  records = [module.primary.public_ip]
 }
 
 # Internal Route 53 definitions
@@ -429,13 +429,13 @@ module "rds_postgres" {
   apply_immediately           = true
 }
 
-resource "aws_security_group_rule" "secondary_to_postgres" {
-  description              = "Allow inbound PostgreSQL from secondary"
+resource "aws_security_group_rule" "primary_to_postgres" {
+  description              = "Allow inbound PostgreSQL from primary"
   type                     = "ingress"
   from_port                = 5432
   to_port                  = 5432
   protocol                 = "tcp"
-  source_security_group_id = module.secondary.security_group_id
+  source_security_group_id = module.primary.security_group_id
   security_group_id        = module.rds_postgres.security_group_id
 }
 
@@ -452,7 +452,7 @@ resource "aws_route53_record" "prometheus" {
   name    = "prometheus"
   type    = "A"
   ttl     = 300
-  records = [module.secondary.private_ip]
+  records = [module.primary.private_ip]
 }
 
 resource "aws_route53_record" "beaver" {
@@ -460,5 +460,5 @@ resource "aws_route53_record" "beaver" {
   name    = "beaver"
   type    = "A"
   ttl     = 300
-  records = [module.secondary.private_ip]
+  records = [module.primary.private_ip]
 }

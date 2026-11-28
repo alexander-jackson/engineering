@@ -1,9 +1,3 @@
-data "aws_iam_role" "instance" {
-  for_each = var.instance_role_names
-
-  name = each.value
-}
-
 resource "aws_iam_role" "this" {
   name        = format("%s-role", var.application_name)
   description = format("Role for the %s application container", var.application_name)
@@ -15,7 +9,7 @@ resource "aws_iam_role" "this" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          AWS = [for role in data.aws_iam_role.instance : role.arn]
+          AWS = [for instance in var.instance_roles : instance.arn]
         }
       }
     ]
@@ -29,10 +23,10 @@ resource "aws_iam_role_policy" "this" {
 }
 
 resource "aws_iam_role_policy" "instance_assume" {
-  for_each = var.instance_role_names
+  for_each = var.instance_roles
 
   name = format("%s-assume-role", var.application_name)
-  role = each.value
+  role = each.value.name
 
   policy = jsonencode({
     Statement = [

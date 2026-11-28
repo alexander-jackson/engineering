@@ -72,7 +72,10 @@ module "application_role" {
   application_name = each.key
   policy_json      = each.value
 
-  instance_role_names = {
-    secondary = module.secondary.role_name
+  instance_roles = {
+    primary = {
+      name = module.primary.role_name
+      arn  = module.primary.role_arn
+    }
   }
 }
