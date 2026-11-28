@@ -74,22 +74,20 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docke
 sudo apt update
 sudo apt install -y docker-ce
 
-# Install Vector on the host (as a systemd service) to export host metrics
-if [ -n "${host_metrics_config_key}" ]; then
-    curl -fsSL https://keys.datadoghq.com/DATADOG_APT_KEY_CURRENT.public | sudo gpg --dearmor -o /usr/share/keyrings/datadog-archive-keyring.gpg
-    echo "deb [signed-by=/usr/share/keyrings/datadog-archive-keyring.gpg] https://apt.vector.dev/ stable vector-0" | sudo tee /etc/apt/sources.list.d/vector.list > /dev/null
+# Install Vector on the host (as a systemd service) to ship logs and export host metrics
+curl -fsSL https://keys.datadoghq.com/DATADOG_APT_KEY_CURRENT.public | sudo gpg --dearmor -o /usr/share/keyrings/datadog-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/datadog-archive-keyring.gpg] https://apt.vector.dev/ stable vector-0" | sudo tee /etc/apt/sources.list.d/vector.list > /dev/null
 
-    sudo apt update
-    sudo apt install -y vector=${vector_version}-1
+sudo apt update
+sudo apt install -y vector=${vector_version}-1
 
-    sudo aws s3 cp s3://${config_bucket}/${host_metrics_config_key} /etc/vector/vector.yaml
-    sudo vector validate --no-environment /etc/vector/vector.yaml
-    sudo systemctl enable vector
-    sudo systemctl restart vector
-fi
+# Allow `vector` to read container logs from the Docker socket
+sudo usermod -aG docker vector
 
-# Download the `vector` configuration
-aws s3 cp s3://configuration-68f6c7/vector/vector.yaml /home/ubuntu/vector.yaml
+sudo aws s3 cp s3://${config_bucket}/vector/vector.yaml /etc/vector/vector.yaml
+sudo vector validate --no-environment /etc/vector/vector.yaml
+sudo systemctl enable vector
+sudo systemctl restart vector
 
 # Allow the `ubuntu` user to run `docker` commands (for SSH access)
 sudo usermod -aG docker ubuntu
@@ -103,5 +101,5 @@ DEPLOY_SCRIPT_EOF
 chown ubuntu:ubuntu /home/ubuntu/deploy-version.sh
 chmod 755 /home/ubuntu/deploy-version.sh
 
-# Start vector and f2
+# Start f2
 /home/ubuntu/deploy-version.sh ${tag}

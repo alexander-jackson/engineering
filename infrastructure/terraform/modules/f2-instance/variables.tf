@@ -30,14 +30,6 @@ variable "logging" {
   description = "Parameters for use in logging output"
 }
 
-variable "host_metrics" {
-  type = object({
-    config_key = string
-  })
-  description = "If set, installs Vector on the host to export instance metrics using the config at this key in the configuration bucket"
-  default     = null
-}
-
 variable "hackathon" {
   type = object({
     bucket = string
