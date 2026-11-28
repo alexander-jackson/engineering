@@ -5,6 +5,17 @@ sources:
     type: docker_logs
     docker_host: /var/run/docker.sock
 
+  host:
+    type: host_metrics
+    scrape_interval_secs: 15
+    collectors: [cpu, memory, filesystem, network, load, disk]
+    filesystem:
+      mountpoints:
+        excludes:
+          # Container overlays are unreadable by the `vector` user and are noise anyway
+          - /var/lib/docker/**
+          - /run/docker/**
+
 transforms:
   parse_logs:
     type: remap
@@ -81,6 +92,20 @@ transforms:
         "fields": fields,
       }
 
+  # NaN on zero-size pseudo-filesystems (/proc, /sys, /dev/pts) fails OTLP encoding
+  drop_nan:
+    type: filter
+    inputs:
+      - host
+    condition: .name != "filesystem_used_ratio"
+
+  ec2:
+    type: aws_ec2_metadata
+    inputs:
+      - drop_nan
+    fields: [instance-id, instance-type, availability-zone, region]
+    required: false
+
 sinks:
   s3:
     type: aws_s3
@@ -94,7 +119,7 @@ sinks:
 
   beaver:
     type: http
-    uri: http://beaver:7000/logs
+    uri: http://beaver.mesh.internal/logs
     compression: gzip
     batch:
       max_events: 1000
@@ -107,3 +132,14 @@ sinks:
       codec: json
     inputs:
       - normalise_logs
+
+  prometheus:
+    type: opentelemetry
+    inputs:
+      - ec2
+    protocol:
+      type: http
+      uri: http://prometheus.mesh.internal/api/v1/otlp/v1/metrics
+      method: post
+      encoding:
+        codec: otlp

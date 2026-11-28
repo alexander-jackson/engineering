@@ -311,10 +311,6 @@ module "secondary" {
     vector_version = "0.60.0"
   }
 
-  host_metrics = {
-    config_key = "vector/host-metrics.yaml"
-  }
-
   hackathon = {
     bucket = module.hackathon_bucket.name
   }
