@@ -49,7 +49,7 @@ const render = (
 };
 
 export const endpoint = (path: string) => {
-  return `http://localhost${path}`;
+  return `http://localhost:3025/api${path}`;
 };
 
 export default render;
