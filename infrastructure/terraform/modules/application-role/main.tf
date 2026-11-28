@@ -44,9 +44,3 @@ resource "aws_iam_role_policy" "instance_assume" {
     ]
   })
 }
-
-# Previously a single instance role was supported, which was always `secondary`
-moved {
-  from = aws_iam_role_policy.instance_assume
-  to   = aws_iam_role_policy.instance_assume["secondary"]
-}
