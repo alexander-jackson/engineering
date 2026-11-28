@@ -458,3 +458,11 @@ resource "aws_route53_record" "prometheus" {
   ttl     = 300
   records = [module.secondary.private_ip]
 }
+
+resource "aws_route53_record" "beaver" {
+  zone_id = aws_route53_zone.internal.id
+  name    = "beaver"
+  type    = "A"
+  ttl     = 300
+  records = [module.secondary.private_ip]
+}
