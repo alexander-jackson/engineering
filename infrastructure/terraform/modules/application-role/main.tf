@@ -1,5 +1,7 @@
 data "aws_iam_role" "instance" {
-  name = var.instance_role_name
+  for_each = var.instance_role_names
+
+  name = each.value
 }
 
 resource "aws_iam_role" "this" {
@@ -13,7 +15,7 @@ resource "aws_iam_role" "this" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          AWS = data.aws_iam_role.instance.arn
+          AWS = [for role in data.aws_iam_role.instance : role.arn]
         }
       }
     ]
@@ -27,8 +29,10 @@ resource "aws_iam_role_policy" "this" {
 }
 
 resource "aws_iam_role_policy" "instance_assume" {
+  for_each = var.instance_role_names
+
   name = format("%s-assume-role", var.application_name)
-  role = var.instance_role_name
+  role = each.value
 
   policy = jsonencode({
     Statement = [
@@ -39,4 +43,10 @@ resource "aws_iam_role_policy" "instance_assume" {
       }
     ]
   })
+}
+
+# Previously a single instance role was supported, which was always `secondary`
+moved {
+  from = aws_iam_role_policy.instance_assume
+  to   = aws_iam_role_policy.instance_assume["secondary"]
 }
